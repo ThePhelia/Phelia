@@ -1,0 +1,87 @@
+version: "3.9"
+
+x-env: &default-env
+  TZ: ${TZ:-Etc/UTC}
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      <<: *default-env
+      POSTGRES_USER: ${DB_USER:-music}
+      POSTGRES_PASSWORD: ${DB_PASS:-music}
+      POSTGRES_DB: ${DB_NAME:-musicdl}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-music}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    volumes:
+      - redis_data:/data
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      <<: *default-env
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      WEBUI_PORT: ${QB_WEB_PORT:-8080}
+    ports:
+      - "${QB_WEB_PORT:-8080}:8080"
+      - "${BT_PORT_TCP:-6881}:6881"
+      - "${BT_PORT_UDP:-6881}:6881/udp"
+    volumes:
+      - qb_config:/config
+      - downloads:${DOWNLOADS_DIR:-/downloads}
+      - music:${MUSIC_DIR:-/music}
+
+  api:
+    build: ../apps/api
+    env_file:
+      - ./env/api.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qbittorrent:
+        condition: service_started
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - downloads:/downloads
+      - music:/music
+
+  worker:
+    build: ../apps/api
+    command: ["bash", "-lc", "celery -A app.services.jobs.tasks worker -l info"]
+    env_file:
+      - ./env/api.env
+    depends_on:
+      - api
+      - redis
+      - db
+    volumes:
+      - downloads:/downloads
+      - music:/music
+
+  scheduler:
+    build: ../apps/api
+    command: ["bash", "-lc", "celery -A app.services.jobs.tasks beat -l info"]
+    env_file:
+      - ./env/api.env
+    depends_on:
+      - worker
+
+volumes:
+  db_data:
+  redis_data:
+  qb_config:
+  downloads:
+  music:

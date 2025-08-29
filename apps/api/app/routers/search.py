@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.db.session import session_scope
 from app.db.models import Tracker
+from app.core.security import get_current_user
 from app.services.search.torznab import TorznabClient
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/search")
 async def search(query: str):

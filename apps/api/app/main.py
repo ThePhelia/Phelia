@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import health, auth, downloads
+from app.routers import health, auth, downloads, search
 
 app = FastAPI(title="Music AutoDL API", version="0.1.0")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
 app.include_router(downloads.router, prefix="/api/v1", tags=["downloads"])
+app.include_router(search.router, prefix="/api/v1", tags=["search"])
 
 @app.get("/")
 def root():

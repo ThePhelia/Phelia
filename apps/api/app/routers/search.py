@@ -1,9 +1,7 @@
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
 from app.db.session import session_scope
-from app.db.models import Download
+from app.db.models import Tracker
 from app.services.search.torznab import TorznabClient
-import asyncio
 
 router = APIRouter()
 
@@ -15,7 +13,7 @@ async def search(query: str):
     results = []
 
     with session_scope() as db:
-        trackers = db.execute("SELECT * FROM trackers WHERE enabled=1").fetchall()
+        trackers = db.query(Tracker).filter_by(enabled=True).all()
 
     for tr in trackers:
         if tr.type == "torznab" and tr.base_url:

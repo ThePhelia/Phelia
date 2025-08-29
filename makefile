@@ -1,5 +1,5 @@
 up:
-	cd deploy && docker compose --env-file ./env/api.env up -d --build
+	cd deploy && docker compose up --build
 
 down:
 	cd deploy && docker compose down

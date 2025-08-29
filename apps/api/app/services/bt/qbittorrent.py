@@ -15,14 +15,13 @@ class QbClient:
                 "password": self.password,
             })
             r.raise_for_status()
-            # qBittorrent sets SID cookie
             self.cookies = r.cookies
             return True
 
     async def _client(self) -> httpx.AsyncClient:
         if self.cookies is None:
             await self.login()
-        return httpx.AsyncClient(cookies=self.cookies, timeout=15)
+        return httpx.AsyncClient(cookies=self.cookies, timeout=20)
 
     async def add_magnet(self, magnet: str, save_path: Optional[str] = None) -> str:
         async with await self._client() as c:
@@ -31,8 +30,6 @@ class QbClient:
                 data["savepath"] = save_path
             r = await c.post(f"{self.base_url}/api/v2/torrents/add", data=data)
             r.raise_for_status()
-            # Need to fetch hash from list after add (qB API doesn't return id)
-            # We'll return empty; the poller will match latest torrents
             return ""
 
     async def list_torrents(self):
@@ -41,8 +38,27 @@ class QbClient:
             r.raise_for_status()
             return r.json()
 
-    async def props(self, torrent_hash: str):
+    async def info_by_hash(self, torrent_hash: str):
         async with await self._client() as c:
-            r = await c.get(f"{self.base_url}/api/v2/torrents/properties", params={"hash": torrent_hash})
+            r = await c.get(f"{self.base_url}/api/v2/torrents/info", params={"hashes": torrent_hash})
             r.raise_for_status()
-            return r.json()
+            data = r.json()
+            return data[0] if data else None
+
+    async def pause(self, torrent_hash: str):
+        async with await self._client() as c:
+            r = await c.post(f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash})
+            r.raise_for_status()
+
+    async def resume(self, torrent_hash: str):
+        async with await self._client() as c:
+            r = await c.post(f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash})
+            r.raise_for_status()
+
+    async def delete(self, torrent_hash: str, delete_files: bool = False):
+        async with await self._client() as c:
+            r = await c.post(f"{self.base_url}/api/v2/torrents/delete", data={
+                "hashes": torrent_hash,
+                "deleteFiles": "true" if delete_files else "false",
+            })
+            r.raise_for_status()

@@ -1,5 +1,7 @@
 import httpx
 from typing import Optional
+from urllib.parse import urlparse, parse_qs
+import base64
 
 class QbClient:
     def __init__(self, base_url: str, username: str, password: str):
@@ -24,13 +26,33 @@ class QbClient:
         return httpx.AsyncClient(cookies=self.cookies, timeout=20)
 
     async def add_magnet(self, magnet: str, save_path: Optional[str] = None) -> str:
+        """Add a magnet link and return its torrent hash if derivable."""
+        # Try to extract hash from magnet uri (btih).
+        torrent_hash = ""
+        try:
+            query = parse_qs(urlparse(magnet).query)
+            for xt in query.get("xt", []):
+                if xt.startswith("urn:btih:"):
+                    ih = xt.split("urn:btih:")[-1]
+                    # btih may be hex (40 chars) or base32 (32 chars)
+                    if len(ih) == 32:
+                        try:
+                            torrent_hash = base64.b32decode(ih).hex()
+                        except Exception:
+                            torrent_hash = ih.lower()
+                    else:
+                        torrent_hash = ih.lower()
+                    break
+        except Exception:
+            torrent_hash = ""
+
         async with await self._client() as c:
             data = {"urls": magnet}
             if save_path:
                 data["savepath"] = save_path
             r = await c.post(f"{self.base_url}/api/v2/torrents/add", data=data)
             r.raise_for_status()
-            return ""
+        return torrent_hash
 
     async def list_torrents(self):
         async with await self._client() as c:

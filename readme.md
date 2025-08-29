@@ -1,4 +1,4 @@
-# Music AutoDL — First Commit
+# Phelia
 
 MVP: Postgres + Redis + qBittorrent + FastAPI + Celery. Add a magnet, watch status.
 

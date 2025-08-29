@@ -4,6 +4,15 @@ from datetime import datetime
 from app.db.session import Base, engine, SessionLocal
 from app.core.config import settings
 
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(32), default="user")
+
+
 class Download(Base):
     __tablename__ = "downloads"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -29,12 +38,23 @@ class Tracker(Base):
     creds_enc: Mapped[str | None] = mapped_column(String(512))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
+
 # bootstrap (MVP): создаём таблицы при старте
 Base.metadata.create_all(bind=engine)
 
 
 if settings.APP_ENV == "dev":
+    from passlib.context import CryptContext
+
     with SessionLocal() as db:
+        if not db.query(User).first():
+            pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            dev_user = User(
+                email="dev@example.com",
+                hashed_password=pwd.hash("dev"),
+                role="admin",
+            )
+            db.add(dev_user)
         if not db.query(Tracker).first():
             sample = [
                 Tracker(
@@ -46,4 +66,4 @@ if settings.APP_ENV == "dev":
                 )
             ]
             db.add_all(sample)
-            db.commit()
+        db.commit()

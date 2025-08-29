@@ -1,14 +1,15 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from pydantic import BaseModel
 from pathlib import Path
 import asyncio
 from app.db.session import session_scope
 from app.db.models import Download
+from app.core.security import get_current_user
 from app.core.config import settings
 from app.services.jobs.tasks import enqueue_magnet, poll_status
 from app.services.bt.qbittorrent import QbClient
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 class DownloadIn(BaseModel):
     magnet: str

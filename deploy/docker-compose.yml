@@ -91,7 +91,6 @@ services:
     depends_on:
       - api
 volumes:
-  volumes:
   db_data:
   redis_data:
   qb_config:

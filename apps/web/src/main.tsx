@@ -9,7 +9,7 @@ function App() {
   const [magnet, setMagnet] = useState('')
   const [items, setItems] = useState<any[]>([])
   const [token, setToken] = useState(localStorage.getItem('token') || '')
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   useEffect(() => {
@@ -26,11 +26,12 @@ function App() {
 
   const login = async () => {
     const base = API_BASE.replace(/\/api\/v1$/, '')
-    const { data } = await axios.post(`${base}/auth/login`, { username, password })
-    const tok = data.token
+    const { data } = await axios.post(`${base}/auth/login`, { email, password })
+    const tok = data.accessToken
     if (tok) {
       localStorage.setItem('token', tok)
       setToken(tok)
+      axios.defaults.headers.common['Authorization'] = `Bearer ${tok}`
     }
   }
 
@@ -71,7 +72,7 @@ function App() {
         <h1>Music AutoDL</h1>
         <h2>Login</h2>
         <div style={{display:'flex', flexDirection:'column', gap:8}}>
-          <input value={username} onChange={e=>setUsername(e.target.value)} placeholder="username" />
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email" />
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="password" />
           <button onClick={login}>Login</button>
         </div>

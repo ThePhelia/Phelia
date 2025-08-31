@@ -8,13 +8,31 @@ const WS_BASE = import.meta.env.VITE_WS_BASE || 'ws://localhost:8000'
 function App() {
   const [magnet, setMagnet] = useState('')
   const [items, setItems] = useState<any[]>([])
+  const [token, setToken] = useState(localStorage.getItem('token') || '')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      refresh()
+    }
+  }, [token])
 
   const refresh = async () => {
     const { data } = await axios.get(`${API_BASE}/downloads`)
     setItems(data)
   }
 
-  useEffect(() => { refresh() }, [])
+  const login = async () => {
+    const base = API_BASE.replace(/\/api\/v1$/, '')
+    const { data } = await axios.post(`${base}/auth/login`, { username, password })
+    const tok = data.token
+    if (tok) {
+      localStorage.setItem('token', tok)
+      setToken(tok)
+    }
+  }
 
   const addMagnet = async () => {
     if (!magnet) return
@@ -45,6 +63,20 @@ function App() {
       } : it))
     }
     ws.onclose = () => {}
+  }
+
+  if (!token) {
+    return (
+      <div style={{maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, sans-serif'}}>
+        <h1>Music AutoDL</h1>
+        <h2>Login</h2>
+        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          <input value={username} onChange={e=>setUsername(e.target.value)} placeholder="username" />
+          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="password" />
+          <button onClick={login}>Login</button>
+        </div>
+      </div>
+    )
   }
 
   return (

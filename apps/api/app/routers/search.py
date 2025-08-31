@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Depends
 from app.db.session import session_scope
 from app.db.models import Tracker
 from app.core.security import get_current_user
 from app.services.search.torznab import TorznabClient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -23,7 +27,7 @@ async def search(query: str):
                 res = await client.search(query)
                 results.extend(res)
             except Exception as e:
-                print(f"[WARN] Tracker {tr.name} failed: {e}")
+                logger.warning(f"Tracker {tr.name} failed: {e}")
                 continue
 
     results.sort(key=lambda x: (x["seeds"], x["size"]), reverse=True)

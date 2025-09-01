@@ -38,9 +38,9 @@ def list_downloads():
 @router.post("/downloads")
 def create_download(body: DownloadIn):
     save_path = body.savePath or settings.DEFAULT_SAVE_DIR
-    allowed = [Path(p.strip()) for p in settings.ALLOWED_SAVE_DIRS.split(',')]
-    save_path_obj = Path(save_path)
-    if not any(str(save_path_obj).startswith(str(a)) for a in allowed):
+    allowed = [Path(p.strip()).resolve() for p in settings.ALLOWED_SAVE_DIRS.split(',')]
+    save_path_obj = Path(save_path).resolve()
+    if not any(save_path_obj.is_relative_to(a) for a in allowed):
         raise HTTPException(status_code=400, detail=f"savePath not allowed. Allowed: {allowed}")
     try:
         save_path_obj.mkdir(parents=True, exist_ok=True)

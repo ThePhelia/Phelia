@@ -1,4 +1,3 @@
-version: "3.9"
 
 x-env: &default-env
   TZ: ${TZ:-Etc/UTC}
@@ -8,88 +7,141 @@ services:
     image: postgres:16
     environment:
       <<: *default-env
-      POSTGRES_USER: ${DB_USER:-music}
-      POSTGRES_PASSWORD: ${DB_PASS:-music}
-      POSTGRES_DB: ${DB_NAME:-musicdl}
+      POSTGRES_USER: ${DB_USER:-phelia}
+      POSTGRES_PASSWORD: ${DB_PASS:-phelia}
+      POSTGRES_DB: ${DB_NAME:-phelia}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-music}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-phelia} -d ${DB_NAME:-phelia}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   redis:
     image: redis:7-alpine
-    command: redis-server --save "" --appendonly no
+    command: ["redis-server","--appendonly","yes"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     environment:
       <<: *default-env
-      PUID: ${PUID:-1000}
-      PGID: ${PGID:-1000}
-      WEBUI_PORT: ${QB_WEB_PORT:-8080}
-    ports:
-      - "${QB_WEB_PORT:-8080}:8080"
-      - "${BT_PORT_TCP:-6881}:6881"
-      - "${BT_PORT_UDP:-6881}:6881/udp"
+      WEBUI_PORT: 8080
+      # при первом старте qB сам создаст конфиг в /config
     volumes:
       - qb_config:/config
-      - downloads:${DOWNLOADS_DIR:-/downloads}
-      - music:${MUSIC_DIR:-/music}
+      - downloads:/downloads
+      - music:/music
+    ports:
+      - "8080:8080" # в проде не публиковать наружу
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   api:
-    build: ../apps/api
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
     env_file:
       - ./env/api.env
+    environment:
+      <<: *default-env
+      # жёстко пробрасываем DSN и Redis из compose
+      DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QB_URL: http://qbittorrent:8080
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       qbittorrent:
-        condition: service_started
+        condition: service_healthy
+    command: ["/app/entrypoint.sh"]
+    volumes:
+      - ../apps/api:/app
+      - downloads:/downloads
+      - music:/music
     ports:
       - "${API_PORT:-8000}:8000"
-    volumes:
-      - downloads:/downloads
-      - music:/music
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   worker:
-    build: ../apps/api
-    command: ["bash", "-lc", "celery -A app.services.jobs.tasks worker -l info"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
     env_file:
       - ./env/api.env
+    environment:
+      <<: *default-env
+      DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QB_URL: http://qbittorrent:8080
+    command: ["celery","-A","app.services.jobs.tasks.celery_app","worker","-l","info","-O","fair"]
     depends_on:
-      - api
-      - redis
-      - db
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
     volumes:
+      - ../apps/api:/app
       - downloads:/downloads
       - music:/music
 
-  scheduler:
-    build: ../apps/api
-    command: ["bash", "-lc", "celery -A app.services.jobs.tasks beat -l info"]
+  beat:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
     env_file:
       - ./env/api.env
+    environment:
+      <<: *default-env
+      DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: ["celery","-A","app.services.jobs.tasks.celery_app","beat","-l","info"]
     depends_on:
-      - worker
-
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - ../apps/api:/app
 
   web:
-    build: ../apps/web
+    build:
+      context: ../apps/web
+    env_file:
+      - ./env/web.env
     environment:
-      - VITE_API_BASE=${VITE_API_BASE:-http://localhost:${API_PORT:-8000}/api/v1}
-      - VITE_WS_BASE=${VITE_WS_BASE:-ws://localhost:${API_PORT:-8000}}
+      <<: *default-env
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:${API_PORT:-8000}/api/v1}
+      VITE_WS_BASE: ${VITE_WS_BASE:-ws://localhost:${API_PORT:-8000}}
     ports:
-      - "${WEB_PORT:-5173}:5173"
-    command: ["bash", "-lc", "npm ci && npm run dev -- --host 0.0.0.0"]
+      - "${WEB_PORT:-5173}:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+
 volumes:
   db_data:
   redis_data:

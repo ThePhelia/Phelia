@@ -1,33 +1,58 @@
-from app.db.session import Base, engine, SessionLocal
-from app.db import models
+# app/db/init_db.py
+
 from app.core.config import settings
+from app.db.session import SessionLocal, Base, engine  # Base/engine оставляем на случай редкого dev-скрипта
+from app.db import models
 
 
 def init_db() -> None:
-    """Create tables and seed initial data."""
-    Base.metadata.create_all(bind=engine)
+    """
+    Dev-only seed. Do NOT create tables here — schema is managed by Alembic.
+    In production this function is a no-op.
+    """
+    if settings.APP_ENV != "dev":
+        return
 
-    if settings.APP_ENV == "dev":
-        from passlib.context import CryptContext
+    # В dev можно раскомментировать следующие 2 строки, если хочешь аварийно создать схему без Alembic.
+    # НЕ делай этого в проде.
+    # from sqlalchemy import inspect
+    # if not inspect(engine).has_table("users"): Base.metadata.create_all(bind=engine)
 
-        with SessionLocal() as db:
-            if not db.query(models.User).first():
-                pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-                dev_user = models.User(
-                    email="dev@example.com",
-                    hashed_password=pwd.hash("dev"),
-                    role="admin",
-                )
-                db.add(dev_user)
-            if not db.query(models.Tracker).first():
-                sample = [
-                    models.Tracker(
-                        name="Example",
-                        type="torznab",
-                        base_url="https://example.com",
-                        creds_enc="",
-                        enabled=False,
-                    )
-                ]
-                db.add_all(sample)
-            db.commit()
+    from passlib.context import CryptContext
+
+    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    with SessionLocal() as db:
+        # ---- Seed admin user (idempotent by email) ----
+        dev_email = "dev@example.com"
+        user = db.query(models.User).filter(models.User.email == dev_email).one_or_none()
+        if user is None:
+            user = models.User(
+                email=dev_email,
+                hashed_password=pwd.hash("dev"),
+                role="admin",
+            )
+            db.add(user)
+
+        # ---- Seed example tracker (idempotent by name+type) ----
+        tracker_name = "Example"
+        tracker_type = "torznab"
+        tracker = (
+            db.query(models.Tracker)
+            .filter(
+                models.Tracker.name == tracker_name,
+                models.Tracker.type == tracker_type,
+            )
+            .one_or_none()
+        )
+        if tracker is None:
+            tracker = models.Tracker(
+                name=tracker_name,
+                type=tracker_type,
+                base_url="https://example.com",
+                creds_enc="",
+                enabled=False,
+            )
+            db.add(tracker)
+
+        db.commit()
+

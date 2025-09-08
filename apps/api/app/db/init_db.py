@@ -1,7 +1,8 @@
 # app/db/init_db.py
 
 from app.core.config import settings
-from app.db.session import SessionLocal, Base, engine  # Base/engine оставляем на случай редкого dev-скрипта
+from app.db.session import SessionLocal, Base, engine  # noqa: F401
+# Keep Base/engine for rare dev scripts
 from app.db import models
 
 
@@ -13,8 +14,8 @@ def init_db() -> None:
     if settings.APP_ENV != "dev":
         return
 
-    # В dev можно раскомментировать следующие 2 строки, если хочешь аварийно создать схему без Alembic.
-    # НЕ делай этого в проде.
+    # In dev you can uncomment the next 2 lines to create the schema without Alembic.
+    # Do NOT do this in production.
     # from sqlalchemy import inspect
     # if not inspect(engine).has_table("users"): Base.metadata.create_all(bind=engine)
 

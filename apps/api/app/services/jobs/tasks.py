@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from celery import Celery
 from sqlalchemy.orm import Session
+import logging
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -23,6 +24,7 @@ celery_app.conf.beat_schedule = {
     }
 }
 celery_app.conf.timezone = "UTC"
+logger = logging.getLogger(__name__)
 
 
 def _qb() -> QbClient:
@@ -42,12 +44,14 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
     try:
         dl = db.get(Download, download_id)
         if not dl:
+            logger.warning("Download %s not found", download_id)
             return False
         if magnet and not dl.magnet:
             dl.magnet = magnet
         if save_path and not dl.save_path:
             dl.save_path = save_path
         if not dl.magnet:
+            logger.warning("Download %s missing magnet link", download_id)
             return False
 
         qb = _qb(); qb.login()
@@ -108,7 +112,8 @@ def poll_status() -> int:
 def _safe_list_torrents(qb: QbClient) -> List[dict]:
     try:
         return qb.list_torrents()
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to list torrents: %s", e)
         return []
 
 

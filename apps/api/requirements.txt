@@ -14,7 +14,7 @@ pydantic-settings>=2.2
 
 # --- Auth / crypto ---
 python-jose[cryptography]>=3.3
-# passlib + bcrypt: фиксируем версии, чтобы не ловить баг "module 'bcrypt' has no attribute '__about__'"
+# passlib + bcrypt: pin versions to avoid bug "module 'bcrypt' has no attribute '__about__'"
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
@@ -26,7 +26,7 @@ feedparser>=6.0.11
 celery>=5.4
 redis>=5.0
 
-# --- Utils (по желанию, но полезно) ---
+# --- Utils (optional but useful) ---
 python-dotenv>=1.0
 orjson>=3.10
 

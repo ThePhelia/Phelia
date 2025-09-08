@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     gunicorn alembic psycopg2-binary
 
 COPY . .
-# entrypoint.sh попадает сюда (мы монтируем томом в compose, но лучше иметь и в образе)
+# entrypoint.sh is placed here (mounted via a compose volume, but better to keep in the image)
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000

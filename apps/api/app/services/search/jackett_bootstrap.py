@@ -19,7 +19,7 @@ def read_jackett_apikey() -> Optional[str]:
         return None
 
 def ensure_jackett_tracker(name: str = "jackett-all") -> bool:
-    """Создаёт/обновляет трекер Jackett в БД. Возвращает True, если есть валидный ключ."""
+    """Create or update the Jackett tracker in the DB. Return True if a valid key is present."""
     api_key = read_jackett_apikey()
     if not api_key:
         return False

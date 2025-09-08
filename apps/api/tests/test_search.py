@@ -1,6 +1,7 @@
 import json
 import logging
 import pytest
+import feedparser
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
@@ -46,3 +47,25 @@ async def test_search_error_logs(monkeypatch, db_session, caplog):
             resp = await ac.get("/api/v1/search", params={"query": "foo"})
     assert resp.status_code == 200
     assert any("Error searching tracker" in r.message for r in caplog.records)
+
+
+def test_torznab_client_builds_url(monkeypatch):
+    captured = {}
+
+    def fake_parse(url):
+        captured["url"] = url
+
+        class Feed:
+            entries = []
+
+        return Feed()
+
+    monkeypatch.setattr(feedparser, "parse", fake_parse)
+    client = TorznabClient()
+    items = client.search("http://example/", "secret", "foo bar")
+
+    assert items == []
+    assert (
+        captured["url"]
+        == "http://example?t=search&q=foo+bar&apikey=secret"
+    )

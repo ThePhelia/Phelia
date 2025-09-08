@@ -5,19 +5,13 @@ from sqlalchemy.orm import Session
 import json
 import logging
 
-from app.db.session import SessionLocal
+from app.db.session import get_db
 from app.db import models
 from app.services.search.torznab import TorznabClient
 
 router = APIRouter(prefix="/search", tags=["search"])
 logger = logging.getLogger(__name__)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("")
 def search(query: str = Query(min_length=2), db: Session = Depends(get_db)) -> dict[str, Any]:

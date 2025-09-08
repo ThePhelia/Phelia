@@ -21,3 +21,9 @@ def session_scope():
         raise
     finally:
         db.close()
+
+
+def get_db():
+    """Yield a database session scoped to a request."""
+    with session_scope() as db:
+        yield db

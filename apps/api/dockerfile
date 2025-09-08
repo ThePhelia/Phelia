@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    gunicorn alembic psycopg2-binary
+# Install Python dependencies listed in pyproject.toml via requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 # entrypoint.sh is placed here (mounted via a compose volume, but better to keep in the image)

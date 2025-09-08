@@ -1,20 +1,13 @@
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.session import SessionLocal
+from app.db.session import get_db
 from app.db import models
 from app.schemas.trackers import TrackerCreate, TrackerOut, TrackerUpdate
 import json
 import httpx
 
 router = APIRouter(prefix="/trackers", tags=["trackers"])
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("", response_model=list[TrackerOut])
 def list_trackers(db: Session = Depends(get_db)):

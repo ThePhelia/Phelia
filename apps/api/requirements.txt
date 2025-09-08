@@ -1,32 +1,30 @@
+# Sync with pyproject.toml; update that file to change dependencies.
+
 # --- Web / ASGI ---
-fastapi>=0.111,<0.115
-uvicorn[standard]>=0.30
-gunicorn>=23.0
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+gunicorn==23.0.0
 
 # --- DB / Migrations ---
-SQLAlchemy>=2.0
-alembic>=1.13
-psycopg2-binary>=2.9
+SQLAlchemy==2.0.32
+alembic==1.13.2  # for future migrations
+psycopg2-binary==2.9.9
 
 # --- Pydantic / settings ---
-pydantic>=2.7,<3
-pydantic-settings>=2.2
+pydantic==2.8.2
+pydantic-settings==2.4.0
 
 # --- Auth / crypto ---
-python-jose[cryptography]>=3.3
+python-jose[cryptography]==3.3.0
 # passlib + bcrypt: pin versions to avoid bug "module 'bcrypt' has no attribute '__about__'"
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
 # --- HTTP / feeds ---
-httpx>=0.27
-feedparser>=6.0.11
+httpx==0.27.0
+feedparser==6.0.11
 
 # --- Tasks / broker ---
-celery>=5.4
-redis>=5.0
-
-# --- Utils (optional but useful) ---
-python-dotenv>=1.0
-orjson>=3.10
+celery==5.4.0
+redis==5.0.7
 

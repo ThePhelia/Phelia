@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.db.session import SessionLocal
+from app.db.session import get_db
 from app.db import models
 from app.core.config import settings
 from app.services.jobs.tasks import celery_app
@@ -34,14 +34,6 @@ class DownloadOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _qb() -> QbClient:
@@ -75,18 +67,9 @@ async def pause_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
-<<<<<<< ours
     qb = _qb()
     await qb.login()
     await qb.pause_torrent(dl.hash)
-=======
-    async with _qb() as qb:
-        await qb.login()
-        r = await qb._c().post(
-            f"{qb.base_url}/api/v2/torrents/pause", data={"hashes": dl.hash}
-        )
-        r.raise_for_status()
->>>>>>> theirs
     return {}
 
 
@@ -97,18 +80,9 @@ async def resume_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
-<<<<<<< ours
     qb = _qb()
     await qb.login()
     await qb.resume_torrent(dl.hash)
-=======
-    async with _qb() as qb:
-        await qb.login()
-        r = await qb._c().post(
-            f"{qb.base_url}/api/v2/torrents/resume", data={"hashes": dl.hash}
-        )
-        r.raise_for_status()
->>>>>>> theirs
     return {}
 
 
@@ -118,19 +92,9 @@ async def delete_download(download_id: int, withFiles: bool = False, db: Session
     if not dl:
         raise HTTPException(404, "Not found")
     if dl.hash:
-<<<<<<< ours
         qb = _qb()
         await qb.login()
         await qb.delete_torrent(dl.hash, withFiles)
-=======
-        async with _qb() as qb:
-            await qb.login()
-            r = await qb._c().post(
-                f"{qb.base_url}/api/v2/torrents/delete",
-                data={"hashes": dl.hash, "deleteFiles": "true" if withFiles else "false"},
-            )
-            r.raise_for_status()
->>>>>>> theirs
     db.delete(dl)
     db.commit()
     return {}

@@ -15,13 +15,15 @@ async def test_pause_torrent_posts_hash():
         return httpx.Response(200, json={})
 
     transport = httpx.MockTransport(handler)
-    qb = QbClient("http://qb", "user", "pass")
-    qb._client = httpx.AsyncClient(transport=transport)
-    await qb.pause_torrent("abc")
-    await qb._client.aclose()
+    client = None
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        client = qb._client
+        await qb.pause_torrent("abc")
 
     assert recorded["url"] == "http://qb/api/v2/torrents/pause"
     assert recorded["data"] == {"hashes": "abc"}
+    assert client.is_closed
 
 
 @pytest.mark.anyio
@@ -34,13 +36,15 @@ async def test_resume_torrent_posts_hash():
         return httpx.Response(200, json={})
 
     transport = httpx.MockTransport(handler)
-    qb = QbClient("http://qb", "user", "pass")
-    qb._client = httpx.AsyncClient(transport=transport)
-    await qb.resume_torrent("abc")
-    await qb._client.aclose()
+    client = None
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        client = qb._client
+        await qb.resume_torrent("abc")
 
     assert recorded["url"] == "http://qb/api/v2/torrents/resume"
     assert recorded["data"] == {"hashes": "abc"}
+    assert client.is_closed
 
 
 @pytest.mark.anyio
@@ -53,10 +57,12 @@ async def test_delete_torrent_posts_hash_and_flag():
         return httpx.Response(200, json={})
 
     transport = httpx.MockTransport(handler)
-    qb = QbClient("http://qb", "user", "pass")
-    qb._client = httpx.AsyncClient(transport=transport)
-    await qb.delete_torrent("abc", True)
-    await qb._client.aclose()
+    client = None
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        client = qb._client
+        await qb.delete_torrent("abc", True)
 
     assert recorded["url"] == "http://qb/api/v2/torrents/delete"
     assert recorded["data"] == {"hashes": "abc", "deleteFiles": "true"}
+    assert client.is_closed

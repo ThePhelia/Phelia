@@ -6,14 +6,17 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi==0.111.0",
   "uvicorn[standard]==0.30.0",
+  "gunicorn==23.0.0",
   "pydantic==2.8.2",
   "pydantic-settings==2.4.0",
   "SQLAlchemy==2.0.32",
   "psycopg2-binary==2.9.9",
   "alembic==1.13.2",  # for future migrations
   "httpx==0.27.0",
+  "feedparser==6.0.11",
   "python-jose[cryptography]==3.3.0",
   "passlib[bcrypt]==1.7.4",
+  "bcrypt==4.0.1",  # pin with passlib to avoid "__about__" bug
   "celery==5.4.0",
   "redis==5.0.7",
 ]

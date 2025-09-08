@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.download import Download
+from app.db.models import Download
 from app.services.bt.qbittorrent import QbClient
 
 

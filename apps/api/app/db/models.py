@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Column, String, Integer, Float, DateTime, Text, Boolean
+from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from app.db.session import Base
 
@@ -19,14 +19,14 @@ class Download(Base):
     hash = Column(String(64), nullable=True, index=True)
     name = Column(String(512), nullable=True)
 
-    magnet = Column(Text, nullable=True)
-    save_path = Column(String(1024), nullable=True)
+    magnet = Column(Text, nullable=False)
+    save_path = Column(String(1024), nullable=False)
 
-    status = Column(String(32), nullable=True)
-    progress = Column(Float, nullable=True)
-    dlspeed = Column(Integer, nullable=True)
-    upspeed = Column(Integer, nullable=True)
-    eta = Column(Integer, nullable=True)
+    status = Column(String(32), nullable=False, default="queued")
+    progress = Column(Float, nullable=False, default=0.0)
+    dlspeed = Column(Integer, nullable=False, default=0)
+    upspeed = Column(Integer, nullable=False, default=0)
+    eta = Column(Integer, nullable=True, default=0)
 
 
 class Tracker(Base):

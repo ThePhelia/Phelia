@@ -7,13 +7,14 @@ from unittest.mock import AsyncMock
 
 from app.routers.downloads import router as downloads_router
 from app.db import models
-from app.db.session import SessionLocal
+from app.db.session import get_db
 
 
 @pytest.mark.anyio
 async def test_download_lookup(db_session):
     app = FastAPI()
     app.include_router(downloads_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
     # Not found case
@@ -33,15 +34,14 @@ async def test_download_lookup(db_session):
 
     assert resp_conflict.status_code == 409
     assert resp_delete.status_code == 204
-
-    with SessionLocal() as db:
-        assert db.get(models.Download, dl.id) is None
+    assert db_session.get(models.Download, dl.id) is None
 
 
 @pytest.mark.anyio
 async def test_pause_resume_success(monkeypatch, db_session):
     app = FastAPI()
     app.include_router(downloads_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
     dl = models.Download(

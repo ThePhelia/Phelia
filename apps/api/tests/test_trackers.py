@@ -4,6 +4,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.routers.trackers import router as trackers_router
 from app.db import models
+from app.db.session import get_db
 
 
 @pytest.mark.anyio
@@ -15,6 +16,7 @@ async def test_update_tracker_lookup(db_session):
 
     app = FastAPI()
     app.include_router(trackers_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

@@ -8,6 +8,7 @@ from httpx import AsyncClient, ASGITransport
 from app.routers.search import router as search_router, logger as search_logger
 from app.services.search.torznab import TorznabClient
 from app.db import models
+from app.db.session import get_db
 
 
 @pytest.mark.anyio
@@ -18,6 +19,7 @@ async def test_search_missing_api_key_logs(db_session, caplog):
 
     app = FastAPI()
     app.include_router(search_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
     with caplog.at_level(logging.WARNING, logger=search_logger.name):
@@ -40,6 +42,7 @@ async def test_search_error_logs(monkeypatch, db_session, caplog):
 
     app = FastAPI()
     app.include_router(search_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
     with caplog.at_level(logging.WARNING, logger=search_logger.name):

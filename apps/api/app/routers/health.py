@@ -1,21 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.core.config import settings
 from app.services.bt.qbittorrent import QbClient
-import asyncio
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/health")
 async def health():
-    ok = True
-    details = {}
-    # qBittorrent
+    qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
     try:
-        qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
         await qb.login()
         items = await qb.list_torrents()
-        details["qbittorrent"] = {"ok": True, "count": len(items)}
-    except Exception as e:
-        ok = False
-        details["qbittorrent"] = {"ok": False, "error": str(e)}
-    return {"ok": ok, "details": details}
+    except Exception:
+        logger.exception("Failed to reach qBittorrent")
+        raise HTTPException(status_code=502, detail="qBittorrent unreachable")
+    return {"ok": True, "details": {"qbittorrent": {"ok": True, "count": len(items)}}}

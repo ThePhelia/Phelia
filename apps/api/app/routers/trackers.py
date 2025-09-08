@@ -34,7 +34,7 @@ def create_tracker(body: TrackerCreate, db: Session = Depends(get_db)):
 
 @router.patch("/{tracker_id}", response_model=TrackerOut)
 def update_tracker(tracker_id: int, body: TrackerUpdate, db: Session = Depends(get_db)):
-    tr = db.query(models.Tracker).get(tracker_id)
+    tr = db.get(models.Tracker, tracker_id)
     if not tr:
         raise HTTPException(404, "Not found")
     if body.name is not None:
@@ -52,7 +52,7 @@ def update_tracker(tracker_id: int, body: TrackerUpdate, db: Session = Depends(g
 
 @router.delete("/{tracker_id}", status_code=204)
 def delete_tracker(tracker_id: int, db: Session = Depends(get_db)):
-    tr = db.query(models.Tracker).get(tracker_id)
+    tr = db.get(models.Tracker, tracker_id)
     if not tr:
         raise HTTPException(404, "Not found")
     db.delete(tr); db.commit()
@@ -60,7 +60,7 @@ def delete_tracker(tracker_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{tracker_id}/test")
 async def test_tracker(tracker_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
-    tr = db.query(models.Tracker).get(tracker_id)
+    tr = db.get(models.Tracker, tracker_id)
     if not tr:
         raise HTTPException(404, "Not found")
     data = json.loads(tr.creds_enc or "{}")

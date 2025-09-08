@@ -40,7 +40,7 @@ def _db() -> Session:
 def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Optional[str] = None) -> bool:
     db = _db()
     try:
-        dl = db.query(Download).get(download_id)
+        dl = db.get(Download, download_id)
         if not dl:
             return False
         if magnet and not dl.magnet:

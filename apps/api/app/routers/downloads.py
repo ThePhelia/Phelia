@@ -70,7 +70,7 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
 
 @router.post("/{download_id}/pause", status_code=204)
 def pause_download(download_id: int, db: Session = Depends(get_db)):
-    dl = db.query(models.Download).get(download_id)
+    dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if not dl.hash:
@@ -83,7 +83,7 @@ def pause_download(download_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{download_id}/resume", status_code=204)
 def resume_download(download_id: int, db: Session = Depends(get_db)):
-    dl = db.query(models.Download).get(download_id)
+    dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if not dl.hash:
@@ -96,7 +96,7 @@ def resume_download(download_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{download_id}", status_code=204)
 def delete_download(download_id: int, withFiles: bool = False, db: Session = Depends(get_db)):
-    dl = db.query(models.Download).get(download_id)
+    dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if dl.hash:

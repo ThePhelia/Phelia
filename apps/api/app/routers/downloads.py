@@ -1,147 +1,112 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
-from pydantic import BaseModel
-from pathlib import Path
-import asyncio
-from app.db.session import session_scope
-from app.db.models import Download
-from app.core.security import get_current_user
+from __future__ import annotations
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.db.session import SessionLocal
+from app.db import models
 from app.core.config import settings
-from app.services.jobs.tasks import enqueue_magnet, poll_status
+from app.services.jobs.tasks import celery_app
 from app.services.bt.qbittorrent import QbClient
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
 
-class DownloadIn(BaseModel):
-    magnet: str
-    savePath: str | None = None
+router = APIRouter(prefix="/downloads", tags=["downloads"])
 
-@router.get("/downloads")
-def list_downloads():
-    with session_scope() as db:
-        rows = db.query(Download).order_by(Download.created_at.desc()).all()
-        return [
-            {
-                "id": r.id,
-                "status": r.status,
-                "progress": r.progress,
-                "rateDown": r.rate_down,
-                "rateUp": r.rate_up,
-                "etaSec": r.eta_sec,
-                "savePath": r.save_path,
-                "client": r.client,
-                "hash": r.client_torrent_id,
-                "createdAt": r.created_at.isoformat(),
-            }
-            for r in rows
-        ]
 
-@router.post("/downloads")
-def create_download(body: DownloadIn):
+class DownloadCreate(BaseModel):
+    magnet: str = Field(min_length=10)
+    savePath: Optional[str] = None
+
+
+class DownloadOut(BaseModel):
+    id: int
+    name: Optional[str] = None
+    magnet: Optional[str] = None
+    hash: Optional[str] = None
+    progress: Optional[float] = None
+    dlspeed: Optional[int] = None
+    upspeed: Optional[int] = None
+    status: Optional[str] = None
+    eta: Optional[int] = None
+    save_path: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _qb() -> QbClient:
+    return QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
+
+
+@router.get("", response_model=List[DownloadOut])
+def list_downloads(db: Session = Depends(get_db)):
+    q = db.query(models.Download).order_by(models.Download.id.desc()).all()
+    return q
+
+
+@router.post("", response_model=dict, status_code=201)
+def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
     save_path = body.savePath or settings.DEFAULT_SAVE_DIR
-    allowed = [Path(p.strip()).resolve() for p in settings.ALLOWED_SAVE_DIRS.split(',')]
-    save_path_obj = Path(save_path).resolve()
-    if not any(save_path_obj.is_relative_to(a) for a in allowed):
-        raise HTTPException(status_code=400, detail=f"savePath not allowed. Allowed: {allowed}")
-    try:
-        save_path_obj.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cannot create directory: {e}")
+    dl = models.Download(magnet=body.magnet, save_path=save_path, status="queued")
+    db.add(dl)
+    db.commit()
+    db.refresh(dl)
+    celery_app.send_task(
+        "app.services.jobs.tasks.enqueue_magnet",
+        args=[dl.id, body.magnet, save_path],
+    )
+    return {"id": dl.id}
 
-    with session_scope() as db:
-        dl = Download(save_path=str(save_path_obj), status="queued")
-        db.add(dl)
-        db.flush()
-        enqueue_magnet.delay(dl.id, body.magnet, str(save_path_obj))
-        return {"id": dl.id}
 
-@router.get("/downloads/{download_id}")
-def get_download(download_id: int):
-    with session_scope() as db:
-        dl = db.get(Download, download_id)
-        if not dl:
-            raise HTTPException(status_code=404, detail="Not found")
-        poll_status.delay(download_id)
-        return {
-            "id": dl.id,
-            "status": dl.status,
-            "progress": dl.progress,
-            "rateDown": dl.rate_down,
-            "rateUp": dl.rate_up,
-            "etaSec": dl.eta_sec,
-            "savePath": dl.save_path,
-            "client": dl.client,
-            "hash": dl.client_torrent_id,
-        }
+@router.post("/{download_id}/pause", status_code=204)
+def pause_download(download_id: int, db: Session = Depends(get_db)):
+    dl = db.query(models.Download).get(download_id)
+    if not dl:
+        raise HTTPException(404, "Not found")
+    if not dl.hash:
+        raise HTTPException(409, "hash is not assigned yet")
+    qb = _qb()
+    qb.login()
+    qb._c().post(f"{qb.base_url}/api/v2/torrents/pause", data={"hashes": dl.hash}).raise_for_status()
+    return {}
 
-@router.post("/downloads/{download_id}/pause")
-async def pause_download(download_id: int):
-    with session_scope() as db:
-        dl = db.get(Download, download_id)
-        if not dl:
-            raise HTTPException(status_code=404, detail="Not found")
-        if not dl.client_torrent_id:
-            raise HTTPException(status_code=409, detail="Torrent hash not yet known; try again soon")
-    qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
-    await qb.pause(dl.client_torrent_id)
-    return {"ok": True}
 
-@router.post("/downloads/{download_id}/resume")
-async def resume_download(download_id: int):
-    with session_scope() as db:
-        dl = db.get(Download, download_id)
-        if not dl:
-            raise HTTPException(status_code=404, detail="Not found")
-        if not dl.client_torrent_id:
-            raise HTTPException(status_code=409, detail="Torrent hash not yet known; try again soon")
-    qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
-    await qb.resume(dl.client_torrent_id)
-    return {"ok": True}
+@router.post("/{download_id}/resume", status_code=204)
+def resume_download(download_id: int, db: Session = Depends(get_db)):
+    dl = db.query(models.Download).get(download_id)
+    if not dl:
+        raise HTTPException(404, "Not found")
+    if not dl.hash:
+        raise HTTPException(409, "hash is not assigned yet")
+    qb = _qb()
+    qb.login()
+    qb._c().post(f"{qb.base_url}/api/v2/torrents/resume", data={"hashes": dl.hash}).raise_for_status()
+    return {}
 
-@router.delete("/downloads/{download_id}")
-async def delete_download(download_id: int, deleteFiles: bool = False):
-    with session_scope() as db:
-        dl = db.get(Download, download_id)
-        if not dl:
-            raise HTTPException(status_code=404, detail="Not found")
-        if not dl.client_torrent_id:
-            raise HTTPException(status_code=409, detail="Torrent hash not yet known; try again soon")
-    qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
-    await qb.delete(dl.client_torrent_id, delete_files=deleteFiles)
-    # Обновим статус локально
-    with session_scope() as db:
-        dl = db.get(Download, download_id)
-        dl.status = "cancelled"
-        dl.progress = 0.0
-    return {"ok": True}
 
-# --- WebSocket: живой статус конкретной загрузки ---
-@router.websocket("/ws/downloads/{download_id}")
-async def ws_download_status(websocket: WebSocket, download_id: int):
-    await websocket.accept()
-    try:
-        while True:
-            # каждые 2 сек тянем актуальные данные из qBittorrent
-            with session_scope() as db:
-                dl = db.get(Download, download_id)
-                if not dl:
-                    await websocket.send_json({"error": "not_found"})
-                    break
-                torrent_hash = dl.client_torrent_id
-            qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
-            if torrent_hash:
-                info = await qb.info_by_hash(torrent_hash)
-                if info:
-                    payload = {
-                        "id": download_id,
-                        "hash": torrent_hash,
-                        "state": info.get("state"),
-                        "progress": info.get("progress"),
-                        "dlspeed": info.get("dlspeed"),
-                        "upspeed": info.get("upspeed"),
-                        "eta": info.get("eta"),
-                        "name": info.get("name"),
-                    }
-                    await websocket.send_json(payload)
-            await asyncio.sleep(2)
-    except WebSocketDisconnect:
-        return
+@router.delete("/{download_id}", status_code=204)
+def delete_download(download_id: int, withFiles: bool = False, db: Session = Depends(get_db)):
+    dl = db.query(models.Download).get(download_id)
+    if not dl:
+        raise HTTPException(404, "Not found")
+    if dl.hash:
+        qb = _qb()
+        qb.login()
+        qb._c().post(
+            f"{qb.base_url}/api/v2/torrents/delete",
+            data={"hashes": dl.hash, "deleteFiles": "true" if withFiles else "false"},
+        ).raise_for_status()
+    db.delete(dl)
+    db.commit()
+    return {}
+

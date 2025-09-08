@@ -1,5 +1,5 @@
 from pydantic import BaseModel, HttpUrl, Field
-from typing import Optional, Literal, Any, Dict
+from typing import Optional, Literal
 
 TrackerType = Literal["torznab"]
 
@@ -10,7 +10,7 @@ class TrackerBase(BaseModel):
     enabled: bool = True
 
 class TrackerCreate(TrackerBase):
-    api_key: Optional[str] = None  # можно оставить пустым: для Jackett подтянется из конфига
+    api_key: Optional[str] = None
 
 class TrackerUpdate(BaseModel):
     name: Optional[str] = None
@@ -20,7 +20,6 @@ class TrackerUpdate(BaseModel):
 
 class TrackerOut(TrackerBase):
     id: int
-    # НЕ выдаём api_key наружу
     class Config:
         from_attributes = True
 

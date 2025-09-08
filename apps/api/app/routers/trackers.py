@@ -1,3 +1,4 @@
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
@@ -58,7 +59,7 @@ def delete_tracker(tracker_id: int, db: Session = Depends(get_db)):
     return
 
 @router.post("/{tracker_id}/test")
-async def test_tracker(tracker_id: int, db: Session = Depends(get_db)):
+async def test_tracker(tracker_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
     tr = db.query(models.Tracker).get(tracker_id)
     if not tr:
         raise HTTPException(404, "Not found")
@@ -66,13 +67,9 @@ async def test_tracker(tracker_id: int, db: Session = Depends(get_db)):
     api_key = data.get("api_key")
     if not api_key:
         raise HTTPException(400, "api_key missing")
-
-    # Torznab caps как дешёвый тест доступности
-    url = tr.base_url
-    sep = "&" if "?" in url else "?"
-    test_url = f"{url}{sep}t=caps&apikey={api_key}"
+    url = tr.base_url + ("&" if "?" in tr.base_url else "?") + f"t=caps&apikey={api_key}"
     async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(test_url)
+        r = await client.get(url)
         ok = r.status_code == 200 and b"<caps" in r.content
     return {"ok": ok, "status": r.status_code}
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Optional
 
 from celery import Celery
 from sqlalchemy.orm import Session
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db import models
-from app.services.bt.qbittorrent import QBitClient
+from app.services.bt.qbittorrent import QbClient
 
 
 celery_app = Celery(
@@ -25,8 +25,8 @@ celery_app.conf.beat_schedule = {
 celery_app.conf.timezone = "UTC"
 
 
-def _qb() -> QBitClient:
-    return QBitClient(
+def _qb() -> QbClient:
+    return QbClient(
         base_url=settings.QB_URL,
         username=settings.QB_USER,
         password=settings.QB_PASS,
@@ -37,19 +37,24 @@ def _db() -> Session:
 
 
 @celery_app.task(name="app.services.jobs.tasks.enqueue_magnet")
-def enqueue_magnet(download_id: int) -> bool:
+def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Optional[str] = None) -> bool:
     db = _db()
     try:
         dl = db.query(models.Download).get(download_id)
-        if not dl or not dl.magnet:
+        if not dl:
+            return False
+        if magnet and not dl.magnet:
+            dl.magnet = magnet
+        if save_path and not dl.save_path:
+            dl.save_path = save_path
+        if not dl.magnet:
             return False
         qb = _qb(); qb.login()
         if dl.hash:
             return True
-        info = qb.add_magnet(dl.magnet, save_path=dl.save_path or settings.DEFAULT_SAVE_DIR)
-        if info and isinstance(info, dict) and info.get("hash"):
-            dl.hash = info["hash"]
-            db.commit()
+        _ = qb.add_magnet(dl.magnet, save_path=dl.save_path or settings.DEFAULT_SAVE_DIR)
+        dl.status = "queued"
+        db.commit()
         return True
     finally:
         db.close()
@@ -62,7 +67,7 @@ def poll_status() -> int:
     try:
         active: List[models.Download] = (
             db.query(models.Download)
-              .filter(models.Download.state.in_(("queued","downloading","stalled","checking")))
+              .filter(models.Download.status.in_(("queued","downloading","stalled","checking")))
               .all()
         )
         if not active:
@@ -79,7 +84,7 @@ def poll_status() -> int:
                 dl.progress = s.get("progress")
                 dl.dlspeed = s.get("dlspeed")
                 dl.upspeed = s.get("upspeed")
-                dl.state = s.get("state")
+                dl.status = s.get("state")
                 dl.eta = s.get("eta")
                 updated += 1
             db.commit()

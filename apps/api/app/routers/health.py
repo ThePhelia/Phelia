@@ -8,10 +8,10 @@ logger = logging.getLogger(__name__)
 
 @router.get("/health")
 async def health():
-    qb = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
     try:
-        await qb.login()
-        items = await qb.list_torrents()
+        async with QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS) as qb:
+            await qb.login()
+            items = await qb.list_torrents()
     except Exception:
         logger.exception("Failed to reach qBittorrent")
         raise HTTPException(status_code=502, detail="qBittorrent unreachable")

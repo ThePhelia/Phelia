@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import List, Optional
 
 from celery import Celery
 from sqlalchemy.orm import Session
 import logging
+import asyncio
+import inspect
+from typing import List, Optional
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -38,6 +40,12 @@ def _db() -> Session:
     return SessionLocal()
 
 
+async def _maybe_await(result):
+    if inspect.isawaitable(result):
+        return await result
+    return result
+
+
 @celery_app.task(name="app.services.jobs.tasks.enqueue_magnet")
 def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Optional[str] = None) -> bool:
     db = _db()
@@ -54,12 +62,26 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
             logger.warning("Download %s missing magnet link", download_id)
             return False
 
-        qb = _qb(); qb.login()
-        qb.add_magnet(dl.magnet, save_path=dl.save_path or settings.DEFAULT_SAVE_DIR)
+        async def _run() -> List[dict]:
+            qb = _qb()
+            try:
+                await _maybe_await(qb.login())
+                await _maybe_await(
+                    qb.add_magnet(
+                        dl.magnet,
+                        save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                    )
+                )
+                return await _maybe_await(qb.list_torrents())
+            finally:
+                close = getattr(qb, "close", None)
+                if close:
+                    await _maybe_await(close())
+
+        stats = asyncio.run(_run())
         dl.status = "queued"
         db.commit()
 
-        stats = _safe_list_torrents(qb)
         if stats:
             cand = _pick_candidate(stats, dl)
             if cand:
@@ -84,8 +106,17 @@ def poll_status() -> int:
         if not active:
             return 0
 
-        qb = _qb(); qb.login()
-        stats = _safe_list_torrents(qb)
+        async def _run() -> List[dict]:
+            qb = _qb()
+            try:
+                await _maybe_await(qb.login())
+                return await _maybe_await(qb.list_torrents())
+            finally:
+                close = getattr(qb, "close", None)
+                if close:
+                    await _maybe_await(close())
+
+        stats = asyncio.run(_run())
         if not stats:
             return 0
 
@@ -111,7 +142,10 @@ def poll_status() -> int:
 
 def _safe_list_torrents(qb: QbClient) -> List[dict]:
     try:
-        return qb.list_torrents()
+        res = qb.list_torrents()
+        if inspect.isawaitable(res):
+            return asyncio.run(res)
+        return res
     except Exception as e:
         logger.warning("Failed to list torrents: %s", e)
         return []

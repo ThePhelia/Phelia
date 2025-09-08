@@ -42,6 +42,42 @@ class QbClient:
         r.raise_for_status()
         return r.json()
 
+<<<<<<< ours
+    async def pause_torrent(self, torrent_hash: str) -> Dict:
+        r = await self._c().post(
+            f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash}
+        )
+        r.raise_for_status()
+        return {}
+
+    async def resume_torrent(self, torrent_hash: str) -> Dict:
+        r = await self._c().post(
+            f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash}
+        )
+        r.raise_for_status()
+        return {}
+
+    async def delete_torrent(self, torrent_hash: str, delete_files: bool = False) -> Dict:
+        r = await self._c().post(
+            f"{self.base_url}/api/v2/torrents/delete",
+            data={"hashes": torrent_hash, "deleteFiles": "true" if delete_files else "false"},
+        )
+        r.raise_for_status()
+        return {}
+=======
+    async def close(self) -> None:
+        """Close the underlying HTTP client if it was created."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def __aenter__(self) -> "QbClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
+>>>>>>> theirs
+
 
 QBitClient = QbClient
 

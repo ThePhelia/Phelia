@@ -69,43 +69,68 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/{download_id}/pause", status_code=204)
-def pause_download(download_id: int, db: Session = Depends(get_db)):
+async def pause_download(download_id: int, db: Session = Depends(get_db)):
     dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
+<<<<<<< ours
     qb = _qb()
-    qb.login()
-    qb._c().post(f"{qb.base_url}/api/v2/torrents/pause", data={"hashes": dl.hash}).raise_for_status()
+    await qb.login()
+    await qb.pause_torrent(dl.hash)
+=======
+    async with _qb() as qb:
+        await qb.login()
+        r = await qb._c().post(
+            f"{qb.base_url}/api/v2/torrents/pause", data={"hashes": dl.hash}
+        )
+        r.raise_for_status()
+>>>>>>> theirs
     return {}
 
 
 @router.post("/{download_id}/resume", status_code=204)
-def resume_download(download_id: int, db: Session = Depends(get_db)):
+async def resume_download(download_id: int, db: Session = Depends(get_db)):
     dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
+<<<<<<< ours
     qb = _qb()
-    qb.login()
-    qb._c().post(f"{qb.base_url}/api/v2/torrents/resume", data={"hashes": dl.hash}).raise_for_status()
+    await qb.login()
+    await qb.resume_torrent(dl.hash)
+=======
+    async with _qb() as qb:
+        await qb.login()
+        r = await qb._c().post(
+            f"{qb.base_url}/api/v2/torrents/resume", data={"hashes": dl.hash}
+        )
+        r.raise_for_status()
+>>>>>>> theirs
     return {}
 
 
 @router.delete("/{download_id}", status_code=204)
-def delete_download(download_id: int, withFiles: bool = False, db: Session = Depends(get_db)):
+async def delete_download(download_id: int, withFiles: bool = False, db: Session = Depends(get_db)):
     dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
     if dl.hash:
+<<<<<<< ours
         qb = _qb()
-        qb.login()
-        qb._c().post(
-            f"{qb.base_url}/api/v2/torrents/delete",
-            data={"hashes": dl.hash, "deleteFiles": "true" if withFiles else "false"},
-        ).raise_for_status()
+        await qb.login()
+        await qb.delete_torrent(dl.hash, withFiles)
+=======
+        async with _qb() as qb:
+            await qb.login()
+            r = await qb._c().post(
+                f"{qb.base_url}/api/v2/torrents/delete",
+                data={"hashes": dl.hash, "deleteFiles": "true" if withFiles else "false"},
+            )
+            r.raise_for_status()
+>>>>>>> theirs
     db.delete(dl)
     db.commit()
     return {}

@@ -35,21 +35,12 @@ def search(query: str = Query(min_length=2), db: Session = Depends(get_db)) -> d
         creds = json.loads(tr.creds_enc or "{}")
         api_key = creds.get("api_key")
         if not api_key:
-<<<<<<< ours
-            # skip tracker without key
-            continue
-        try:
-            out.extend(tc.search(tr.base_url, api_key, query))
-        except Exception:
-            # silently skip failing tracker
-=======
             logger.warning("Tracker %s missing api_key, skipping", tr.base_url or tr.name)
             continue
         try:
             out.extend(tc.search(tr.base_url, api_key, query))
         except Exception as e:
             logger.warning("Error searching tracker %s: %s", tr.base_url or tr.name, e)
->>>>>>> theirs
             continue
 
     # simple normalization: keep only items with magnet

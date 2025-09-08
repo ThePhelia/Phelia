@@ -36,6 +36,24 @@ export async function updateTracker(token: string, id: number, body: Partial<{na
   return r.json();
 }
 
+
+export async function searchApi(q: string) {
+  const r = await fetch(`${BASE}/search?query=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error(`search ${r.status}`);
+  return r.json() as Promise<{ total: number; items: Array<{ title: string; magnet?: string }> }>;
+}
+
+
+
+export async function createDownload(token: string, magnet: string, savePath = "/downloads") {
+  const r = await fetch(`${BASE}/downloads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ magnet, savePath }),
+  });
+  if (!r.ok) throw new Error(`createDownload ${r.status}`);
+  return r.json() as Promise<{ id: number }>;
+}
 export async function deleteTracker(token: string, id: number) {
   const r = await fetch(`${BASE}/trackers/${id}`, {
     method: "DELETE",

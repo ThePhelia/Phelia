@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.db import models
+from app.models.download import Download
 from app.services.bt.qbittorrent import QbClient
 
 
@@ -40,7 +40,7 @@ def _db() -> Session:
 def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Optional[str] = None) -> bool:
     db = _db()
     try:
-        dl = db.query(models.Download).get(download_id)
+        dl = db.query(Download).get(download_id)
         if not dl:
             return False
         if magnet and not dl.magnet:
@@ -49,12 +49,19 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
             dl.save_path = save_path
         if not dl.magnet:
             return False
+
         qb = _qb(); qb.login()
-        if dl.hash:
-            return True
-        _ = qb.add_magnet(dl.magnet, save_path=dl.save_path or settings.DEFAULT_SAVE_DIR)
+        qb.add_magnet(dl.magnet, save_path=dl.save_path or settings.DEFAULT_SAVE_DIR)
         dl.status = "queued"
         db.commit()
+
+        stats = _safe_list_torrents(qb)
+        if stats:
+            cand = _pick_candidate(stats, dl)
+            if cand:
+                dl.name = cand.get("name") or dl.name
+                dl.status = cand.get("state") or dl.status
+                db.commit()
         return True
     finally:
         db.close()
@@ -65,30 +72,56 @@ def poll_status() -> int:
     db = _db()
     updated = 0
     try:
-        active: List[models.Download] = (
-            db.query(models.Download)
-              .filter(models.Download.status.in_(("queued","downloading","stalled","checking")))
+        active: List[Download] = (
+            db.query(Download)
+              .filter(Download.status.in_(("queued","downloading","stalled","checking")))
               .all()
         )
         if not active:
             return 0
+
         qb = _qb(); qb.login()
-        by_hash = {d.hash: d for d in active if d.hash}
-        if by_hash:
-            stats = qb.list_torrents()
-            for s in stats:
-                h = s.get("hash")
-                if not h or h not in by_hash:
-                    continue
-                dl = by_hash[h]
-                dl.progress = s.get("progress")
-                dl.dlspeed = s.get("dlspeed")
-                dl.upspeed = s.get("upspeed")
-                dl.status = s.get("state")
-                dl.eta = s.get("eta")
-                updated += 1
+        stats = _safe_list_torrents(qb)
+        if not stats:
+            return 0
+
+        for d in active:
+            t = _pick_candidate(stats, d)
+            if not t:
+                continue
+            d.progress = t.get("progress") or d.progress
+            d.dlspeed = t.get("dlspeed") or d.dlspeed
+            d.upspeed = t.get("upspeed") or d.upspeed
+            d.status = t.get("state") or d.status
+            d.eta = t.get("eta") or d.eta
+            if not d.name and t.get("name"):
+                d.name = t.get("name")
+            updated += 1
+
+        if updated:
             db.commit()
         return updated
     finally:
         db.close()
+
+
+def _safe_list_torrents(qb: QbClient) -> List[dict]:
+    try:
+        return qb.list_torrents()
+    except Exception:
+        return []
+
+
+def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
+    if d.name:
+        for t in stats:
+            if (t.get("name") or "").strip() == d.name.strip():
+                return t
+    if d.save_path:
+        cands = [t for t in stats if (t.get("save_path") or "") == d.save_path]
+        if len(cands) == 1:
+            return cands[0]
+        if cands:
+            return cands[0]
+    return None
 

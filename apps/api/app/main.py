@@ -1,8 +1,9 @@
 from __future__ import annotations
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 import logging
+import redis.asyncio as redis
 
 from app.core.config import settings
 from app.db.init_db import init_db
@@ -37,4 +38,30 @@ def startup_event():
         ensure_jackett_tracker()
     except Exception as e:
         logger.exception("Error ensuring Jackett tracker")
+
+
+@app.websocket("/ws/downloads/{download_id}")
+async def download_ws(websocket: WebSocket, download_id: int):
+    await websocket.accept()
+    r = redis.from_url(settings.REDIS_URL)
+    pubsub = r.pubsub()
+    channel = f"downloads:{download_id}"
+    await pubsub.subscribe(channel)
+    try:
+        async for message in pubsub.listen():
+            if message.get("type") != "message":
+                continue
+            data = message.get("data")
+            if isinstance(data, bytes):
+                data = data.decode()
+            try:
+                await websocket.send_text(data)
+            except Exception:
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await pubsub.unsubscribe(channel)
+        await pubsub.close()
+        await r.close()
 

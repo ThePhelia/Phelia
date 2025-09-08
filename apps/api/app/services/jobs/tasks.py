@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.models import Download
 from app.services.bt.qbittorrent import QbClient
+from app.services.broadcast import broadcast_download
 
 
 celery_app = Celery(
@@ -81,6 +82,7 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
         stats = asyncio.run(_run())
         dl.status = "queued"
         db.commit()
+        broadcast_download(dl)
 
         if stats:
             cand = _pick_candidate(stats, dl)
@@ -88,6 +90,7 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
                 dl.name = cand.get("name") or dl.name
                 dl.status = cand.get("state") or dl.status
                 db.commit()
+                broadcast_download(dl)
         return True
     finally:
         db.close()
@@ -120,6 +123,7 @@ def poll_status() -> int:
         if not stats:
             return 0
 
+        changed: List[Download] = []
         for d in active:
             t = _pick_candidate(stats, d)
             if not t:
@@ -131,11 +135,13 @@ def poll_status() -> int:
             d.eta = t.get("eta") or d.eta
             if not d.name and t.get("name"):
                 d.name = t.get("name")
-            updated += 1
+            changed.append(d)
 
-        if updated:
+        if changed:
             db.commit()
-        return updated
+            for d in changed:
+                broadcast_download(d)
+        return len(changed)
     finally:
         db.close()
 

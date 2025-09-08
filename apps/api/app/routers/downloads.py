@@ -68,17 +68,10 @@ async def pause_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
-<<<<<<< ours
-    qb = _qb()
-    await qb.login()
-    await qb.pause_torrent(dl.hash)
-    return {}
-=======
     async with _qb() as qb:
         await qb.login()
         await qb.pause_torrent(dl.hash)
     return JSONResponse(status_code=204, content={})
->>>>>>> theirs
 
 
 @router.post("/{download_id}/resume", status_code=204)
@@ -88,17 +81,10 @@ async def resume_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not found")
     if not dl.hash:
         raise HTTPException(409, "hash is not assigned yet")
-<<<<<<< ours
-    qb = _qb()
-    await qb.login()
-    await qb.resume_torrent(dl.hash)
-    return {}
-=======
     async with _qb() as qb:
         await qb.login()
         await qb.resume_torrent(dl.hash)
     return JSONResponse(status_code=204, content={})
->>>>>>> theirs
 
 
 @router.delete("/{download_id}", status_code=204)
@@ -107,15 +93,9 @@ async def delete_download(download_id: int, withFiles: bool = False, db: Session
     if not dl:
         raise HTTPException(404, "Not found")
     if dl.hash:
-<<<<<<< ours
-        qb = _qb()
-        await qb.login()
-        await qb.delete_torrent(dl.hash, withFiles)
-=======
         async with _qb() as qb:
             await qb.login()
             await qb.delete_torrent(dl.hash, withFiles)
->>>>>>> theirs
     db.delete(dl)
     db.commit()
     return JSONResponse(status_code=204, content={})

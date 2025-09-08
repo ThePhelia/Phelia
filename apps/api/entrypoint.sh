@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 cd /app
 export PYTHONPATH=/app
 
-# Простой ожидатель Postgres (на всякий случай, healthcheck у нас уже есть)
-echo "Running Alembic migrations..."
-alembic upgrade head || { echo "Alembic failed"; exit 1; }
+echo "[entrypoint] running alembic migrations..."
+if alembic upgrade head; then
+  echo "[entrypoint] migrations done"
+else
+  echo "[entrypoint] alembic failed, continue anyway"
+fi
 
-echo "Starting Gunicorn..."
+echo "[entrypoint] starting gunicorn..."
 exec gunicorn app.main:app \
   -k uvicorn.workers.UvicornWorker \
   -b 0.0.0.0:${API_PORT:-8000} \

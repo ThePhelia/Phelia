@@ -1,39 +1,23 @@
-import logging
+from __future__ import annotations
+from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Depends
-from app.db.session import session_scope
-from app.db.models import Tracker
-from app.core.security import get_current_user
-from app.services.search.torznab import TorznabClient
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from app.db.session import SessionLocal
+from app.services.search.torznab import torznab_search_all
 
-router = APIRouter(dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/search", tags=["search"])
 
-@router.get("/search")
-async def search(query: str):
-    if not query or len(query) < 2:
-        raise HTTPException(status_code=400, detail="Query too short")
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-    results = []
+@router.get("")
+async def search(query: str = Query(..., min_length=1, max_length=200), db: Session = Depends(get_db)) -> Dict[str, Any]:
+    items = await torznab_search_all(db, query)
+    return {"query": query, "total": len(items), "items": items}
 
-    with session_scope() as db:
-        trackers = db.query(Tracker).filter_by(enabled=True).all()
-
-    for tr in trackers:
-        if tr.type == "torznab" and tr.base_url:
-            client = TorznabClient(tr.base_url, tr.creds_enc)
-            try:
-                res = await client.search(query)
-                results.extend(res)
-            except Exception as e:
-                logger.warning(f"Tracker {tr.name} failed: {e}")
-                continue
-
-    results.sort(key=lambda x: (x["seeds"], x["size"]), reverse=True)
-
-    return {
-        "items": results,
-        "total": len(results),
-        "query": query,
-    }

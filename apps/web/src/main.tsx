@@ -1,120 +1,203 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { createRoot } from 'react-dom/client'
-import axios from 'axios'
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1'
-const WS_BASE = import.meta.env.VITE_WS_BASE || 'ws://localhost:8000'
+const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
+const WS_BASE = (import.meta as any).env.VITE_WS_BASE || "ws://localhost:8000";
 
 function App() {
-  const [magnet, setMagnet] = useState('')
-  const [items, setItems] = useState<any[]>([])
-  const [token, setToken] = useState(localStorage.getItem('token') || '')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [magnet, setMagnet] = useState("");
+  const [items, setItems] = useState<any[]>([]);
+  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const ax = useMemo(() => {
+    const i = axios.create({ baseURL: API_BASE });
+    i.interceptors.request.use((cfg) => {
+      if (token) cfg.headers.Authorization = `Bearer ${token}`;
+      return cfg;
+    });
+    return i;
+  }, [token]);
 
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      refresh()
-    }
-  }, [token])
+    if (token) list();
+  }, [token]);
 
-  const refresh = async () => {
-    const { data } = await axios.get(`${API_BASE}/downloads`)
-    setItems(data)
+  async function login() {
+    const r = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    const t = data.accessToken || data.access_token || data.token;
+    if (!t) throw new Error("no token");
+    localStorage.setItem("token", t);
+    setToken(t);
   }
 
-  const login = async () => {
-    const base = API_BASE.replace(/\/api\/v1$/, '')
-    const { data } = await axios.post(`${base}/auth/login`, { email, password })
-    const tok = data.accessToken
-    if (tok) {
-      localStorage.setItem('token', tok)
-      setToken(tok)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${tok}`
-    }
+  async function list() {
+    const r = await ax.get("/downloads");
+    setItems(r.data.items || r.data || []);
   }
 
-  const addMagnet = async () => {
-    if (!magnet) return
-    await axios.post(`${API_BASE}/downloads`, { magnet, savePath: '/downloads' })
-    setMagnet('')
-    refresh()
+  async function add() {
+    await ax.post("/downloads", { magnet, savePath: "/downloads" });
+    setMagnet("");
+    await list();
   }
 
-  const pause = async (id: number) => { await axios.post(`${API_BASE}/downloads/${id}/pause`); refresh() }
-  const resume = async (id: number) => { await axios.post(`${API_BASE}/downloads/${id}/resume`); refresh() }
-  const del = async (id: number, delFiles: boolean) => {
-    await axios.delete(`${API_BASE}/downloads/${id}`, { params: { deleteFiles: delFiles }})
-    refresh()
+  async function pause(id: number) {
+    await ax.post(`/downloads/${id}/pause`);
+    await list();
   }
 
-  const attachWS = (id: number) => {
-    const ws = new WebSocket(`${WS_BASE}/ws/downloads/${id}`)
-    ws.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data)
-      setItems(prev => prev.map(it => it.id === id ? {
-        ...it,
-        status: msg.state || it.status,
-        progress: msg.progress ?? it.progress,
-        rateDown: msg.dlspeed ?? it.rateDown,
-        rateUp: msg.upspeed ?? it.rateUp,
-        etaSec: msg.eta ?? it.etaSec,
-        name: msg.name ?? it.name,
-      } : it))
-    }
-    ws.onclose = () => {}
+  async function resume(id: number) {
+    await ax.post(`/downloads/${id}/resume`);
+    await list();
   }
 
-  if (!token) {
-    return (
-      <div style={{maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, sans-serif'}}>
-        <h1>Music AutoDL</h1>
-        <h2>Login</h2>
-        <div style={{display:'flex', flexDirection:'column', gap:8}}>
-          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email" />
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="password" />
-          <button onClick={login}>Login</button>
-        </div>
-      </div>
-    )
+  async function del(id: number, withFiles: boolean) {
+    await ax.delete(`/downloads/${id}`, { params: { withFiles } });
+    await list();
+  }
+
+  function attachWS(id: number) {
+    const ws = new WebSocket(`${WS_BASE}/ws/downloads/${id}`);
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        if (!m || !m.id) return;
+        setItems((prev) =>
+          prev.map((x) => (x.id === m.id ? { ...x, ...m } : x))
+        );
+      } catch {}
+    };
+  }
+
+  async function doSearch() {
+    const r = await ax.get("/search", { params: { query } });
+    setResults(r.data.items || []);
   }
 
   return (
-    <div style={{maxWidth: 900, margin: '40px auto', fontFamily: 'system-ui, sans-serif'}}>
-      <h1>Music AutoDL</h1>
-      <div style={{display: 'flex', gap: 8}}>
-        <input value={magnet} onChange={e=>setMagnet(e.target.value)} placeholder="magnet:?xt=..." style={{flex:1, padding:8}} />
-        <button onClick={addMagnet}>Add</button>
-      </div>
-      <h2 style={{marginTop: 24}}>Downloads</h2>
-      <button onClick={refresh}>Refresh</button>
-      <table width="100%" cellPadding="6" style={{borderCollapse:'collapse'}}>
+    <div style={{ padding: 16, fontFamily: "sans-serif" }}>
+      <h3>Auth</h3>
+      {!token ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            login().catch((e) => alert("Login failed: " + e));
+          }}
+        >
+          <input
+            type="email"
+            name="email"
+            placeholder="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />{" "}
+          <input
+            type="password"
+            name="password"
+            placeholder="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />{" "}
+          <button type="submit">Login</button>
+        </form>
+      ) : (
+        <div>
+          <code>{token.slice(0, 24)}...</code>{" "}
+          <button
+            onClick={() => {
+              localStorage.removeItem("token");
+              setToken("");
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      )}
+
+      <h3>Search</h3>
+      <input
+        placeholder="query"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />{" "}
+      <button onClick={doSearch}>Search</button>
+      <ul>
+        {results.map((r, i) => (
+          <li key={i}>
+            {r.title}{" "}
+            <button
+              onClick={() => {
+                const m = r.magnet || r.link;
+                if (m) setMagnet(m);
+              }}
+            >
+              Use magnet
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <h3>Add</h3>
+      <input
+        placeholder="magnet"
+        value={magnet}
+        onChange={(e) => setMagnet(e.target.value)}
+        style={{ width: 600 }}
+      />{" "}
+      <button onClick={add}>Add</button>
+
+      <h3>Downloads</h3>
+      <button onClick={list}>Refresh</button>
+      <table cellPadding={6} style={{ borderCollapse: "collapse" }}>
         <thead>
-          <tr><th>ID</th><th>Name/Path</th><th>Status</th><th>Prog</th><th>DL↑/UL↑</th><th>ETA</th><th>Actions</th><th>WS</th></tr>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Progress</th>
+            <th>State</th>
+            <th>DL</th>
+            <th>UP</th>
+            <th>ETA</th>
+            <th>Actions</th>
+            <th>WS</th>
+          </tr>
         </thead>
         <tbody>
-          {items.map(it => (
-            <tr key={it.id} style={{borderTop:'1px solid #ddd'}}>
+          {items.map((it: any) => (
+            <tr key={it.id}>
               <td>{it.id}</td>
-              <td>{it.name || it.savePath}</td>
-              <td>{it.status}</td>
-              <td>{Math.round((it.progress||0)*100)}%</td>
-              <td>{Math.round((it.rateDown||0)/1024)} / {Math.round((it.rateUp||0)/1024)} kB/s</td>
-              <td>{it.etaSec ?? '-'}</td>
+              <td>{it.name || it.title}</td>
+              <td>{Math.round((it.progress || 0) * 100)}%</td>
+              <td>{it.state}</td>
+              <td>{it.dlspeed}</td>
+              <td>{it.upspeed}</td>
+              <td>{it.eta}</td>
               <td>
-                <button onClick={()=>pause(it.id)}>Pause</button>{' '}
-                <button onClick={()=>resume(it.id)}>Resume</button>{' '}
-                <button onClick={()=>del(it.id, false)}>Remove</button>{' '}
-                <button onClick={()=>del(it.id, true)}>Remove+Files</button>
+                <button onClick={() => pause(it.id)}>Pause</button>{" "}
+                <button onClick={() => resume(it.id)}>Resume</button>{" "}
+                <button onClick={() => del(it.id, false)}>Remove</button>{" "}
+                <button onClick={() => del(it.id, true)}>Remove+Files</button>
               </td>
-              <td><button onClick={()=>attachWS(it.id)}>WS</button></td>
+              <td>
+                <button onClick={() => attachWS(it.id)}>WS</button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById("root")!).render(<App />);
+

@@ -1,86 +1,48 @@
+from __future__ import annotations
+from typing import Dict, List, Optional
 import httpx
-from typing import Optional
-from urllib.parse import urlparse, parse_qs
-import base64
+
 
 class QbClient:
-    def __init__(self, base_url: str, username: str, password: str):
-        self.base_url = base_url.rstrip('/')
+    def __init__(self, base_url: str, username: str, password: str, timeout: float = 15.0):
+        self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
-        self.cookies = None
+        self.timeout = timeout
+        self._client: Optional[httpx.Client] = None
 
-    async def login(self):
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as c:
-            r = await c.post(f"{self.base_url}/api/v2/auth/login", data={
-                "username": self.username,
-                "password": self.password,
-            })
-            r.raise_for_status()
-            self.cookies = r.cookies
-            return True
+    def _c(self) -> httpx.Client:
+        if self._client is None:
+            self._client = httpx.Client(timeout=self.timeout, follow_redirects=True)
+        return self._client
 
-    async def _client(self) -> httpx.AsyncClient:
-        if self.cookies is None:
-            await self.login()
-        return httpx.AsyncClient(cookies=self.cookies, timeout=20)
+    def login(self) -> None:
+        r = self._c().post(
+            f"{self.base_url}/api/v2/auth/login",
+            data={"username": self.username, "password": self.password},
+        )
+        r.raise_for_status()
 
-    async def add_magnet(self, magnet: str, save_path: Optional[str] = None) -> str:
-        """Add a magnet link and return its torrent hash if derivable."""
-        # Try to extract hash from magnet uri (btih).
-        torrent_hash = ""
-        try:
-            query = parse_qs(urlparse(magnet).query)
-            for xt in query.get("xt", []):
-                if xt.startswith("urn:btih:"):
-                    ih = xt.split("urn:btih:")[-1]
-                    # btih may be hex (40 chars) or base32 (32 chars)
-                    if len(ih) == 32:
-                        try:
-                            torrent_hash = base64.b32decode(ih).hex()
-                        except Exception:
-                            torrent_hash = ih.lower()
-                    else:
-                        torrent_hash = ih.lower()
-                    break
-        except Exception:
-            torrent_hash = ""
+    def add_magnet(self, magnet: str, save_path: Optional[str] = None, category: Optional[str] = None) -> Dict:
+        data = {"urls": magnet}
+        if save_path:
+            data["savepath"] = save_path
+        if category:
+            data["category"] = category
+        r = self._c().post(f"{self.base_url}/api/v2/torrents/add", data=data)
+        r.raise_for_status()
+        return {}
 
-        async with await self._client() as c:
-            data = {"urls": magnet}
-            if save_path:
-                data["savepath"] = save_path
-            r = await c.post(f"{self.base_url}/api/v2/torrents/add", data=data)
-            r.raise_for_status()
-        return torrent_hash
+    def list_torrents(self, filter: Optional[str] = None, category: Optional[str] = None) -> List[Dict]:
+        params = {}
+        if filter:
+            params["filter"] = filter
+        if category:
+            params["category"] = category
+        r = self._c().get(f"{self.base_url}/api/v2/torrents/info", params=params)
+        r.raise_for_status()
+        return r.json()
 
-    async def list_torrents(self):
-        async with await self._client() as c:
-            r = await c.get(f"{self.base_url}/api/v2/torrents/info")
-            r.raise_for_status()
-            return r.json()
 
-    async def info_by_hash(self, torrent_hash: str):
-        async with await self._client() as c:
-            r = await c.get(f"{self.base_url}/api/v2/torrents/info", params={"hashes": torrent_hash})
-            r.raise_for_status()
-            data = r.json()
-            return data[0] if data else None
+QBitClient = QbClient
 
-    async def pause(self, torrent_hash: str):
-        async with await self._client() as c:
-            r = await c.post(f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash})
-            r.raise_for_status()
-
-    async def resume(self, torrent_hash: str):
-        async with await self._client() as c:
-            r = await c.post(f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash})
-            r.raise_for_status()
-
-    async def delete(self, torrent_hash: str, delete_files: bool = False):
-        async with await self._client() as c:
-            r = await c.post(f"{self.base_url}/api/v2/torrents/delete", data={
-                "hashes": torrent_hash,
-                "deleteFiles": "true" if delete_files else "false",
-            })
-            r.raise_for_status()

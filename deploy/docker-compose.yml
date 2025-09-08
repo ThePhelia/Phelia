@@ -1,12 +1,7 @@
-
-x-env: &default-env
-  TZ: ${TZ:-Etc/UTC}
-
 services:
   db:
     image: postgres:16
     environment:
-      <<: *default-env
       POSTGRES_USER: ${DB_USER:-phelia}
       POSTGRES_PASSWORD: ${DB_PASS:-phelia}
       POSTGRES_DB: ${DB_NAME:-phelia}
@@ -32,20 +27,38 @@ services:
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     environment:
-      <<: *default-env
       WEBUI_PORT: 8080
-      # при первом старте qB сам создаст конфиг в /config
+      TZ: ${TZ:-Etc/UTC}
     volumes:
       - qb_config:/config
       - downloads:/downloads
       - music:/music
     ports:
-      - "8080:8080" # в проде не публиковать наружу
+      - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080"]
       interval: 10s
       timeout: 5s
       retries: 30
+
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-Etc/UTC}
+      AUTO_UPDATE: "true"
+    volumes:
+      - jackett_config:/config
+      - downloads:/downloads
+    ports:
+      - "9117:9117"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9117/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
 
   api:
     build:
@@ -54,12 +67,12 @@ services:
     env_file:
       - ./env/api.env
     environment:
-      <<: *default-env
-      # жёстко пробрасываем DSN и Redis из compose
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       QB_URL: http://qbittorrent:8080
+      TZ: ${TZ:-Etc/UTC}
+    command: ["/app/entrypoint.sh"]
     depends_on:
       db:
         condition: service_healthy
@@ -67,15 +80,17 @@ services:
         condition: service_healthy
       qbittorrent:
         condition: service_healthy
-    command: ["/app/entrypoint.sh"]
+      jackett:
+        condition: service_started
     volumes:
       - ../apps/api:/app
       - downloads:/downloads
       - music:/music
+      - jackett_config:/jackett_config:ro
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/v1/health >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -87,11 +102,11 @@ services:
     env_file:
       - ./env/api.env
     environment:
-      <<: *default-env
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       QB_URL: http://qbittorrent:8080
+      TZ: ${TZ:-Etc/UTC}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","worker","-l","info","-O","fair"]
     depends_on:
       redis:
@@ -112,10 +127,10 @@ services:
     env_file:
       - ./env/api.env
     environment:
-      <<: *default-env
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
+      TZ: ${TZ:-Etc/UTC}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","beat","-l","info"]
     depends_on:
       redis:
@@ -130,12 +145,15 @@ services:
   web:
     build:
       context: ../apps/web
+      args:
+        VITE_API_BASE: ${VITE_API_BASE}
+        VITE_WS_BASE: ${VITE_WS_BASE}
     env_file:
       - ./env/web.env
     environment:
-      <<: *default-env
       VITE_API_BASE: ${VITE_API_BASE:-http://localhost:${API_PORT:-8000}/api/v1}
       VITE_WS_BASE: ${VITE_WS_BASE:-ws://localhost:${API_PORT:-8000}}
+      TZ: ${TZ:-Etc/UTC}
     ports:
       - "${WEB_PORT:-5173}:80"
     depends_on:
@@ -148,4 +166,5 @@ volumes:
   qb_config:
   downloads:
   music:
+  jackett_config:
 

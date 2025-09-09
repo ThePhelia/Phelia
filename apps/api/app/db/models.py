@@ -32,7 +32,7 @@ class Tracker(Base):
     __tablename__ = "trackers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(64), unique=True)
     type: Mapped[str] = mapped_column(String(16))
     base_url: Mapped[str | None] = mapped_column(String(255))
     creds_enc: Mapped[str | None] = mapped_column(String(512))

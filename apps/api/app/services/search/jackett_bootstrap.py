@@ -2,11 +2,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Optional
+import logging
+
 from app.db.session import SessionLocal
 from app.db import models
 
 JACKETT_CONFIG = Path("/jackett_config/Jackett/ServerConfig.json")
 JACKETT_BASE   = "http://jackett:9117/api/v2.0/indexers/all/results/torznab/"
+
+logger = logging.getLogger(__name__)
 
 def read_jackett_apikey() -> Optional[str]:
     try:
@@ -24,7 +28,18 @@ def ensure_jackett_tracker(name: str = "jackett-all") -> bool:
     if not api_key:
         return False
     with SessionLocal() as db:
-        tr = db.query(models.Tracker).filter(models.Tracker.name == name).one_or_none()
+        qs = (
+            db.query(models.Tracker)
+              .filter(models.Tracker.name == name)
+              .order_by(models.Tracker.id)
+        )
+        tr = qs.first()
+        extras = qs.offset(1).all()
+        if extras:
+            for extra in extras:
+                db.delete(extra)
+            logger.warning("Removed %d duplicate tracker rows for %s", len(extras), name)
+
         creds_enc = json.dumps({"api_key": api_key})
         if tr:
             tr.type = "torznab"
@@ -34,7 +49,7 @@ def ensure_jackett_tracker(name: str = "jackett-all") -> bool:
         else:
             tr = models.Tracker(
                 name=name, type="torznab", base_url=JACKETT_BASE,
-                creds_enc=creds_enc, enabled=True
+                creds_enc=creds_enc, enabled=True,
             )
             db.add(tr)
         db.commit()

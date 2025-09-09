@@ -1,6 +1,9 @@
 from __future__ import annotations
 from typing import Dict, List, Optional
 import httpx
+import logging
+
+from app.core.config import settings
 
 
 class QbClient:
@@ -78,4 +81,19 @@ class QbClient:
 
 
 QBitClient = QbClient
+
+logger = logging.getLogger(__name__)
+
+
+async def health_check() -> None:
+    client = QbClient(
+        settings.QB_URL, settings.QB_USER, settings.QB_PASS, timeout=5.0
+    )
+    try:
+        async with client:
+            await client.login()
+            await client.list_torrents()
+        logger.info("qBittorrent reachable at %s", settings.QB_URL)
+    except Exception as e:
+        logger.error("qBittorrent health check failed: %s", e)
 

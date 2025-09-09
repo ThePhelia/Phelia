@@ -3,12 +3,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 import logging
+import asyncio
 import redis.asyncio as redis
 
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.routers import health, auth, downloads, search, trackers
 from app.services.search.jackett_bootstrap import ensure_jackett_tracker
+from app.services.bt.qbittorrent import health_check as qb_health_check
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,10 @@ def startup_event():
         ensure_jackett_tracker()
     except Exception as e:
         logger.exception("Error ensuring Jackett tracker")
+    try:
+        asyncio.run(qb_health_check())
+    except Exception:
+        logger.exception("Error checking qBittorrent connectivity")
 
 
 @app.websocket("/ws/downloads/{download_id}")

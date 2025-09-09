@@ -21,9 +21,13 @@ export function Trackers({ token }: { token: string }) {
   useEffect(() => { if (token) load(); }, [token]);
 
   async function add() {
-    await createTracker(token, { name, base_url: baseUrl, api_key: apiKey, enabled: true });
-    setName(""); setBaseUrl(""); setApiKey("");
-    await load();
+    try {
+      await createTracker(token, { name, base_url: baseUrl, api_key: apiKey, enabled: true });
+      setName(""); setBaseUrl(""); setApiKey("");
+      await load();
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
   }
 
   async function toggle(id: number, enabled: boolean) {
@@ -37,8 +41,12 @@ export function Trackers({ token }: { token: string }) {
   }
 
   async function test(id: number) {
-    const r = await testTracker(token, id);
-    alert(`ok=${r.ok} status=${r.status}`);
+    try {
+      const r = await testTracker(token, id);
+      alert(`ok=${r.ok} status=${r.status}`);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
   }
 
   return (

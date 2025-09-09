@@ -56,17 +56,25 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
     db.add(dl)
     db.commit()
     db.refresh(dl)
+    logger.info("Enqueuing magnet %s to %s", body.magnet, save_path)
     try:
         res = celery_app.send_task(
             "app.services.jobs.tasks.enqueue_magnet",
             args=[dl.id, body.magnet, save_path],
         )
+        task_id = getattr(res, "id", "unknown")
+        logger.info("Celery task %s dispatched for download %s", task_id, dl.id)
         if res.failed():
+            logger.error(
+                "Celery task %s failed for magnet %s", task_id, body.magnet
+            )
             dl.status = "error"
             db.commit()
             raise HTTPException(500, "Failed to enqueue magnet")
     except Exception as e:
-        logger.exception("Failed to enqueue magnet %s: %s", dl.id, e)
+        logger.exception(
+            "Failed to enqueue magnet %s to %s: %s", body.magnet, save_path, e
+        )
         dl.status = "error"
         db.commit()
         raise HTTPException(500, "Failed to enqueue magnet")
@@ -82,7 +90,9 @@ async def pause_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(409, "hash is not assigned yet")
     async with _qb() as qb:
         await qb.login()
+        logger.info("Pausing torrent %s", dl.hash)
         await qb.pause_torrent(dl.hash)
+        logger.info("Paused torrent %s", dl.hash)
     return JSONResponse(status_code=204, content={})
 
 
@@ -95,7 +105,9 @@ async def resume_download(download_id: int, db: Session = Depends(get_db)):
         raise HTTPException(409, "hash is not assigned yet")
     async with _qb() as qb:
         await qb.login()
+        logger.info("Resuming torrent %s", dl.hash)
         await qb.resume_torrent(dl.hash)
+        logger.info("Resumed torrent %s", dl.hash)
     return JSONResponse(status_code=204, content={})
 
 
@@ -107,7 +119,9 @@ async def delete_download(download_id: int, withFiles: bool = False, db: Session
     if dl.hash:
         async with _qb() as qb:
             await qb.login()
+            logger.info("Deleting torrent %s (files=%s)", dl.hash, withFiles)
             await qb.delete_torrent(dl.hash, withFiles)
+            logger.info("Deleted torrent %s", dl.hash)
     db.delete(dl)
     db.commit()
     return JSONResponse(status_code=204, content={})

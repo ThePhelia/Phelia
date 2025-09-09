@@ -26,6 +26,7 @@ def test_init_db_exception_logged(monkeypatch, caplog):
 
     monkeypatch.setattr(main, "init_db", bad_init)
     monkeypatch.setattr(main, "ensure_jackett_tracker", lambda: None)
+    monkeypatch.setattr(main, "qb_health_check", lambda: None)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         main.startup_event()
@@ -40,6 +41,7 @@ def test_ensure_jackett_tracker_exception_logged(monkeypatch, caplog):
         raise RuntimeError("jackett failure")
 
     monkeypatch.setattr(main, "ensure_jackett_tracker", bad_jackett)
+    monkeypatch.setattr(main, "qb_health_check", lambda: None)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         main.startup_event()

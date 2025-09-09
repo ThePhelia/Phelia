@@ -43,10 +43,33 @@ export function Trackers({ token }: { token: string }) {
   async function test(id: number) {
     try {
       const r = await testTracker(token, id);
-      alert(`ok=${r.ok} status=${r.status}`);
+      if (!r.ok && r.status === 100) {
+        alert("Invalid API key");
+      } else {
+        alert(`ok=${r.ok} status=${r.status}`);
+      }
     } catch (e: any) {
       alert(e.message || String(e));
     }
+  }
+
+  function onBaseUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    try {
+      const u = new URL(v);
+      const key = u.searchParams.get("apikey");
+      if (key) {
+        setApiKey(key);
+        u.searchParams.delete("apikey");
+        const search = u.searchParams.toString();
+        const normalized = u.origin + u.pathname + (search ? `?${search}` : "") + u.hash;
+        setBaseUrl(normalized);
+        return;
+      }
+    } catch {
+      // ignore parse errors and keep the raw value
+    }
+    setBaseUrl(v);
   }
 
   return (
@@ -54,7 +77,7 @@ export function Trackers({ token }: { token: string }) {
       <h3>Trackers</h3>
       <div style={{ marginBottom: 8 }}>
         <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
-        <input placeholder="base_url" value={baseUrl} onChange={e=>setBaseUrl(e.target.value)} style={{ width: 420, marginLeft: 6 }} />
+        <input placeholder="base_url" value={baseUrl} onChange={onBaseUrlChange} style={{ width: 420, marginLeft: 6 }} />
         <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
       </div>

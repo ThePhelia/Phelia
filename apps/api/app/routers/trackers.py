@@ -7,6 +7,7 @@ from app.db import models
 from app.schemas.trackers import TrackerCreate, TrackerOut, TrackerUpdate
 import json
 import httpx
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trackers", tags=["trackers"])
@@ -19,7 +20,14 @@ def list_trackers(db: Session = Depends(get_db)):
 def create_tracker(body: TrackerCreate, db: Session = Depends(get_db)):
     if db.query(models.Tracker).filter(models.Tracker.name == body.name).first():
         raise HTTPException(400, "Tracker with this name already exists")
-    base_url = str(body.base_url).rstrip("/")
+    raw_base = str(body.base_url)
+    split = urlsplit(raw_base)
+    path = split.path.rstrip("/")
+    qs = parse_qsl(split.query, keep_blank_values=True)
+    filtered = [(k, v) for k, v in qs if k.lower() != "apikey"]
+    if len(filtered) != len(qs):
+        logger.warning("create_tracker stripping apikey from base_url")
+    base_url = urlunsplit((split.scheme, split.netloc, path, urlencode(filtered), split.fragment))
     creds_enc = json.dumps({"api_key": body.api_key} if body.api_key else {})
     tr = models.Tracker(
         name=body.name, type="torznab", base_url=base_url,

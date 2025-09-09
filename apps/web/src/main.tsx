@@ -178,7 +178,7 @@ function App() {
               <td>{it.id}</td>
               <td>{it.name || it.title}</td>
               <td>{Math.round((it.progress || 0) * 100)}%</td>
-              <td>{it.state}</td>
+              <td>{it.status}</td>
               <td>{it.dlspeed}</td>
               <td>{it.upspeed}</td>
               <td>{it.eta}</td>

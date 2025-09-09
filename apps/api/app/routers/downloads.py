@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.services.bt.qbittorrent import QbClient
 
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
+logger = logging.getLogger(__name__)
 
 
 class DownloadCreate(BaseModel):
@@ -54,10 +56,20 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
     db.add(dl)
     db.commit()
     db.refresh(dl)
-    celery_app.send_task(
-        "app.services.jobs.tasks.enqueue_magnet",
-        args=[dl.id, body.magnet, save_path],
-    )
+    try:
+        res = celery_app.send_task(
+            "app.services.jobs.tasks.enqueue_magnet",
+            args=[dl.id, body.magnet, save_path],
+        )
+        if res.failed():
+            dl.status = "error"
+            db.commit()
+            raise HTTPException(500, "Failed to enqueue magnet")
+    except Exception as e:
+        logger.exception("Failed to enqueue magnet %s: %s", dl.id, e)
+        dl.status = "error"
+        db.commit()
+        raise HTTPException(500, "Failed to enqueue magnet")
     return {"id": dl.id}
 
 

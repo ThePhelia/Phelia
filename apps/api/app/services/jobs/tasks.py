@@ -79,7 +79,15 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
                 if close:
                     await _maybe_await(close())
 
-        stats = asyncio.run(_run())
+        try:
+            stats = asyncio.run(_run())
+        except Exception as e:
+            logger.exception("Failed to enqueue magnet for %s: %s", download_id, e)
+            dl.status = "error"
+            db.commit()
+            broadcast_download(dl)
+            return False
+
         dl.status = "queued"
         db.commit()
         broadcast_download(dl)
@@ -92,6 +100,14 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
                 db.commit()
                 broadcast_download(dl)
         return True
+    except Exception as e:
+        logger.exception("Error in enqueue_magnet for %s: %s", download_id, e)
+        dl = locals().get("dl")
+        if dl:
+            dl.status = "error"
+            db.commit()
+            broadcast_download(dl)
+        return False
     finally:
         db.close()
 

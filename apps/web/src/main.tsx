@@ -42,13 +42,23 @@ function App() {
 
   async function list() {
     const r = await ax.get("/downloads");
-    setItems(r.data.items || r.data || []);
+    const arr = r.data.items || r.data || [];
+    setItems(arr);
+    return arr;
   }
 
   async function add() {
-    await ax.post("/downloads", { magnet, savePath: "/downloads" });
-    setMagnet("");
-    await list();
+    try {
+      const r = await ax.post("/downloads", { magnet, savePath: "/downloads" });
+      const id = r.data?.id;
+      setMagnet("");
+      const arr = await list();
+      if (!arr.find((it: any) => it.id === id)) {
+        alert("Download was not created");
+      }
+    } catch (e) {
+      alert("Failed to add download: " + e);
+    }
   }
 
   async function pause(id: number) {

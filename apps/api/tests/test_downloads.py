@@ -3,11 +3,35 @@ from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.routers.downloads import router as downloads_router
 from app.db import models
 from app.db.session import get_db
+from app.services.jobs.tasks import celery_app
+
+
+@pytest.mark.anyio
+async def test_create_download(monkeypatch, db_session):
+    app = FastAPI()
+    app.include_router(downloads_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+    transport = ASGITransport(app=app)
+
+    monkeypatch.setattr(
+        celery_app,
+        "send_task",
+        MagicMock(return_value=SimpleNamespace(failed=lambda: False)),
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/v1/downloads",
+            json={"magnet": "magnet:?xt=urn:btih:abcd"},
+        )
+
+    assert resp.status_code == 201
+    assert db_session.query(models.Download).count() == 1
 
 
 @pytest.mark.anyio

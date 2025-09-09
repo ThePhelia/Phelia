@@ -52,6 +52,20 @@ async def test_search_error_logs(monkeypatch, db_session, caplog):
     assert any("Error searching tracker" in r.message for r in caplog.records)
 
 
+@pytest.mark.anyio
+async def test_search_no_trackers_returns_400(db_session):
+    app = FastAPI()
+    app.include_router(search_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/search", params={"query": "foo"})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "No torznab trackers configured"
+
+
 def test_torznab_client_builds_url(monkeypatch):
     captured = {}
 

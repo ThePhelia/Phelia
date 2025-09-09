@@ -90,8 +90,15 @@ function App() {
   }
 
   async function doSearch() {
-    const r = await ax.get("/search", { params: { query } });
-    setResults(r.data.items || []);
+    try {
+      const r = await ax.get("/search", { params: { query } });
+      setResults(r.data.items || []);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.detail || e?.message || String(e);
+      alert("Search failed: " + msg);
+      setResults([]);
+    }
   }
 
   return (

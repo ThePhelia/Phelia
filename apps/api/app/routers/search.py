@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 import json
 import logging
@@ -21,7 +21,7 @@ def search(query: str = Query(min_length=2), db: Session = Depends(get_db)) -> d
           .all()
     )
     if not trackers:
-        return {"total": 0, "items": []}
+        raise HTTPException(status_code=400, detail="No torznab trackers configured")
 
     tc = TorznabClient()
     out: list[dict] = []

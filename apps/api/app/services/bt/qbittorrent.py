@@ -13,19 +13,20 @@ class QbClient:
         self.password = password
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
+        self._headers = {"Referer": f"{self.base_url}/"}
 
     def _c(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
                 follow_redirects=True,
-                headers={"Referer": f"{self.base_url}/"},
             )
         return self._client
     async def login(self) -> None:
         r = await self._c().post(
             f"{self.base_url}/api/v2/auth/login",
             data={"username": self.username, "password": self.password},
+            headers=self._headers,
         )
         r.raise_for_status()
 
@@ -35,7 +36,11 @@ class QbClient:
             data["savepath"] = save_path
         if category:
             data["category"] = category
-        r = await self._c().post(f"{self.base_url}/api/v2/torrents/add", data=data)
+        r = await self._c().post(
+            f"{self.base_url}/api/v2/torrents/add",
+            data=data,
+            headers=self._headers,
+        )
         r.raise_for_status()
         return {}
 
@@ -52,7 +57,10 @@ class QbClient:
             data["category"] = category
         files = {"torrents": ("torrent.torrent", torrent)}
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/add", data=data, files=files
+            f"{self.base_url}/api/v2/torrents/add",
+            data=data,
+            files=files,
+            headers=self._headers,
         )
         r.raise_for_status()
         return {}
@@ -69,14 +77,18 @@ class QbClient:
 
     async def pause_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash}
+            f"{self.base_url}/api/v2/torrents/pause",
+            data={"hashes": torrent_hash},
+            headers=self._headers,
         )
         r.raise_for_status()
         return {}
 
     async def resume_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash}
+            f"{self.base_url}/api/v2/torrents/resume",
+            data={"hashes": torrent_hash},
+            headers=self._headers,
         )
         r.raise_for_status()
         return {}
@@ -85,6 +97,7 @@ class QbClient:
         r = await self._c().post(
             f"{self.base_url}/api/v2/torrents/delete",
             data={"hashes": torrent_hash, "deleteFiles": "true" if delete_files else "false"},
+            headers=self._headers,
         )
         r.raise_for_status()
         return {}

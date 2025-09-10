@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, Float, Boolean
+from sqlalchemy import Column, String, Text, Integer, Float, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
@@ -23,8 +23,12 @@ class Download(Base):
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    dlspeed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    upspeed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dlspeed: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    upspeed: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     eta: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
 
 

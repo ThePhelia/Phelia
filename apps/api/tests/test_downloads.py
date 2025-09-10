@@ -36,6 +36,17 @@ async def test_create_download(monkeypatch, db_session):
     assert db_session.query(models.Download).count() == 1
 
 
+def test_download_defaults(db_session):
+    """Row persists with default speeds set."""
+    dl = models.Download(magnet="magnet:?xt=urn:btih:abcd", save_path="/downloads")
+    db_session.add(dl)
+    db_session.commit()
+    db_session.refresh(dl)
+
+    assert dl.dlspeed == 0
+    assert dl.upspeed == 0
+
+
 @pytest.mark.anyio
 async def test_create_download_qb_unreachable(monkeypatch, db_session):
     app = FastAPI()

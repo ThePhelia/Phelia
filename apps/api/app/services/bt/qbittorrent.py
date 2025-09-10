@@ -16,7 +16,11 @@ class QbClient:
 
     def _c(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout, follow_redirects=True)
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=True,
+                headers={"Referer": f"{self.base_url}/"},
+            )
         return self._client
     async def login(self) -> None:
         r = await self._c().post(

@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import asyncio
 import pytest
 
 # Ensure environment variables for Settings before importing the app
@@ -26,10 +27,14 @@ def test_init_db_exception_logged(monkeypatch, caplog):
 
     monkeypatch.setattr(main, "init_db", bad_init)
     monkeypatch.setattr(main, "ensure_jackett_tracker", lambda: None)
-    monkeypatch.setattr(main, "qb_health_check", lambda: None)
+
+    async def noop_qb_health_check():
+        return None
+
+    monkeypatch.setattr(main, "qb_health_check", noop_qb_health_check)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
-        main.startup_event()
+        asyncio.run(main.startup_event())
 
     assert any("Error initializing database" in record.message for record in caplog.records)
 
@@ -41,9 +46,13 @@ def test_ensure_jackett_tracker_exception_logged(monkeypatch, caplog):
         raise RuntimeError("jackett failure")
 
     monkeypatch.setattr(main, "ensure_jackett_tracker", bad_jackett)
-    monkeypatch.setattr(main, "qb_health_check", lambda: None)
+
+    async def noop_qb_health_check():
+        return None
+
+    monkeypatch.setattr(main, "qb_health_check", noop_qb_health_check)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
-        main.startup_event()
+        asyncio.run(main.startup_event())
 
     assert any("Error ensuring Jackett tracker" in record.message for record in caplog.records)

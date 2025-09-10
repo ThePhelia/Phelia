@@ -3,7 +3,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 import logging
-import asyncio
 import redis.asyncio as redis
 
 from app.core.config import settings
@@ -31,7 +30,7 @@ app.include_router(search.router, prefix="/api/v1")
 app.include_router(trackers.router, prefix="/api/v1")
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     try:
         init_db()
     except Exception as e:
@@ -41,7 +40,7 @@ def startup_event():
     except Exception as e:
         logger.exception("Error ensuring Jackett tracker")
     try:
-        asyncio.run(qb_health_check())
+        await qb_health_check()
     except Exception:
         logger.exception("Error checking qBittorrent connectivity")
 

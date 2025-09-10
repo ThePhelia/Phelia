@@ -66,3 +66,53 @@ async def test_delete_torrent_posts_hash_and_flag():
     assert recorded["url"] == "http://qb/api/v2/torrents/delete"
     assert recorded["data"] == {"hashes": "abc", "deleteFiles": "true"}
     assert client.is_closed
+
+
+@pytest.mark.anyio
+async def test_post_requests_include_referer(monkeypatch):
+    recorded = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("referer") != "http://qb/":
+            return httpx.Response(403)
+        recorded["headers"] = dict(request.headers)
+        return httpx.Response(200, json={})
+
+    transport = httpx.MockTransport(handler)
+    original_async_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        kwargs["transport"] = transport
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client_factory)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        await qb.add_magnet("magnet:?xt=urn:btih:abc")
+
+    assert recorded["headers"]["referer"] == "http://qb/"
+
+
+@pytest.mark.anyio
+async def test_add_torrent_file_includes_referer(monkeypatch):
+    recorded = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("referer") != "http://qb/":
+            return httpx.Response(403)
+        recorded["headers"] = dict(request.headers)
+        return httpx.Response(200, json={})
+
+    transport = httpx.MockTransport(handler)
+    original_async_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        kwargs["transport"] = transport
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client_factory)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        await qb.add_torrent_file(b"data")
+
+    assert recorded["headers"]["referer"] == "http://qb/"

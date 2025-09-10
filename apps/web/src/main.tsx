@@ -49,7 +49,16 @@ function App() {
 
   async function add() {
     try {
-      const r = await ax.post("/downloads", { magnet, savePath: "/downloads" });
+      const body: any = { savePath: "/downloads" };
+      if (magnet.startsWith("magnet:")) {
+        body.magnet = magnet;
+      } else if (magnet) {
+        body.url = magnet;
+      } else {
+        alert("No magnet or URL specified");
+        return;
+      }
+      const r = await ax.post("/downloads", body);
       const id = r.data?.id;
       setMagnet("");
       const arr = await list();
@@ -154,8 +163,9 @@ function App() {
             {r.title}{" "}
             <button
               onClick={() => {
-                const m = r.magnet || r.link;
+                const m = r.magnet || r.url;
                 if (m) setMagnet(m);
+                else alert("Tracker returned no magnet or URL");
               }}
             >
               Use magnet

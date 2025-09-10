@@ -35,6 +35,24 @@ class QbClient:
         r.raise_for_status()
         return {}
 
+    async def add_torrent_file(
+        self,
+        torrent: bytes,
+        save_path: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> Dict:
+        data = {}
+        if save_path:
+            data["savepath"] = save_path
+        if category:
+            data["category"] = category
+        files = {"torrents": ("torrent.torrent", torrent)}
+        r = await self._c().post(
+            f"{self.base_url}/api/v2/torrents/add", data=data, files=files
+        )
+        r.raise_for_status()
+        return {}
+
     async def list_torrents(self, filter: Optional[str] = None, category: Optional[str] = None) -> List[Dict]:
         params = {}
         if filter:

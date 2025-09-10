@@ -6,6 +6,7 @@ import logging
 import asyncio
 import inspect
 from typing import List, Optional
+import httpx
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -47,8 +48,13 @@ async def _maybe_await(result):
     return result
 
 
-@celery_app.task(name="app.services.jobs.tasks.enqueue_magnet")
-def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Optional[str] = None) -> bool:
+@celery_app.task(name="app.services.jobs.tasks.enqueue_download")
+def enqueue_download(
+    download_id: int,
+    magnet: Optional[str] = None,
+    url: Optional[str] = None,
+    save_path: Optional[str] = None,
+) -> bool:
     db = _db()
     try:
         dl = db.get(Download, download_id)
@@ -59,20 +65,29 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
             dl.magnet = magnet
         if save_path and not dl.save_path:
             dl.save_path = save_path
-        if not dl.magnet:
-            logger.warning("Download %s missing magnet link", download_id)
+        if not dl.magnet and not url:
+            logger.warning("Download %s missing magnet or url", download_id)
             return False
 
         async def _run() -> List[dict]:
             qb = _qb()
             try:
                 await _maybe_await(qb.login())
-                await _maybe_await(
-                    qb.add_magnet(
-                        dl.magnet,
-                        save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                if dl.magnet:
+                    await _maybe_await(
+                        qb.add_magnet(
+                            dl.magnet,
+                            save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                        )
                     )
-                )
+                else:
+                    content = httpx.get(url).content if url else b""
+                    await _maybe_await(
+                        qb.add_torrent_file(
+                            content,
+                            save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                        )
+                    )
                 return await _maybe_await(qb.list_torrents())
             finally:
                 close = getattr(qb, "close", None)
@@ -82,7 +97,7 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
         try:
             stats = asyncio.run(_run())
         except Exception as e:
-            logger.exception("Failed to enqueue magnet for %s: %s", download_id, e)
+            logger.exception("Failed to enqueue download for %s: %s", download_id, e)
             dl.status = "error"
             db.commit()
             broadcast_download(dl)
@@ -101,7 +116,7 @@ def enqueue_magnet(download_id: int, magnet: Optional[str] = None, save_path: Op
                 broadcast_download(dl)
         return True
     except Exception as e:
-        logger.exception("Error in enqueue_magnet for %s: %s", download_id, e)
+        logger.exception("Error in enqueue_download for %s: %s", download_id, e)
         dl = locals().get("dl")
         if dl:
             dl.status = "error"

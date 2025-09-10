@@ -4,7 +4,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 import logging
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -19,8 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 class DownloadCreate(BaseModel):
-    magnet: str = Field(min_length=10)
+    magnet: Optional[str] = Field(default=None, min_length=10)
+    url: Optional[str] = None
     savePath: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_source(self):
+        if not (self.magnet or self.url):
+            raise ValueError("Either magnet or url must be provided")
+        return self
 
 
 class DownloadOut(BaseModel):
@@ -52,32 +59,38 @@ def list_downloads(db: Session = Depends(get_db)):
 @router.post("", response_model=dict, status_code=201)
 def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
     save_path = body.savePath or settings.DEFAULT_SAVE_DIR
-    dl = models.Download(magnet=body.magnet, save_path=save_path, status="queued")
+    dl = models.Download(magnet=body.magnet or "", save_path=save_path, status="queued")
     db.add(dl)
     db.commit()
     db.refresh(dl)
-    logger.info("Enqueuing magnet %s to %s", body.magnet, save_path)
+    logger.info(
+        "Enqueuing download magnet=%s url=%s to %s", body.magnet, body.url, save_path
+    )
     try:
         res = celery_app.send_task(
-            "app.services.jobs.tasks.enqueue_magnet",
-            args=[dl.id, body.magnet, save_path],
+            "app.services.jobs.tasks.enqueue_download",
+            args=[dl.id, body.magnet, body.url, save_path],
         )
         task_id = getattr(res, "id", "unknown")
         logger.info("Celery task %s dispatched for download %s", task_id, dl.id)
         if res.failed():
             logger.error(
-                "Celery task %s failed for magnet %s", task_id, body.magnet
+                "Celery task %s failed for magnet %s url %s", task_id, body.magnet, body.url
             )
             dl.status = "error"
             db.commit()
-            raise HTTPException(500, "Failed to enqueue magnet")
+            raise HTTPException(500, "Failed to enqueue download")
     except Exception as e:
         logger.exception(
-            "Failed to enqueue magnet %s to %s: %s", body.magnet, save_path, e
+            "Failed to enqueue download magnet=%s url=%s to %s: %s",
+            body.magnet,
+            body.url,
+            save_path,
+            e,
         )
         dl.status = "error"
         db.commit()
-        raise HTTPException(500, "Failed to enqueue magnet")
+        raise HTTPException(500, "Failed to enqueue download")
     return {"id": dl.id}
 
 

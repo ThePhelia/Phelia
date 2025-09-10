@@ -1,18 +1,18 @@
 import logging
 
 from app.services.jobs import tasks
-from app.services.jobs.tasks import enqueue_magnet
+from app.services.jobs.tasks import enqueue_download
 from app.db import models
 from app.db.session import SessionLocal
 
 
-def test_enqueue_magnet_not_found(caplog):
+def test_enqueue_download_not_found(caplog):
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
-        assert enqueue_magnet(1) is False
+        assert enqueue_download(1) is False
     assert any("not found" in r.message for r in caplog.records)
 
 
-def test_enqueue_magnet_missing_magnet(caplog):
+def test_enqueue_download_missing_source(caplog):
     with SessionLocal() as db:
         dl = models.Download(magnet="", save_path="/downloads", status="queued")
         db.add(dl)
@@ -21,11 +21,11 @@ def test_enqueue_magnet_missing_magnet(caplog):
         dl_id = dl.id
 
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
-        assert enqueue_magnet(dl_id) is False
-    assert any("missing magnet" in r.message for r in caplog.records)
+        assert enqueue_download(dl_id) is False
+    assert any("missing magnet or url" in r.message for r in caplog.records)
 
 
-def test_enqueue_magnet_success(monkeypatch):
+def test_enqueue_download_magnet_success(monkeypatch):
     class FakeQB:
         def login(self):
             pass
@@ -42,7 +42,33 @@ def test_enqueue_magnet_success(monkeypatch):
         db.refresh(dl)
         dl_id = dl.id
 
-    assert enqueue_magnet(dl_id) is True
+    assert enqueue_download(dl_id) is True
+
+    with SessionLocal() as db:
+        d = db.get(models.Download, dl_id)
+        assert d.status == "queued"
+
+
+def test_enqueue_download_url_success(monkeypatch):
+    class FakeQB:
+        def login(self):
+            pass
+        def add_torrent_file(self, torrent, save_path):
+            pass
+        def list_torrents(self):
+            return []
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+    monkeypatch.setattr(tasks.httpx, "get", lambda url: type("R", (), {"content": b"data"})())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        db.refresh(dl)
+        dl_id = dl.id
+
+    assert enqueue_download(dl_id, url="http://example.com/file.torrent") is True
 
     with SessionLocal() as db:
         d = db.get(models.Download, dl_id)

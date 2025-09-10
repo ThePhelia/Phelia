@@ -81,7 +81,14 @@ def enqueue_download(
                         )
                     )
                 else:
-                    content = httpx.get(url).content if url else b""
+                    try:
+                        content = httpx.get(url).content if url else b""
+                    except httpx.RequestError as e:
+                        logger.error("Failed to fetch %s: %s", url, e)
+                        dl.status = "error"
+                        db.commit()
+                        broadcast_download(dl)
+                        raise
                     await _maybe_await(
                         qb.add_torrent_file(
                             content,
@@ -89,6 +96,14 @@ def enqueue_download(
                         )
                     )
                 return await _maybe_await(qb.list_torrents())
+            except httpx.RequestError as e:
+                logger.error(
+                    "HTTP error talking to qBittorrent for %s: %s", download_id, e
+                )
+                dl.status = "error"
+                db.commit()
+                broadcast_download(dl)
+                raise
             finally:
                 close = getattr(qb, "close", None)
                 if close:

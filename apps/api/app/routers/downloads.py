@@ -3,6 +3,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException
 import logging
+import time
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
@@ -80,6 +81,17 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
             dl.status = "error"
             db.commit()
             raise HTTPException(500, "Failed to enqueue download")
+
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            db.refresh(dl)
+            if dl.status == "error":
+                detail = "Failed to reach qBittorrent"
+                logger.error(detail)
+                raise HTTPException(status_code=502, detail=detail)
+            time.sleep(0.1)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(
             "Failed to enqueue download magnet=%s url=%s to %s: %s",

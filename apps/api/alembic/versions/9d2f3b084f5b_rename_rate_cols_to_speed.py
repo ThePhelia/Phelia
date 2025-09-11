@@ -20,18 +20,17 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
     if "downloads" not in inspector.get_table_names():
         return
-    with op.batch_alter_table("downloads") as batch_op:
-<<<<<<< ours
-        if "rate_down" in cols and "dlspeed" in cols:
-            batch_op.drop_column("rate_down")
-=======
-        inspector = sa.inspect(op.get_bind())
-        cols = [c["name"] for c in inspector.get_columns("downloads")]
 
+    def columns():
+        return [c["name"] for c in inspector.get_columns("downloads")]
+
+    with op.batch_alter_table("downloads") as batch_op:
+        cols = columns()
+
+        # Handle dlspeed (was rate_down)
         if "dlspeed" in cols:
             if "rate_down" in cols:
                 batch_op.drop_column("rate_down")
->>>>>>> theirs
         elif "rate_down" in cols:
             batch_op.alter_column(
                 "rate_down",
@@ -41,21 +40,13 @@ def upgrade() -> None:
                 server_default=sa.text("0"),
             )
         else:
-            batch_op.add_column(
-                sa.Column("dlspeed", sa.Integer(), nullable=False, server_default=sa.text("0"))
-            )
+            batch_op.add_column(sa.Column("dlspeed", sa.Integer(), nullable=False, server_default=sa.text("0")))
 
-<<<<<<< ours
-        if "rate_up" in cols and "upspeed" in cols:
-            batch_op.drop_column("rate_up")
-=======
-        inspector = sa.inspect(op.get_bind())
-        cols = [c["name"] for c in inspector.get_columns("downloads")]
-
+        # Handle upspeed (was rate_up)
+        cols = columns()  # refresh
         if "upspeed" in cols:
             if "rate_up" in cols:
                 batch_op.drop_column("rate_up")
->>>>>>> theirs
         elif "rate_up" in cols:
             batch_op.alter_column(
                 "rate_up",
@@ -65,9 +56,7 @@ def upgrade() -> None:
                 server_default=sa.text("0"),
             )
         else:
-            batch_op.add_column(
-                sa.Column("upspeed", sa.Integer(), nullable=False, server_default=sa.text("0"))
-            )
+            batch_op.add_column(sa.Column("upspeed", sa.Integer(), nullable=False, server_default=sa.text("0")))
 
     op.execute(sa.text("UPDATE downloads SET dlspeed = 0 WHERE dlspeed IS NULL"))
     op.execute(sa.text("UPDATE downloads SET upspeed = 0 WHERE upspeed IS NULL"))
@@ -78,7 +67,9 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
     if "downloads" not in inspector.get_table_names():
         return
+
     cols = [c["name"] for c in inspector.get_columns("downloads")]
+
     with op.batch_alter_table("downloads") as batch_op:
         if "dlspeed" in cols:
             batch_op.alter_column(

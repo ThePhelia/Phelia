@@ -24,11 +24,12 @@ class QbClient:
         return self._client
     async def login(self) -> None:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/auth/login",
-            data={"username": self.username, "password": self.password},
+            f"{self.base_url}/api/v2/auth/login", data={"username": self.username, "password": self.password},
             headers=self._headers,
         )
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
 
     async def add_magnet(self, magnet: str, save_path: Optional[str] = None, category: Optional[str] = None) -> Dict:
         data = {"urls": magnet}
@@ -37,11 +38,12 @@ class QbClient:
         if category:
             data["category"] = category
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/add",
-            data=data,
+            f"{self.base_url}/api/v2/torrents/add", data=data,
             headers=self._headers,
         )
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
     async def add_torrent_file(
@@ -55,7 +57,7 @@ class QbClient:
             data["savepath"] = save_path
         if category:
             data["category"] = category
-        files = {"torrents": ("torrent.torrent", torrent)}
+        files = {"torrents": ("torrent.torrent", torrent, "application/x-bittorrent")}
         r = await self._c().post(
             f"{self.base_url}/api/v2/torrents/add",
             data=data,
@@ -71,35 +73,40 @@ class QbClient:
             params["filter"] = filter
         if category:
             params["category"] = category
-        r = await self._c().get(f"{self.base_url}/api/v2/torrents/info", params=params)
+        r = await self._c().get(f"{self.base_url}/api/v2/torrents/info", params=params, headers=self._headers)
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return r.json()
 
     async def pause_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/pause",
-            data={"hashes": torrent_hash},
+            f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash},
             headers=self._headers,
         )
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
     async def resume_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/resume",
-            data={"hashes": torrent_hash},
+            f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash},
             headers=self._headers,
         )
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
     async def delete_torrent(self, torrent_hash: str, delete_files: bool = False) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/delete",
-            data={"hashes": torrent_hash, "deleteFiles": "true" if delete_files else "false"},
+            f"{self.base_url}/api/v2/torrents/delete", data={"hashes": torrent_hash, "deleteFiles": "true" if delete_files else "false"},
             headers=self._headers,
         )
         r.raise_for_status()
+        if r.text.strip().lower() not in {"ok.", "ok"}:
+            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
     async def close(self) -> None:

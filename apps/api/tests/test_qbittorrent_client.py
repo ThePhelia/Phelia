@@ -8,11 +8,10 @@ from app.services.bt.qbittorrent import QbClient
 @pytest.mark.anyio
 async def test_pause_torrent_posts_hash():
     recorded = {}
-
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
-        return httpx.Response(200, json={})
+        return httpx.Response(200, text="Ok.")
 
     transport = httpx.MockTransport(handler)
     client = None
@@ -29,11 +28,10 @@ async def test_pause_torrent_posts_hash():
 @pytest.mark.anyio
 async def test_resume_torrent_posts_hash():
     recorded = {}
-
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
-        return httpx.Response(200, json={})
+        return httpx.Response(200, text="Ok.")
 
     transport = httpx.MockTransport(handler)
     client = None
@@ -50,11 +48,10 @@ async def test_resume_torrent_posts_hash():
 @pytest.mark.anyio
 async def test_delete_torrent_posts_hash_and_flag():
     recorded = {}
-
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
-        return httpx.Response(200, json={})
+        return httpx.Response(200, text="Ok.")
 
     transport = httpx.MockTransport(handler)
     client = None
@@ -71,12 +68,11 @@ async def test_delete_torrent_posts_hash_and_flag():
 @pytest.mark.anyio
 async def test_post_requests_include_referer(monkeypatch):
     recorded = {}
-
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.headers.get("referer") != "http://qb/":
             return httpx.Response(403)
         recorded["headers"] = dict(request.headers)
-        return httpx.Response(200, json={})
+        return httpx.Response(200, text="Ok.")
 
     transport = httpx.MockTransport(handler)
     original_async_client = httpx.AsyncClient
@@ -101,7 +97,7 @@ async def test_add_torrent_file_includes_referer(monkeypatch):
         if request.headers.get("referer") != "http://qb/":
             return httpx.Response(403)
         recorded["headers"] = dict(request.headers)
-        return httpx.Response(200, json={})
+        return httpx.Response(200, text="Ok.")
 
     transport = httpx.MockTransport(handler)
     original_async_client = httpx.AsyncClient

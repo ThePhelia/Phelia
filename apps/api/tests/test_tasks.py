@@ -59,7 +59,30 @@ def test_enqueue_download_url_success(monkeypatch):
             return []
 
     monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
-    monkeypatch.setattr(tasks.httpx, "get", lambda url: type("R", (), {"content": b"data"})())
+
+<<<<<<< ours
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+        async def get(self, url, follow_redirects=True):
+            return type("R", (), {"content": b"data", "raise_for_status": lambda self: None})()
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeClient())
+=======
+    class FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, url):
+            return type("R", (), {"content": b"data"})()
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeAsyncClient())
+>>>>>>> theirs
 
     with SessionLocal() as db:
         dl = models.Download(magnet="", save_path="/downloads", status="queued")

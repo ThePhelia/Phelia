@@ -81,14 +81,35 @@ def enqueue_download(
                         )
                     )
                 else:
+<<<<<<< ours
                     try:
-                        content = httpx.get(url).content if url else b""
-                    except httpx.RequestError as e:
+                        if url:
+                            async with httpx.AsyncClient() as client:
+                                resp = await client.get(url, follow_redirects=True)
+                                resp.raise_for_status()
+                                content = resp.content
+                        else:
+                            content = b""
+                    except httpx.HTTPError as e:
                         logger.error("Failed to fetch %s: %s", url, e)
                         dl.status = "error"
                         db.commit()
                         broadcast_download(dl)
                         raise
+=======
+                    if url:
+                        try:
+                            async with httpx.AsyncClient() as client:
+                                content = (await client.get(url)).content
+                        except httpx.RequestError as e:
+                            logger.error("Failed to fetch %s: %s", url, e)
+                            dl.status = "error"
+                            db.commit()
+                            broadcast_download(dl)
+                            raise
+                    else:
+                        content = b""
+>>>>>>> theirs
                     await _maybe_await(
                         qb.add_torrent_file(
                             content,

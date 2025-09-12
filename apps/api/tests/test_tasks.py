@@ -92,6 +92,7 @@ def test_enqueue_download_url_success(monkeypatch):
 
 def test_enqueue_download_url_magnet(monkeypatch):
 <<<<<<< ours
+<<<<<<< ours
     called = {}
 
     class FakeQB:
@@ -111,6 +112,8 @@ def test_enqueue_download_url_magnet(monkeypatch):
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", fail_client)
 =======
+=======
+>>>>>>> theirs
     class FakeQB:
         def __init__(self):
             self.magnet = None
@@ -132,6 +135,9 @@ def test_enqueue_download_url_magnet(monkeypatch):
             pass
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: BadAsyncClient())
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 
     with SessionLocal() as db:
@@ -141,6 +147,7 @@ def test_enqueue_download_url_magnet(monkeypatch):
         db.refresh(dl)
         dl_id = dl.id
 
+<<<<<<< ours
 <<<<<<< ours
     assert (
         enqueue_download(dl_id, url="magnet:?xt=urn:btih:abcd") is True
@@ -152,6 +159,8 @@ def test_enqueue_download_url_magnet(monkeypatch):
         assert d.magnet == "magnet:?xt=urn:btih:abcd"
         assert d.status == "queued"
 =======
+=======
+>>>>>>> theirs
     magnet_uri = "magnet:?xt=urn:btih:abcd"
     assert enqueue_download(dl_id, url=magnet_uri) is True
     assert qb.magnet == magnet_uri
@@ -159,6 +168,9 @@ def test_enqueue_download_url_magnet(monkeypatch):
     with SessionLocal() as db:
         d = db.get(models.Download, dl_id)
         assert d.magnet == magnet_uri
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 
 

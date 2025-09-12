@@ -71,6 +71,7 @@ def enqueue_download(
             return False
         else:
 <<<<<<< ours
+<<<<<<< ours
             if url:
                 if url.startswith("magnet:"):
                     if not dl.magnet:
@@ -85,6 +86,8 @@ def enqueue_download(
                     broadcast_download(dl)
                     return False
 =======
+=======
+>>>>>>> theirs
             if url and not dl.magnet:
                 if url.startswith("magnet:"):
                     dl.magnet = url
@@ -95,6 +98,9 @@ def enqueue_download(
                         logger.error("Unrecognized URL scheme for download %s: %s", download_id, url)
                         return False
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
             async def _run() -> List[dict]:
                 qb = _qb()

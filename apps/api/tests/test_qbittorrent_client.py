@@ -6,6 +6,27 @@ from app.services.bt.qbittorrent import QbClient
 
 
 @pytest.mark.anyio
+async def test_list_torrents_returns_json():
+    recorded = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        recorded["url"] = str(request.url)
+        recorded["headers"] = dict(request.headers)
+        return httpx.Response(200, json=[{"name": "a"}])
+
+    transport = httpx.MockTransport(handler)
+    client = None
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        client = qb._client
+        items = await qb.list_torrents()
+
+    assert recorded["url"] == "http://qb/api/v2/torrents/info"
+    assert recorded["headers"]["referer"] == "http://qb/"
+    assert items == [{"name": "a"}]
+    assert client.is_closed
+
+@pytest.mark.anyio
 async def test_pause_torrent_posts_hash():
     recorded = {}
     async def handler(request: httpx.Request) -> httpx.Response:

@@ -90,6 +90,78 @@ def test_enqueue_download_url_success(monkeypatch):
         assert d.status == "queued"
 
 
+def test_enqueue_download_url_magnet(monkeypatch):
+<<<<<<< ours
+    called = {}
+
+    class FakeQB:
+        def login(self):
+            pass
+
+        def add_magnet(self, magnet, save_path):
+            called["magnet"] = magnet
+
+        def list_torrents(self):
+            return []
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    def fail_client(*args, **kwargs):
+        raise AssertionError("HTTP client should not be used")
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", fail_client)
+=======
+    class FakeQB:
+        def __init__(self):
+            self.magnet = None
+        def login(self):
+            pass
+        def add_magnet(self, magnet, save_path):
+            self.magnet = magnet
+        def list_torrents(self):
+            return []
+
+    qb = FakeQB()
+    monkeypatch.setattr(tasks, "_qb", lambda: qb)
+
+    class BadAsyncClient:
+        async def __aenter__(self):
+            raise AssertionError("HTTP request should not be made")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: BadAsyncClient())
+>>>>>>> theirs
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        db.refresh(dl)
+        dl_id = dl.id
+
+<<<<<<< ours
+    assert (
+        enqueue_download(dl_id, url="magnet:?xt=urn:btih:abcd") is True
+    )
+    assert called["magnet"] == "magnet:?xt=urn:btih:abcd"
+
+    with SessionLocal() as db:
+        d = db.get(models.Download, dl_id)
+        assert d.magnet == "magnet:?xt=urn:btih:abcd"
+        assert d.status == "queued"
+=======
+    magnet_uri = "magnet:?xt=urn:btih:abcd"
+    assert enqueue_download(dl_id, url=magnet_uri) is True
+    assert qb.magnet == magnet_uri
+
+    with SessionLocal() as db:
+        d = db.get(models.Download, dl_id)
+        assert d.magnet == magnet_uri
+>>>>>>> theirs
+
+
 def test_safe_list_torrents_logs(monkeypatch, caplog):
     class BadQB:
         def list_torrents(self):

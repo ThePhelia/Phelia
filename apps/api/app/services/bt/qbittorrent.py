@@ -73,10 +73,10 @@ class QbClient:
             params["filter"] = filter
         if category:
             params["category"] = category
-        r = await self._c().get(f"{self.base_url}/api/v2/torrents/info", params=params, headers=self._headers)
+        r = await self._c().get(
+            f"{self.base_url}/api/v2/torrents/info", params=params, headers=self._headers
+        )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
-            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return r.json()
 
     async def pause_torrent(self, torrent_hash: str) -> Dict:

@@ -6,6 +6,7 @@ import logging
 import asyncio
 import inspect
 from typing import List, Optional
+from urllib.parse import urlparse
 import httpx
 
 from app.core.config import settings
@@ -69,6 +70,32 @@ def enqueue_download(
             logger.warning("Download %s missing magnet or url", download_id)
             return False
         else:
+<<<<<<< ours
+            if url:
+                if url.startswith("magnet:"):
+                    if not dl.magnet:
+                        dl.magnet = url
+                    url = None
+                elif not (url.startswith("http://") or url.startswith("https://")):
+                    logger.warning(
+                        "Unsupported URL scheme for %s: %s", download_id, url
+                    )
+                    dl.status = "error"
+                    db.commit()
+                    broadcast_download(dl)
+                    return False
+=======
+            if url and not dl.magnet:
+                if url.startswith("magnet:"):
+                    dl.magnet = url
+                    url = None
+                else:
+                    scheme = urlparse(url).scheme
+                    if scheme and scheme not in ("http", "https"):
+                        logger.error("Unrecognized URL scheme for download %s: %s", download_id, url)
+                        return False
+
+>>>>>>> theirs
             async def _run() -> List[dict]:
                 qb = _qb()
                 try:

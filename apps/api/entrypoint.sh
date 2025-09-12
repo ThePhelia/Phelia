@@ -4,7 +4,7 @@ cd /app
 export PYTHONPATH=/app
 
 echo "[entrypoint] running alembic migrations..."
-alembic upgrade head
+alembic upgrade head || exit 1
 echo "[entrypoint] migrations done"
 
 echo "[entrypoint] starting gunicorn..."

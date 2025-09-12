@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl
-from typing import List
+from pydantic import AnyHttpUrl, ValidationError
 
 class Settings(BaseSettings):
     APP_ENV: str = "dev"
@@ -26,7 +25,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "*"
 
     class Config:
-        env_file = "./deploy/env/api.env"
         extra = "ignore"
 
-settings = Settings()  # type: ignore
+try:
+    settings = Settings()  # type: ignore
+except ValidationError as e:
+    missing = ", ".join(err["loc"][0] for err in e.errors())
+    raise RuntimeError(
+        f"Missing required configuration variables: {missing}"
+    ) from e

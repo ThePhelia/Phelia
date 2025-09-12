@@ -78,8 +78,8 @@ def test_enqueue_download_url_success(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-        async def get(self, url):
-            return type("R", (), {"content": b"data"})()
+        async def get(self, url, follow_redirects=True):
+            return type("R", (), {"content": b"data", "raise_for_status": lambda self: None})()
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeAsyncClient())
 >>>>>>> theirs

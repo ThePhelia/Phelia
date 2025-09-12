@@ -68,20 +68,42 @@ def enqueue_download(
         if not dl.magnet and not url:
             logger.warning("Download %s missing magnet or url", download_id)
             return False
-
-        async def _run() -> List[dict]:
-            qb = _qb()
-            try:
-                await _maybe_await(qb.login())
-                if dl.magnet:
-                    await _maybe_await(
-                        qb.add_magnet(
-                            dl.magnet,
-                            save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+        else:
+            async def _run() -> List[dict]:
+                qb = _qb()
+                try:
+                    await _maybe_await(qb.login())
+                    if dl.magnet:
+                        await _maybe_await(
+                            qb.add_magnet(
+                                dl.magnet,
+                                save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                            )
                         )
+<<<<<<< ours
+                    else:
+                        try:
+                            if url:
+                                async with httpx.AsyncClient() as client:
+                                    resp = await client.get(url, follow_redirects=True)
+                                    resp.raise_for_status()
+                                    content = resp.content
+                            else:
+                                content = b""
+                        except httpx.HTTPError as e:
+                            logger.error("Failed to fetch %s: %s", url, e)
+                            dl.status = "error"
+                            db.commit()
+                            broadcast_download(dl)
+                            raise
+                        await _maybe_await(
+                            qb.add_torrent_file(
+                                content,
+                                save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                            )
+=======
                     )
                 else:
-<<<<<<< ours
                     try:
                         if url:
                             async with httpx.AsyncClient() as client:
@@ -96,61 +118,49 @@ def enqueue_download(
                         db.commit()
                         broadcast_download(dl)
                         raise
-=======
-                    if url:
-                        try:
-                            async with httpx.AsyncClient() as client:
-                                content = (await client.get(url)).content
-                        except httpx.RequestError as e:
-                            logger.error("Failed to fetch %s: %s", url, e)
-                            dl.status = "error"
-                            db.commit()
-                            broadcast_download(dl)
-                            raise
-                    else:
-                        content = b""
->>>>>>> theirs
                     await _maybe_await(
                         qb.add_torrent_file(
                             content,
                             save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+>>>>>>> theirs
                         )
+                    return await _maybe_await(qb.list_torrents())
+                except httpx.RequestError as e:
+                    logger.error(
+                        "HTTP error talking to qBittorrent for %s: %s", download_id, e
                     )
-                return await _maybe_await(qb.list_torrents())
-            except httpx.RequestError as e:
-                logger.error(
-                    "HTTP error talking to qBittorrent for %s: %s", download_id, e
+                    dl.status = "error"
+                    db.commit()
+                    broadcast_download(dl)
+                    raise
+                finally:
+                    close = getattr(qb, "close", None)
+                    if close:
+                        await _maybe_await(close())
+
+            try:
+                stats = asyncio.run(_run())
+            except Exception as e:
+                logger.exception(
+                    "Failed to enqueue download for %s: %s", download_id, e
                 )
                 dl.status = "error"
                 db.commit()
                 broadcast_download(dl)
-                raise
-            finally:
-                close = getattr(qb, "close", None)
-                if close:
-                    await _maybe_await(close())
+                return False
 
-        try:
-            stats = asyncio.run(_run())
-        except Exception as e:
-            logger.exception("Failed to enqueue download for %s: %s", download_id, e)
-            dl.status = "error"
+            dl.status = "queued"
             db.commit()
             broadcast_download(dl)
-            return False
 
-        dl.status = "queued"
-        db.commit()
-        broadcast_download(dl)
-
-        if stats:
-            cand = _pick_candidate(stats, dl)
-            if cand:
-                dl.name = cand.get("name") or dl.name
-                dl.status = cand.get("state") or dl.status
-                db.commit()
-                broadcast_download(dl)
-        return True
+            if stats:
+                cand = _pick_candidate(stats, dl)
+                if cand:
+                    dl.name = cand.get("name") or dl.name
+                    dl.status = cand.get("state") or dl.status
+                    db.commit()
+                    broadcast_download(dl)
+            return True
     except Exception as e:
         logger.exception("Error in enqueue_download for %s: %s", download_id, e)
         dl = locals().get("dl")

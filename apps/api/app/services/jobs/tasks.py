@@ -70,24 +70,6 @@ def enqueue_download(
             logger.warning("Download %s missing magnet or url", download_id)
             return False
         else:
-<<<<<<< ours
-<<<<<<< ours
-            if url:
-                if url.startswith("magnet:"):
-                    if not dl.magnet:
-                        dl.magnet = url
-                    url = None
-                elif not (url.startswith("http://") or url.startswith("https://")):
-                    logger.warning(
-                        "Unsupported URL scheme for %s: %s", download_id, url
-                    )
-                    dl.status = "error"
-                    db.commit()
-                    broadcast_download(dl)
-                    return False
-=======
-=======
->>>>>>> theirs
             if url and not dl.magnet:
                 if url.startswith("magnet:"):
                     dl.magnet = url
@@ -95,13 +77,11 @@ def enqueue_download(
                 else:
                     scheme = urlparse(url).scheme
                     if scheme and scheme not in ("http", "https"):
-                        logger.error("Unrecognized URL scheme for download %s: %s", download_id, url)
+                        logger.error(
+                            "Unrecognized URL scheme for download %s: %s", download_id, url
+                        )
                         return False
 
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
             async def _run() -> List[dict]:
                 qb = _qb()
                 try:
@@ -135,7 +115,7 @@ def enqueue_download(
                             )
                         )
                     return await _maybe_await(qb.list_torrents())
-                except httpx.RequestError as e:
+                except httpx.HTTPError as e:
                     logger.error(
                         "HTTP error talking to qBittorrent for %s: %s", download_id, e
                     )
@@ -206,7 +186,11 @@ def poll_status() -> int:
                 if close:
                     await _maybe_await(close())
 
-        stats = asyncio.run(_run())
+        try:
+            stats = asyncio.run(_run())
+        except httpx.HTTPError as e:
+            logger.warning("HTTP error talking to qBittorrent: %s", e)
+            return 0
         if not stats:
             return 0
 
@@ -245,6 +229,11 @@ def _safe_list_torrents(qb: QbClient) -> List[dict]:
 
 
 def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
+    if d.hash:
+        h = d.hash.lower()
+        for t in stats:
+            if (t.get("hash") or "").lower() == h:
+                return t
     if d.name:
         for t in stats:
             if (t.get("name") or "").strip() == d.name.strip():

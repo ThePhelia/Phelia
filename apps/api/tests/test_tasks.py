@@ -1,4 +1,5 @@
 import logging
+import httpx
 
 from app.services.jobs import tasks
 from app.services.jobs.tasks import enqueue_download
@@ -91,36 +92,16 @@ def test_enqueue_download_url_success(monkeypatch):
 
 
 def test_enqueue_download_url_magnet(monkeypatch):
-<<<<<<< ours
-<<<<<<< ours
-    called = {}
-
-    class FakeQB:
-        def login(self):
-            pass
-
-        def add_magnet(self, magnet, save_path):
-            called["magnet"] = magnet
-
-        def list_torrents(self):
-            return []
-
-    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
-
-    def fail_client(*args, **kwargs):
-        raise AssertionError("HTTP client should not be used")
-
-    monkeypatch.setattr(tasks.httpx, "AsyncClient", fail_client)
-=======
-=======
->>>>>>> theirs
     class FakeQB:
         def __init__(self):
             self.magnet = None
+
         def login(self):
             pass
+
         def add_magnet(self, magnet, save_path):
             self.magnet = magnet
+
         def list_torrents(self):
             return []
 
@@ -135,10 +116,6 @@ def test_enqueue_download_url_magnet(monkeypatch):
             pass
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: BadAsyncClient())
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
 
     with SessionLocal() as db:
         dl = models.Download(magnet="", save_path="/downloads", status="queued")
@@ -147,20 +124,6 @@ def test_enqueue_download_url_magnet(monkeypatch):
         db.refresh(dl)
         dl_id = dl.id
 
-<<<<<<< ours
-<<<<<<< ours
-    assert (
-        enqueue_download(dl_id, url="magnet:?xt=urn:btih:abcd") is True
-    )
-    assert called["magnet"] == "magnet:?xt=urn:btih:abcd"
-
-    with SessionLocal() as db:
-        d = db.get(models.Download, dl_id)
-        assert d.magnet == "magnet:?xt=urn:btih:abcd"
-        assert d.status == "queued"
-=======
-=======
->>>>>>> theirs
     magnet_uri = "magnet:?xt=urn:btih:abcd"
     assert enqueue_download(dl_id, url=magnet_uri) is True
     assert qb.magnet == magnet_uri
@@ -169,8 +132,8 @@ def test_enqueue_download_url_magnet(monkeypatch):
         d = db.get(models.Download, dl_id)
         assert d.magnet == magnet_uri
 <<<<<<< ours
->>>>>>> theirs
 =======
+        assert d.status == "queued"
 >>>>>>> theirs
 
 
@@ -182,3 +145,34 @@ def test_safe_list_torrents_logs(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
         assert tasks._safe_list_torrents(BadQB()) == []
     assert any("Failed to list torrents" in r.message for r in caplog.records)
+
+
+<<<<<<< ours
+def test_poll_status_handles_http_error(monkeypatch, caplog):
+    class BadQB:
+        def login(self):
+            raise httpx.HTTPError("boom")
+
+    # ensure _qb returns our failing client
+    monkeypatch.setattr(tasks, "_qb", lambda: BadQB())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="m", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+
+    with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
+        assert tasks.poll_status() == 0
+    assert any("HTTP error talking to qBittorrent" in r.message for r in caplog.records)
+=======
+def test_pick_candidate_prefers_hash():
+    stats = [
+        {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},
+        {"hash": "BBB222", "name": "other", "save_path": "/downloads"},
+    ]
+    d = models.Download(
+        hash="bbb222", name="dl1", magnet="m", save_path="/downloads", status="queued"
+    )
+    cand = tasks._pick_candidate(stats, d)
+    assert cand["hash"].lower() == "bbb222"
+>>>>>>> theirs

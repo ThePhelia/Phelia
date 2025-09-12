@@ -80,7 +80,6 @@ def enqueue_download(
                                 save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
                             )
                         )
-<<<<<<< ours
                     else:
                         try:
                             if url:
@@ -91,8 +90,8 @@ def enqueue_download(
                             else:
                                 content = b""
                         except httpx.HTTPError as e:
-                            logger.error("Failed to fetch %s: %s", url, e)
-                            dl.status = "error"
+                            logger.error('Failed to fetch %s: %s', url, e)
+                            dl.status = 'error'
                             db.commit()
                             broadcast_download(dl)
                             raise
@@ -101,28 +100,6 @@ def enqueue_download(
                                 content,
                                 save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
                             )
-=======
-                    )
-                else:
-                    try:
-                        if url:
-                            async with httpx.AsyncClient() as client:
-                                resp = await client.get(url, follow_redirects=True)
-                                resp.raise_for_status()
-                                content = resp.content
-                        else:
-                            content = b""
-                    except httpx.HTTPError as e:
-                        logger.error("Failed to fetch %s: %s", url, e)
-                        dl.status = "error"
-                        db.commit()
-                        broadcast_download(dl)
-                        raise
-                    await _maybe_await(
-                        qb.add_torrent_file(
-                            content,
-                            save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
->>>>>>> theirs
                         )
                     return await _maybe_await(qb.list_torrents())
                 except httpx.RequestError as e:

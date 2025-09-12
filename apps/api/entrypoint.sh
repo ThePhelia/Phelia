@@ -4,11 +4,8 @@ cd /app
 export PYTHONPATH=/app
 
 echo "[entrypoint] running alembic migrations..."
-if alembic upgrade head; then
-  echo "[entrypoint] migrations done"
-else
-  echo "[entrypoint] alembic failed, continue anyway"
-fi
+alembic upgrade head
+echo "[entrypoint] migrations done"
 
 echo "[entrypoint] starting gunicorn..."
 exec gunicorn app.main:app \

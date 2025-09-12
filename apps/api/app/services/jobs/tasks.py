@@ -86,6 +86,40 @@ def enqueue_download(
                 qb = _qb()
                 try:
                     await _maybe_await(qb.login())
+                    content = b""
+                    if url and not dl.magnet:
+                        try:
+                            async with httpx.AsyncClient() as client:
+                                resp = await client.get(url, follow_redirects=False)
+                                resp.raise_for_status()
+                                if resp.is_redirect:
+                                    loc = resp.headers.get("Location", "")
+                                    if loc.startswith("magnet:"):
+                                        dl.magnet = loc
+                                        db.commit()
+                                    elif loc:
+                                        scheme = urlparse(loc).scheme
+                                        if scheme and scheme not in ("http", "https"):
+                                            logger.warning(
+                                                "Download %s redirect with unexpected scheme: %s",
+                                                download_id,
+                                                loc,
+                                            )
+                                        resp = await client.get(loc, follow_redirects=True)
+                                        resp.raise_for_status()
+                                        content = resp.content
+                                    else:
+                                        logger.warning(
+                                            "Download %s redirect missing Location header", download_id
+                                        )
+                                else:
+                                    content = resp.content
+                        except httpx.HTTPError as e:
+                            logger.error('Failed to fetch %s: %s', url, e)
+                            dl.status = 'error'
+                            db.commit()
+                            broadcast_download(dl)
+                            raise
                     if dl.magnet:
                         await _maybe_await(
                             qb.add_magnet(
@@ -94,20 +128,6 @@ def enqueue_download(
                             )
                         )
                     else:
-                        try:
-                            if url:
-                                async with httpx.AsyncClient() as client:
-                                    resp = await client.get(url, follow_redirects=True)
-                                    resp.raise_for_status()
-                                    content = resp.content
-                            else:
-                                content = b""
-                        except httpx.HTTPError as e:
-                            logger.error('Failed to fetch %s: %s', url, e)
-                            dl.status = 'error'
-                            db.commit()
-                            broadcast_download(dl)
-                            raise
                         await _maybe_await(
                             qb.add_torrent_file(
                                 content,

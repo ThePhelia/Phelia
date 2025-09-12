@@ -132,6 +132,10 @@ def test_enqueue_download_url_magnet(monkeypatch):
         d = db.get(models.Download, dl_id)
         assert d.magnet == magnet_uri
 <<<<<<< ours
+<<<<<<< ours
+=======
+        assert d.status == "queued"
+>>>>>>> theirs
 =======
         assert d.status == "queued"
 >>>>>>> theirs
@@ -147,6 +151,7 @@ def test_safe_list_torrents_logs(monkeypatch, caplog):
     assert any("Failed to list torrents" in r.message for r in caplog.records)
 
 
+<<<<<<< ours
 <<<<<<< ours
 def test_poll_status_handles_http_error(monkeypatch, caplog):
     class BadQB:
@@ -165,6 +170,8 @@ def test_poll_status_handles_http_error(monkeypatch, caplog):
         assert tasks.poll_status() == 0
     assert any("HTTP error talking to qBittorrent" in r.message for r in caplog.records)
 =======
+=======
+>>>>>>> theirs
 def test_pick_candidate_prefers_hash():
     stats = [
         {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},
@@ -175,4 +182,7 @@ def test_pick_candidate_prefers_hash():
     )
     cand = tasks._pick_candidate(stats, d)
     assert cand["hash"].lower() == "bbb222"
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs

@@ -30,20 +30,27 @@ def test_enqueue_download_magnet_success(monkeypatch):
     class FakeQB:
         def login(self):
             pass
+
         def add_magnet(self, magnet, save_path):
-            pass
+            self.magnet = magnet
+
         def list_torrents(self):
             return []
-    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    qb = FakeQB()
+    monkeypatch.setattr(tasks, "_qb", lambda: qb)
 
     with SessionLocal() as db:
-        dl = models.Download(magnet="magnet:?xt=urn:btih:abcd", save_path="/downloads", status="queued")
+        dl = models.Download(
+            magnet="magnet:?xt=urn:btih:abcd", save_path="/downloads", status="queued"
+        )
         db.add(dl)
         db.commit()
         db.refresh(dl)
         dl_id = dl.id
 
     assert enqueue_download(dl_id) is True
+    assert qb.magnet == "magnet:?xt=urn:btih:abcd"
 
     with SessionLocal() as db:
         d = db.get(models.Download, dl_id)
@@ -51,11 +58,15 @@ def test_enqueue_download_magnet_success(monkeypatch):
 
 
 def test_enqueue_download_url_success(monkeypatch):
+    calls = {}
+
     class FakeQB:
         def login(self):
             pass
+
         def add_torrent_file(self, torrent, save_path):
-            pass
+            calls["torrent"] = torrent
+
         def list_torrents(self):
             return []
 
@@ -68,12 +79,16 @@ def test_enqueue_download_url_success(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-        async def get(self, url, follow_redirects=True):
-            return type(
-                "R",
-                (),
-                {"content": b"data", "raise_for_status": lambda self: None},
-            )()
+        async def get(self, url, follow_redirects=False):
+            class R:
+                is_redirect = False
+                headers = {}
+                content = b"data"
+
+                def raise_for_status(self):
+                    pass
+
+            return R()
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeAsyncClient())
 
@@ -85,6 +100,7 @@ def test_enqueue_download_url_success(monkeypatch):
         dl_id = dl.id
 
     assert enqueue_download(dl_id, url="http://example.com/file.torrent") is True
+    assert calls["torrent"] == b"data"
 
     with SessionLocal() as db:
         d = db.get(models.Download, dl_id)
@@ -131,14 +147,122 @@ def test_enqueue_download_url_magnet(monkeypatch):
     with SessionLocal() as db:
         d = db.get(models.Download, dl_id)
         assert d.magnet == magnet_uri
-<<<<<<< ours
-<<<<<<< ours
-=======
         assert d.status == "queued"
->>>>>>> theirs
-=======
+
+
+def test_enqueue_download_redirect_to_magnet(monkeypatch):
+    calls = {}
+
+    class FakeQB:
+        def login(self):
+            pass
+
+        def add_magnet(self, magnet, save_path):
+            calls["magnet"] = magnet
+
+        def add_torrent_file(self, torrent, save_path):
+            calls["torrent"] = torrent
+
+        def list_torrents(self):
+            return []
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    class FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, url, follow_redirects=False):
+            class R:
+                is_redirect = True
+                headers = {"Location": "magnet:?xt=urn:btih:abcd"}
+                content = b""
+
+                def raise_for_status(self):
+                    pass
+
+            return R()
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeAsyncClient())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        db.refresh(dl)
+        dl_id = dl.id
+
+    assert enqueue_download(dl_id, url="http://example.com/redirect") is True
+    assert calls.get("magnet") == "magnet:?xt=urn:btih:abcd"
+    assert "torrent" not in calls
+
+    with SessionLocal() as db:
+        d = db.get(models.Download, dl_id)
+        assert d.magnet == "magnet:?xt=urn:btih:abcd"
         assert d.status == "queued"
->>>>>>> theirs
+
+
+def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
+    calls = {"magnet": 0, "torrent": 0}
+
+    class FakeQB:
+        def login(self):
+            pass
+
+        def add_magnet(self, magnet, save_path):
+            calls["magnet"] += 1
+
+        def add_torrent_file(self, torrent, save_path):
+            calls["torrent"] += 1
+
+        def list_torrents(self):
+            return []
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    class FakeAsyncClient:
+        def __init__(self):
+            self.calls = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def get(self, url, follow_redirects=False):
+            self.calls += 1
+            if self.calls == 1:
+                class R:
+                    is_redirect = True
+                    headers = {"Location": "ftp://example.com/file.torrent"\}
+                    content = b""
+
+                    def raise_for_status(self):
+                        pass
+
+                return R()
+            raise httpx.UnsupportedProtocol("ftp")
+
+    monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: FakeAsyncClient())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        db.refresh(dl)
+        dl_id = dl.id
+
+    with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
+        assert (
+            enqueue_download(dl_id, url="http://example.com/redirect") is False
+        )
+    assert any("redirect with unexpected scheme" in r.message for r in caplog.records)
+    assert calls["magnet"] == 0
+    assert calls["torrent"] == 0
 
 
 def test_safe_list_torrents_logs(monkeypatch, caplog):
@@ -151,14 +275,11 @@ def test_safe_list_torrents_logs(monkeypatch, caplog):
     assert any("Failed to list torrents" in r.message for r in caplog.records)
 
 
-<<<<<<< ours
-<<<<<<< ours
 def test_poll_status_handles_http_error(monkeypatch, caplog):
     class BadQB:
         def login(self):
             raise httpx.HTTPError("boom")
 
-    # ensure _qb returns our failing client
     monkeypatch.setattr(tasks, "_qb", lambda: BadQB())
 
     with SessionLocal() as db:
@@ -168,10 +289,11 @@ def test_poll_status_handles_http_error(monkeypatch, caplog):
 
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
         assert tasks.poll_status() == 0
-    assert any("HTTP error talking to qBittorrent" in r.message for r in caplog.records)
-=======
-=======
->>>>>>> theirs
+    assert any(
+        "HTTP error talking to qBittorrent" in r.message for r in caplog.records
+    )
+
+
 def test_pick_candidate_prefers_hash():
     stats = [
         {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},
@@ -182,7 +304,4 @@ def test_pick_candidate_prefers_hash():
     )
     cand = tasks._pick_candidate(stats, d)
     assert cand["hash"].lower() == "bbb222"
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
+

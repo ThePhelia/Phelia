@@ -91,28 +91,25 @@ def enqueue_download(
                         try:
                             async with httpx.AsyncClient() as client:
                                 resp = await client.get(url, follow_redirects=False)
-                                resp.raise_for_status()
                                 if resp.is_redirect:
                                     loc = resp.headers.get("Location", "")
                                     if loc.startswith("magnet:"):
                                         dl.magnet = loc
                                         db.commit()
-                                    elif loc:
-                                        scheme = urlparse(loc).scheme
-                                        if scheme and scheme not in ("http", "https"):
-                                            logger.warning(
-                                                "Download %s redirect with unexpected scheme: %s",
-                                                download_id,
-                                                loc,
-                                            )
-                                        resp = await client.get(loc, follow_redirects=True)
+                                        content = b""
+                                    else:
+                                        if loc:
+                                            scheme = urlparse(loc).scheme
+                                            if scheme and scheme not in ("http", "https"):
+                                                logger.warning(
+                                                    "Download %s redirect with unexpected scheme: %s",
+                                                    download_id,
+                                                    loc,
+                                                )
                                         resp.raise_for_status()
                                         content = resp.content
-                                    else:
-                                        logger.warning(
-                                            "Download %s redirect missing Location header", download_id
-                                        )
                                 else:
+                                    resp.raise_for_status()
                                     content = resp.content
                         except httpx.HTTPError as e:
                             logger.error('Failed to fetch %s: %s', url, e)

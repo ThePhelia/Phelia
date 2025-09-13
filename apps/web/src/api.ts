@@ -16,9 +16,6 @@ export async function listTrackers(token: string) {
   return r.json();
 }
 
-<<<<<<< ours
-export async function createTracker(token: string, body: {name:string;base_url:string;api_key?:string;username?:string;password?:string;enabled?:boolean}) {
-=======
 export async function createTracker(
   token: string,
   body: {
@@ -30,7 +27,6 @@ export async function createTracker(
     password?:string;
   }
 ) {
->>>>>>> theirs
   const r = await fetch(`${BASE}/trackers`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

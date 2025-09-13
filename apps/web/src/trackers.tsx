@@ -6,6 +6,8 @@ export function Trackers({ token }: { token: string }) {
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function load() {
@@ -22,8 +24,8 @@ export function Trackers({ token }: { token: string }) {
 
   async function add() {
     try {
-      await createTracker(token, { name, base_url: baseUrl, api_key: apiKey, enabled: true });
-      setName(""); setBaseUrl(""); setApiKey("");
+      await createTracker(token, { name, base_url: baseUrl, api_key: apiKey, username, password, enabled: true });
+      setName(""); setBaseUrl(""); setApiKey(""); setUsername(""); setPassword("");
       await load();
     } catch (e: any) {
       alert(e.message || String(e));
@@ -79,12 +81,14 @@ export function Trackers({ token }: { token: string }) {
         <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
         <input placeholder="base_url" value={baseUrl} onChange={onBaseUrlChange} style={{ width: 420, marginLeft: 6 }} />
         <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
+        <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
+        <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
       </div>
       <table cellPadding={6} style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th>ID</th><th>Name</th><th>URL</th><th>Enabled</th><th>Actions</th>
+            <th>ID</th><th>Name</th><th>URL</th><th>Creds</th><th>Enabled</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -93,6 +97,7 @@ export function Trackers({ token }: { token: string }) {
               <td>{it.id}</td>
               <td>{it.name}</td>
               <td style={{ maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.base_url}</td>
+              <td>{(it.username || it.api_key) ? "Yes" : "No"}</td>
               <td>{String(it.enabled)}</td>
               <td>
                 <button onClick={()=>toggle(it.id, it.enabled)}>Toggle</button>{" "}
@@ -101,7 +106,7 @@ export function Trackers({ token }: { token: string }) {
               </td>
             </tr>
           ))}
-          {loading && <tr><td colSpan={5}>Loading...</td></tr>}
+          {loading && <tr><td colSpan={6}>Loading...</td></tr>}
         </tbody>
       </table>
     </div>

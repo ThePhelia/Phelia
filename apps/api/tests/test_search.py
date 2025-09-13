@@ -12,7 +12,7 @@ from app.db.session import get_db
 
 
 @pytest.mark.anyio
-async def test_search_missing_api_key_logs(db_session, caplog):
+async def test_search_missing_credentials_logs(db_session, caplog):
     tr = models.Tracker(name="t1", type="torznab", base_url="http://example", creds_enc="{}", enabled=True)
     db_session.add(tr)
     db_session.commit()
@@ -26,7 +26,7 @@ async def test_search_missing_api_key_logs(db_session, caplog):
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.get("/api/v1/search", params={"query": "foo"})
     assert resp.status_code == 200
-    assert any("missing api_key" in r.message for r in caplog.records)
+    assert any("missing credentials" in r.message for r in caplog.records)
 
 
 @pytest.mark.anyio
@@ -36,7 +36,7 @@ async def test_search_error_logs(monkeypatch, db_session, caplog):
     db_session.add(tr)
     db_session.commit()
 
-    def bad_search(self, base_url, api_key, query):
+    def bad_search(self, base_url, api_key, query, username=None, password=None):
         raise RuntimeError("boom")
     monkeypatch.setattr(TorznabClient, "search", bad_search)
 

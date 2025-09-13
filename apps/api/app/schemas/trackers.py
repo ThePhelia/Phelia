@@ -11,12 +11,16 @@ class TrackerBase(BaseModel):
 
 class TrackerCreate(TrackerBase):
     api_key: Optional[str] = None
+    username: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    password: Optional[str] = Field(default=None, min_length=1, max_length=256)
 
 class TrackerUpdate(BaseModel):
     name: Optional[str] = None
     base_url: Optional[HttpUrl] = None
     enabled: Optional[bool] = None
     api_key: Optional[str] = None
+    username: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    password: Optional[str] = Field(default=None, min_length=1, max_length=256)
 
 class TrackerOut(TrackerBase):
     id: int

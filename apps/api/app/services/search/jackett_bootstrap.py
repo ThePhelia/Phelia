@@ -45,11 +45,18 @@ def ensure_jackett_tracker(name: str = "jackett-all") -> bool:
             tr.type = "torznab"
             tr.base_url = JACKETT_BASE
             tr.creds_enc = creds_enc
+            tr.username = None
+            tr.password_enc = None
             tr.enabled = True
         else:
             tr = models.Tracker(
-                name=name, type="torznab", base_url=JACKETT_BASE,
-                creds_enc=creds_enc, enabled=True,
+                name=name,
+                type="torznab",
+                base_url=JACKETT_BASE,
+                creds_enc=creds_enc,
+                username=None,
+                password_enc=None,
+                enabled=True,
             )
             db.add(tr)
         db.commit()

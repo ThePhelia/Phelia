@@ -1,6 +1,7 @@
 from __future__ import annotations
 import urllib.parse
 import feedparser
+import httpx
 
 def _pick_magnet(entry: dict) -> str | None:
     cand = entry.get("torrent_magneturi") or entry.get("magneturi") or entry.get("magneturl") or entry.get("magnet")
@@ -28,15 +29,29 @@ def _pick_url(entry: dict) -> str | None:
     return None
 
 class TorznabClient:
-    def _build_url(self, base_url: str, api_key: str, q: str) -> str:
+    def _build_url(self, base_url: str, api_key: str | None, q: str) -> str:
         base = base_url.rstrip("/")
         sep = "&" if "?" in base else "?"
-        qs = urllib.parse.urlencode({"t": "search", "q": q, "apikey": api_key})
+        params = {"t": "search", "q": q}
+        if api_key:
+            params["apikey"] = api_key
+        qs = urllib.parse.urlencode(params)
         return f"{base}{sep}{qs}"
 
-    def search(self, base_url: str, api_key: str, query: str) -> list[dict]:
+    def search(
+        self,
+        base_url: str,
+        api_key: str | None,
+        query: str,
+        username: str | None = None,
+        password: str | None = None,
+    ) -> list[dict]:
         url = self._build_url(base_url, api_key, query)
-        feed = feedparser.parse(url)
+        if username and password:
+            r = httpx.get(url, auth=(username, password))
+            feed = feedparser.parse(r.content)
+        else:
+            feed = feedparser.parse(url)
         items: list[dict] = []
         host = urllib.parse.urlparse(base_url).netloc
         for e in getattr(feed, "entries", []):

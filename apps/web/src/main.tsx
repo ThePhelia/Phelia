@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
+import { Trackers } from "./trackers";
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
 const WS_BASE = (import.meta as any).env.VITE_WS_BASE || "ws://localhost:8000";
@@ -222,6 +223,8 @@ function App() {
           ))}
         </tbody>
       </table>
+
+      {token && <Trackers token={token} />}
     </div>
   );
 }

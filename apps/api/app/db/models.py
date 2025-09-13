@@ -46,4 +46,6 @@ class Tracker(Base):
     type: Mapped[str] = mapped_column(String(16))
     base_url: Mapped[str | None] = mapped_column(String(255))
     creds_enc: Mapped[str | None] = mapped_column(String(512))
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    password_enc: Mapped[str | None] = mapped_column(String(512), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

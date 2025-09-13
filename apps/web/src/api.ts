@@ -16,7 +16,21 @@ export async function listTrackers(token: string) {
   return r.json();
 }
 
-export async function createTracker(token: string, body: {name:string;base_url:string;api_key?:string;enabled?:boolean}) {
+<<<<<<< ours
+export async function createTracker(token: string, body: {name:string;base_url:string;api_key?:string;username?:string;password?:string;enabled?:boolean}) {
+=======
+export async function createTracker(
+  token: string,
+  body: {
+    name:string;
+    base_url:string;
+    api_key?:string;
+    enabled?:boolean;
+    username?:string;
+    password?:string;
+  }
+) {
+>>>>>>> theirs
   const r = await fetch(`${BASE}/trackers`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -34,7 +48,22 @@ export async function createTracker(token: string, body: {name:string;base_url:s
   return JSON.parse(text);
 }
 
-export async function updateTracker(token: string, id: number, body: Partial<{name:string;base_url:string;api_key:string;enabled:boolean}>) {
+<<<<<<< ours
+export async function updateTracker(token: string, id: number, body: Partial<{name:string;base_url:string;api_key:string;username:string;password:string;enabled:boolean}>) {
+=======
+export async function updateTracker(
+  token: string,
+  id: number,
+  body: Partial<{
+    name:string;
+    base_url:string;
+    api_key:string;
+    enabled:boolean;
+    username:string;
+    password:string;
+  }>
+) {
+>>>>>>> theirs
   const r = await fetch(`${BASE}/trackers/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

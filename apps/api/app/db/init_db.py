@@ -51,6 +51,8 @@ def init_db() -> None:
                 type=tracker_type,
                 base_url="https://example.com",
                 creds_enc="",
+                username=None,
+                password_enc=None,
                 enabled=False,
             )
             db.add(tracker)

@@ -103,6 +103,7 @@ export function Trackers({ token }: { token: string }) {
           onChange={e => setPassword(e.target.value)}
           style={{ marginLeft: 6 }}
         />
+        {jackettIndexers.length > 0 && (
           <>
             <input
               placeholder="Jackett indexer"

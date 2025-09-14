@@ -1,31 +1,32 @@
+from __future__ import annotations
+
+from typing import Literal, Optional
+
 from pydantic import BaseModel, HttpUrl, Field
-from typing import Optional, Literal
 
-TrackerType = Literal["torznab"]
 
-class TrackerBase(BaseModel):
-    name: str = Field(min_length=1, max_length=128)
-    type: TrackerType = "torznab"
-    base_url: Optional[HttpUrl] = None
-    enabled: bool = True
+class ProviderInfo(BaseModel):
+    slug: str
+    name: str
+    type: Literal["public", "private"]
+    configured: bool = False
+    needs: list[str] = []
 
-class TrackerCreate(TrackerBase):
-    jackett_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
-    api_key: Optional[str] = None
+
+class ProviderConnectIn(BaseModel):
     username: Optional[str] = Field(default=None, min_length=1, max_length=128)
     password: Optional[str] = Field(default=None, min_length=1, max_length=256)
+    cookies: Optional[str] = None
 
-class TrackerUpdate(BaseModel):
-    name: Optional[str] = None
-    base_url: Optional[HttpUrl] = None
-    enabled: Optional[bool] = None
-    api_key: Optional[str] = None
-    username: Optional[str] = Field(default=None, min_length=1, max_length=128)
-    password: Optional[str] = Field(default=None, min_length=1, max_length=256)
 
-class TrackerOut(TrackerBase):
+class TrackerOut(BaseModel):
     id: int
-    base_url: HttpUrl
+    slug: str
+    name: str
+    enabled: bool
+    torznab_url: HttpUrl
+    requires_auth: bool
+    caps: dict | None = None
+
     class Config:
         from_attributes = True
-

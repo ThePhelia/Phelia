@@ -1,201 +1,175 @@
 import React, { useEffect, useState } from "react";
 import {
+  listProviders,
+  connectProvider,
   listTrackers,
-  createTracker,
-  updateTracker,
-  deleteTracker,
+  toggleTracker,
   testTracker,
-  fetchJackettDefault,
-  fetchJackettIndexers,
+  deleteTracker,
 } from "./api";
 
 export function Trackers({ token }: { token: string }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [name, setName] = useState("");
-  const [jackettId, setJackettId] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [info, setInfo] = useState("");
-  const [jackettIndexers, setJackettIndexers] = useState<any[]>([]);
-  const [jackettSel, setJackettSel] = useState("");
+  const [providers, setProviders] = useState<any[]>([]);
+  const [trackers, setTrackers] = useState<any[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [loadingTrackers, setLoadingTrackers] = useState(false);
+  const [credProvider, setCredProvider] = useState<any | null>(null);
+  const [credValues, setCredValues] = useState<Record<string, string>>({});
 
-  async function load() {
-    setLoading(true);
+  async function loadProviders() {
+    setLoadingProviders(true);
+    try {
+      const data = await listProviders(token);
+      setProviders(data || []);
+    } finally {
+      setLoadingProviders(false);
+    }
+  }
+
+  async function loadTrackers() {
+    setLoadingTrackers(true);
     try {
       const data = await listTrackers(token);
-      setItems(data || []);
+      setTrackers(data || []);
     } finally {
-      setLoading(false);
+      setLoadingTrackers(false);
     }
   }
 
   useEffect(() => {
-    if (token) load();
+    if (token) {
+      loadProviders();
+      loadTrackers();
+    }
   }, [token]);
 
-  async function add() {
-    try {
-      await createTracker(token, {
-        name,
-        jackett_id: jackettId,
-        username: username || undefined,
-        password: password || undefined,
-      });
-      setName("");
-      setJackettId("");
-      setUsername("");
-      setPassword("");
-      setInfo("Created");
-      await load();
-    } catch (e: any) {
-      setInfo(e.message || String(e));
+  function startConnect(p: any) {
+    if (p.needs && p.needs.length > 0) {
+      const vals: Record<string, string> = {};
+      for (const f of p.needs) vals[f] = "";
+      setCredProvider(p);
+      setCredValues(vals);
+    } else {
+      handleConnect(p.slug, undefined);
     }
   }
 
-  async function toggle(id: number, enabled: boolean) {
-    await updateTracker(token, id, { enabled: !enabled });
-    await load();
+  async function handleConnect(slug: string, body: any) {
+    try {
+      await connectProvider(token, slug, body);
+      await loadProviders();
+      await loadTrackers();
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
   }
 
-  async function remove(id: number) {
+  function submitCreds() {
+    if (!credProvider) return;
+    handleConnect(credProvider.slug, credValues);
+    setCredProvider(null);
+    setCredValues({});
+  }
+
+  async function onToggle(id: number) {
+    await toggleTracker(token, id);
+    await loadTrackers();
+  }
+
+  async function onDelete(id: number) {
     await deleteTracker(token, id);
-    await load();
+    await loadTrackers();
   }
 
-  async function test(id: number) {
+  async function onTest(id: number) {
     try {
       const r = await testTracker(token, id);
-      if (!r.ok && r.status === 100) {
-        alert("Invalid API key");
-      } else {
-        alert(`ok=${r.ok} status=${r.status}`);
-      }
+      alert(`ok=${r.ok} latency=${r.latency_ms ?? "?"}`);
     } catch (e: any) {
       alert(e.message || String(e));
     }
-  }
-
-  async function fetchFromJackett() {
-    try {
-      const def = await fetchJackettDefault(token);
-      setJackettId(def.api_key);
-      const idx = await fetchJackettIndexers(token);
-      setJackettIndexers(idx || []);
-    } catch (e: any) {
-      alert(e.message || String(e));
-    }
-  }
-
-  function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
-    const value = e.target.value;
-    setJackettSel(value);
-    const found = jackettIndexers.find((it) => it.name === value);
-    if (found) setJackettId(found.id);
   }
 
   return (
     <div style={{ padding: 12 }}>
-      <h3>Trackers</h3>
-      <div style={{ marginBottom: 8 }}>
-        <input
-          placeholder="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          placeholder="jackett_id"
-          value={jackettId}
-          onChange={(e) => setJackettId(e.target.value)}
-          style={{ width: 180, marginLeft: 6 }}
-        />
-        <input
-          placeholder="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          style={{ marginLeft: 6 }}
-        />
-        <input
-          placeholder="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ marginLeft: 6 }}
-        />
-        {jackettIndexers.length > 0 && (
-          <>
-            <input
-              placeholder="Jackett indexer"
-              list="jackett-indexers"
-              value={jackettSel}
-              onChange={onJackettIndexer}
-              style={{ marginLeft: 6 }}
-            />
-            <datalist id="jackett-indexers">
-              {jackettIndexers.map((it) => (
-                <option
-                  key={it.id}
-                  value={it.name}
-                  label={it.description}
-                />
-              ))}
-            </datalist>
-          </>
-        )}
-        <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>
-          Jackett
-        </button>
-        <button onClick={add} style={{ marginLeft: 6 }}>
-          Add
-        </button>
-        {info && (
-          <span style={{ marginLeft: 6, color: "#555" }}>{info}</span>
-        )}
-      </div>
+      <h3>Provider Catalog</h3>
+      <ul>
+        {providers.map((p) => (
+          <li key={p.slug}>
+            {p.name} ({p.type}) {p.configured ? "✓" : ""}{" "}
+            <button onClick={() => startConnect(p)}>Connect</button>
+          </li>
+        ))}
+        {loadingProviders && <li>Loading...</li>}
+      </ul>
+
+      <h3>My Trackers</h3>
       <table cellPadding={6} style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th>ID</th>
             <th>Name</th>
             <th>URL</th>
-            <th>Creds</th>
             <th>Enabled</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((it) => (
+          {trackers.map((it) => (
             <tr key={it.id}>
               <td>{it.id}</td>
               <td>{it.name}</td>
-              <td
-                style={{
-                  maxWidth: 500,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {it.base_url}
+              <td style={{ maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {it.torznab_url}
               </td>
-              <td>{(it.username || it.api_key) ? "Yes" : "No"}</td>
               <td>{String(it.enabled)}</td>
               <td>
-                <button onClick={() => toggle(it.id, it.enabled)}>
-                  Toggle
-                </button>{" "}
-                <button onClick={() => test(it.id)}>Test</button>{" "}
-                <button onClick={() => remove(it.id)}>Delete</button>
+                <button onClick={() => onToggle(it.id)}>Toggle</button>{" "}
+                <button onClick={() => onTest(it.id)}>Test</button>{" "}
+                <button onClick={() => onDelete(it.id)}>Delete</button>
               </td>
             </tr>
           ))}
-          {loading && (
+          {loadingTrackers && (
             <tr>
-              <td colSpan={6}>Loading...</td>
+              <td colSpan={5}>Loading...</td>
             </tr>
           )}
         </tbody>
       </table>
+      {credProvider && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div style={{ background: "#fff", padding: 20, minWidth: 300 }}>
+            <h4>Connect {credProvider.name}</h4>
+            {credProvider.needs.map((f: string) => (
+              <div key={f} style={{ marginBottom: 8 }}>
+                <label>{f}</label>
+                <input
+                  type={f.toLowerCase().includes("password") ? "password" : "text"}
+                  value={credValues[f] || ""}
+                  onChange={(e) =>
+                    setCredValues({ ...credValues, [f]: e.target.value })
+                  }
+                />
+              </div>
+            ))}
+            <button onClick={submitCreds}>Connect</button>{" "}
+            <button onClick={() => setCredProvider(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

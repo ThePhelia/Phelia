@@ -1,0 +1,50 @@
+[
+  {
+    "slug": "rutracker",
+    "name": "RuTracker",
+    "type": "private",
+    "needs": ["username", "password"]
+  },
+  {
+    "slug": "rarbg",
+    "name": "RARBG",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "1337x",
+    "name": "1337x",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "thepiratebay",
+    "name": "The Pirate Bay",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "eztv",
+    "name": "EZTV",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "nyaasi",
+    "name": "Nyaa",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "limetorrents",
+    "name": "LimeTorrents",
+    "type": "public",
+    "needs": []
+  },
+  {
+    "slug": "torrentleech",
+    "name": "TorrentLeech",
+    "type": "private",
+    "needs": ["username", "password"]
+  }
+]

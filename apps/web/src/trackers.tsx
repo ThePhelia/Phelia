@@ -33,16 +33,7 @@ export function Trackers({ token }: { token: string }) {
 
   useEffect(() => { if (token) load(); }, [token]);
 
-  async function add() {
-    try {
-      await createTracker(token, { name, jackett_id: jackettId, username, password, enabled: true });
-      setName(""); setJackettId(""); setUsername(""); setPassword("");
-      setInfo("Tracker created");
-      setTimeout(() => setInfo(""), 3000);
-      await load();
-    } catch (e: any) {
-      alert(e.message || String(e));
-    }
+@@ -38,77 +46,112 @@ export function Trackers({ token }: { token: string }) {
   }
 
   async function toggle(id: number, enabled: boolean) {
@@ -85,6 +76,7 @@ export function Trackers({ token }: { token: string }) {
     setJackettSel(value);
     const found = jackettIndexers.find(it => it.name === value);
     if (found) setJackettId(found.id);
+
   }
 
   return (
@@ -111,7 +103,6 @@ export function Trackers({ token }: { token: string }) {
           onChange={e => setPassword(e.target.value)}
           style={{ marginLeft: 6 }}
         />
-        {jackettIndexers.length > 0 && (
           <>
             <input
               placeholder="Jackett indexer"
@@ -153,9 +144,3 @@ export function Trackers({ token }: { token: string }) {
             </tr>
           ))}
           {loading && <tr><td colSpan={6}>Loading...</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-

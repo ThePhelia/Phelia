@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker } from "./api";
+import {
+  listTrackers,
+  createTracker,
+  updateTracker,
+  deleteTracker,
+  testTracker,
+  fetchJackettDefault,
+  fetchJackettIndexers,
+} from "./api";
 
 export function Trackers({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -58,6 +66,25 @@ export function Trackers({ token }: { token: string }) {
     } catch (e: any) {
       alert(e.message || String(e));
     }
+  }
+
+  async function fetchFromJackett() {
+    try {
+      const def = await fetchJackettDefault(token);
+      setJackettBase(def.base_url);
+      setJackettId(def.api_key);
+      const idx = await fetchJackettIndexers(token);
+      setJackettIndexers(idx || []);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+  }
+
+  function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setJackettSel(value);
+    const found = jackettIndexers.find(it => it.name === value);
+    if (found) setJackettId(found.id);
   }
 
   return (

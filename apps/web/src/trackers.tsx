@@ -61,23 +61,22 @@ export function Trackers({ token }: { token: string }) {
 
   async function fetchFromJackett() {
     try {
-      const defaults = await fetchJackettDefault(token);
-      if (defaults.base_url) setJackettBase(defaults.base_url);
-      const list = await fetchJackettIndexers(token);
-      setJackettIndexers(list || []);
+      const def = await fetchJackettDefault(token);
+      setJackettBase(def.base_url);
+      setJackettId(def.api_key);
+      const idx = await fetchJackettIndexers(token);
+      setJackettIndexers(idx || []);
     } catch (e: any) {
       alert(e.message || String(e));
     }
   }
 
   function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value;
-    setJackettSel(v);
-    const it = jackettIndexers.find(i => i.name === v || i.id === v);
-    if (it) {
-      setJackettId(it.id);
-      setName(it.name);
-    }
+    const value = e.target.value;
+    setJackettSel(value);
+    const found = jackettIndexers.find(it => it.name === value);
+    if (found) setJackettId(found.id);
+
   }
 
   return (

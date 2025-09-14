@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker, fetchJackettDefault } from "./api";
+import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker, fetchJackettDefault, fetchJackettIndexers } from "./api";
 
 export function Trackers({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -10,6 +10,9 @@ export function Trackers({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState("");
+  const [jackettIndexers, setJackettIndexers] = useState<any[]>([]);
+  const [jackettBase, setJackettBase] = useState("");
+  const [jackettSel, setJackettSel] = useState("");
 
   async function load() {
     setLoading(true);
@@ -59,14 +62,30 @@ export function Trackers({ token }: { token: string }) {
   async function fetchFromJackett() {
     try {
       const data = await fetchJackettDefault(token);
-      if (data.base_url) setBaseUrl(data.base_url);
+      if (data.base_url) {
+        setBaseUrl(data.base_url);
+        setJackettBase(data.base_url);
+      }
       if (data.api_key) {
         setApiKey(data.api_key);
         setInfo("API key fetched from Jackett");
         setTimeout(() => setInfo(""), 3000);
       }
+      const list = await fetchJackettIndexers(token);
+      setJackettIndexers(list || []);
     } catch (e: any) {
       alert(e.message || String(e));
+    }
+  }
+
+  function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setJackettSel(v);
+    const it = jackettIndexers.find((i: any) => i.name === v || i.id === v);
+    if (it && jackettBase) {
+      const root = jackettBase.replace(/\/all\/results\/torznab\/?$/, "");
+      setBaseUrl(`${root}/${it.id}/results/torznab/`);
+      setName(it.name);
     }
   }
 
@@ -108,6 +127,22 @@ export function Trackers({ token }: { token: string }) {
         <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
         <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
         <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
+        {jackettIndexers.length > 0 && (
+          <>
+            <input
+              placeholder="Jackett indexer"
+              list="jackett-indexers"
+              value={jackettSel}
+              onChange={onJackettIndexer}
+              style={{ marginLeft: 6 }}
+            />
+            <datalist id="jackett-indexers">
+              {jackettIndexers.map(it => (
+                <option key={it.id} value={it.name} label={it.description} />
+              ))}
+            </datalist>
+          </>
+        )}
         <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
         {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}

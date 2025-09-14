@@ -35,6 +35,32 @@ def jackett_default() -> dict[str, str]:
         raise HTTPException(404, "jackett apikey not found")
     return {"api_key": key, "base_url": JACKETT_BASE}
 
+
+@router.get("/jackett/indexers")
+async def jackett_indexers() -> list[dict[str, str]]:
+    """Return the catalog of Jackett indexers available for configuration."""
+    key = read_jackett_apikey()
+    if not key:
+        raise HTTPException(404, "jackett apikey not found")
+    base = JACKETT_BASE.rsplit("/all/results/torznab/", 1)[0]
+    url = f"{base}?configured=false&apikey={key}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url)
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        logger.error("jackett indexers url=%s error=%s", url, e)
+        raise HTTPException(502, str(e))
+    data = r.json()
+    return [
+        {
+            "id": it.get("id"),
+            "name": it.get("name"),
+            "description": it.get("description"),
+        }
+        for it in data
+    ]
+
 @router.get("", response_model=list[TrackerOut])
 def list_trackers(db: Session = Depends(get_db)):
     return db.query(models.Tracker).order_by(models.Tracker.id.asc()).all()

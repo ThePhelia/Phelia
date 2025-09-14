@@ -16,6 +16,7 @@ export function Trackers({ token }: { token: string }) {
   const [credProvider, setCredProvider] = useState<any | null>(null);
   const [credValues, setCredValues] = useState<Record<string, string>>({});
 
+
   async function loadProviders() {
     setLoadingProviders(true);
     try {
@@ -54,9 +55,19 @@ export function Trackers({ token }: { token: string }) {
     }
   }
 
-  async function handleConnect(slug: string, body: any) {
+
+  async function onConnect(p: any) {
     try {
-      await connectProvider(token, slug, body);
+      let body: any = undefined;
+      if (p.needs && p.needs.length > 0) {
+        body = {};
+        for (const f of p.needs) {
+          const v = window.prompt(f);
+          if (!v) return;
+          body[f] = v;
+        }
+      }
+      await connectProvider(token, p.slug, body);
       await loadProviders();
       await loadTrackers();
     } catch (e: any) {
@@ -98,6 +109,7 @@ export function Trackers({ token }: { token: string }) {
           <li key={p.slug}>
             {p.name} ({p.type}) {p.configured ? "✓" : ""}{" "}
             <button onClick={() => startConnect(p)}>Connect</button>
+
           </li>
         ))}
         {loadingProviders && <li>Loading...</li>}

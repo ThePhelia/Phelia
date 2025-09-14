@@ -43,8 +43,11 @@ function App() {
   }
   
   async function register() {
-    await registerUser(email, password);
-    await login();
+    const data = await registerUser(email, password);
+    const t = data.accessToken || data.access_token || data.token;
+    if (!t) throw new Error("no token");
+    localStorage.setItem("token", t);
+    setToken(t);
   }
 
   async function list() {

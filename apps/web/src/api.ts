@@ -17,7 +17,7 @@ export async function register(email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+  return r.json() as Promise<{ accessToken: string; tokenType: string }>;
 }
 
 export async function listTrackers(token: string) {

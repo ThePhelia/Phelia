@@ -33,23 +33,51 @@ class JackettAdapter:
                 logger.warning("failed to read providers catalog")
         return []
 
+    def _fetch_indexers(self) -> List[Dict[str, Any]]:
+        """Best-effort fetch of Jackett's indexer catalogue."""
+
+        url = f"{self.base_url}/api/v2.0/server/indexers"
+        try:
+            r = httpx.get(url, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            return data if isinstance(data, list) else []
+        except Exception as e:  # pragma: no cover - network best effort
+            logger.warning("indexers fetch failed url=%s error=%s", url, e)
+            return []
+
+    def _normalise(self, it: Dict[str, Any]) -> Dict[str, Any]:
+        slug = it.get("id") or it.get("slug") or it.get("name")
+        name = it.get("name") or slug
+        cfg = it.get("config") or {}
+        needs: List[str] = []
+        if cfg.get("requiresCredentials") or it.get("requires_auth"):
+            needs = ["username", "password"]
+        type_ = "private" if needs else (it.get("type") or "public")
+        return {
+            "slug": slug,
+            "name": name,
+            "type": type_,
+            "needs": needs,
+            "configured": bool(it.get("configured")),
+        }
+
     def list_configured(self) -> List[Dict[str, Any]]:
-        """Return providers already configured in Jackett.
+        """Return providers already configured in Jackett."""
 
-        This basic implementation returns an empty list; tests typically
-        monkeypatch this method when specific behaviour is required.
-        """
-
-        return []
+        items = [self._normalise(p) for p in self._fetch_indexers()]
+        return [p for p in items if p.get("configured")]
 
     def list_available(self) -> List[Dict[str, Any]]:
         """Return providers available for installation.
 
-        If Jackett does not expose a catalogue the adapter falls back to a
-        static JSON file bundled with the repository.
+        Attempts to query Jackett for the complete catalogue; falls back to
+        a bundled static JSON list if Jackett is unreachable.
         """
 
-        return self._read_catalog()
+        items = [self._normalise(p) for p in self._fetch_indexers()]
+        avail = [p for p in items if not p.get("configured")]
+        return avail if avail else self._read_catalog()
 
     # ------------------------------------------------------------------
     # Installation and configuration

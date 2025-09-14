@@ -34,26 +34,22 @@ def init_db() -> None:
             )
             db.add(user)
 
-        # ---- Seed example tracker (idempotent by name+type) ----
-        tracker_name = "Example"
-        tracker_type = "torznab"
+        # ---- Seed example tracker (idempotent by slug) ----
+        tracker_slug = "example"
         tracker = (
             db.query(models.Tracker)
-            .filter(
-                models.Tracker.name == tracker_name,
-                models.Tracker.type == tracker_type,
-            )
+            .filter(models.Tracker.provider_slug == tracker_slug)
             .one_or_none()
         )
         if tracker is None:
             tracker = models.Tracker(
-                name=tracker_name,
-                type=tracker_type,
-                base_url="https://example.com",
-                creds_enc="",
-                username=None,
-                password_enc=None,
+                provider_slug=tracker_slug,
+                display_name="Example",
+                type="public",
                 enabled=False,
+                torznab_url="https://example.com",
+                jackett_indexer_id=None,
+                requires_auth=False,
             )
             db.add(tracker)
 

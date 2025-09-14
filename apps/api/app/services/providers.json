@@ -1,0 +1,14 @@
+[
+  {
+    "slug": "rutracker",
+    "name": "RuTracker",
+    "type": "private",
+    "needs": ["username", "password"]
+  },
+  {
+    "slug": "rarbg",
+    "name": "RARBG",
+    "type": "public",
+    "needs": []
+  }
+]

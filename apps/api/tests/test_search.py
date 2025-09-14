@@ -1,9 +1,8 @@
-import json
+import feedparser
 import logging
 import pytest
-import feedparser
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.routers.search import router as search_router, logger as search_logger
 from app.services.search.torznab import TorznabClient
@@ -12,32 +11,21 @@ from app.db.session import get_db
 
 
 @pytest.mark.anyio
-async def test_search_missing_credentials_logs(db_session, caplog):
-    tr = models.Tracker(name="t1", type="torznab", base_url="http://example", creds_enc="{}", enabled=True)
-    db_session.add(tr)
-    db_session.commit()
-
-    app = FastAPI()
-    app.include_router(search_router, prefix="/api/v1")
-    app.dependency_overrides[get_db] = lambda: db_session
-    transport = ASGITransport(app=app)
-
-    with caplog.at_level(logging.WARNING, logger=search_logger.name):
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.get("/api/v1/search", params={"query": "foo"})
-    assert resp.status_code == 200
-    assert any("missing credentials" in r.message for r in caplog.records)
-
-
-@pytest.mark.anyio
 async def test_search_error_logs(monkeypatch, db_session, caplog):
-    creds = json.dumps({"api_key": "123"})
-    tr = models.Tracker(name="t1", type="torznab", base_url="http://example", creds_enc=creds, enabled=True)
+    tr = models.Tracker(
+        provider_slug="t1",
+        display_name="t1",
+        type="public",
+        enabled=True,
+        torznab_url="http://example",
+        requires_auth=False,
+    )
     db_session.add(tr)
     db_session.commit()
 
-    def bad_search(self, base_url, api_key, query, username=None, password=None):
+    def bad_search(self, base_url, query):
         raise RuntimeError("boom")
+
     monkeypatch.setattr(TorznabClient, "search", bad_search)
 
     app = FastAPI()
@@ -79,10 +67,7 @@ def test_torznab_client_builds_url(monkeypatch):
 
     monkeypatch.setattr(feedparser, "parse", fake_parse)
     client = TorznabClient()
-    items = client.search("http://example/", "secret", "foo bar")
+    items = client.search("http://example/", "foo bar")
 
     assert items == []
-    assert (
-        captured["url"]
-        == "http://example?t=search&q=foo+bar&apikey=secret"
-    )
+    assert captured["url"] == "http://example?t=search&q=foo+bar"

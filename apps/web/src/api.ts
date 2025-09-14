@@ -20,32 +20,36 @@ export async function register(email: string, password: string) {
   return r.json() as Promise<{ accessToken: string; tokenType: string }>;
 }
 
-export async function listTrackers(token: string) {
-  const r = await fetch(`${BASE}/trackers`, { headers: { Authorization: `Bearer ${token}` }});
+// ---------------------------------------------------------------------------
+// Trackers API
+// ---------------------------------------------------------------------------
+
+export async function listProviders(token: string) {
+  const r = await fetch(`${BASE}/trackers/providers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!r.ok) throw new Error(String(r.status));
   return r.json();
 }
 
-export async function createTracker(
+export async function connectProvider(
   token: string,
-  body: {
-    name: string;
-    jackett_id: string;
-    username?: string;
-    password?: string;
-    enabled?: boolean;
-  }
+  slug: string,
+  body: Record<string, any> | undefined = undefined,
 ) {
-  const r = await fetch(`${BASE}/trackers`, {
+  const r = await fetch(`${BASE}/trackers/providers/${slug}/connect`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ type: "torznab", enabled: true, ...body }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
   const text = await r.text();
   if (!r.ok) {
     try {
       const data = JSON.parse(text);
-      throw new Error(data.detail || text || String(r.status));
+      throw new Error(data.error || text || String(r.status));
     } catch {
       throw new Error(text || String(r.status));
     }
@@ -53,60 +57,66 @@ export async function createTracker(
   return JSON.parse(text);
 }
 
-export async function updateTracker(
-  token: string,
-  id: number,
-  body: Partial<{
-    name: string;
-    base_url: string;
-    api_key: string;
-    enabled: boolean;
-    username: string;
-    password: string;
-  }>
-) {
-  const r = await fetch(`${BASE}/trackers/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+export async function listTrackers(token: string) {
+  const r = await fetch(`${BASE}/trackers`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) throw new Error(String(r.status));
   return r.json();
 }
 
-
-export async function fetchJackettDefault(token: string) {
-  const r = await fetch(`${BASE}/trackers/jackett/default`, {
+export async function toggleTracker(token: string, id: number) {
+  const r = await fetch(`${BASE}/trackers/${id}/toggle`, {
+    method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<{ api_key: string; base_url: string }>;
+  return r.json();
 }
 
-export async function fetchJackettIndexers(token: string) {
-  const r = await fetch(`${BASE}/trackers/jackett/indexers`, {
+export async function testTracker(token: string, id: number) {
+  const r = await fetch(`${BASE}/trackers/${id}/test`, {
+    method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<
-    Array<{ id: string; name: string; description: string }>
-  >;
+  return r.json();
 }
 
+export async function deleteTracker(token: string, id: number) {
+  const r = await fetch(`${BASE}/trackers/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok && r.status !== 200 && r.status !== 204)
+    throw new Error(String(r.status));
+}
+
+// ---------------------------------------------------------------------------
+// Misc existing API helpers
+// ---------------------------------------------------------------------------
 
 export async function searchApi(q: string) {
   const r = await fetch(`${BASE}/search?query=${encodeURIComponent(q)}`);
   if (!r.ok) throw new Error(`search ${r.status}`);
-  return r.json() as Promise<{ total: number; items: Array<{ title: string; magnet?: string }> }>;
+  return r.json() as Promise<{
+    total: number;
+    items: Array<{ title: string; magnet?: string }>;
+  }>;
 }
 
-
-
-export async function createDownload(token: string, magnet: string, savePath = "/downloads") {
+export async function createDownload(
+  token: string,
+  magnet: string,
+  savePath = "/downloads",
+) {
   try {
     const r = await fetch(`${BASE}/downloads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({ magnet, savePath }),
     });
     if (!r.ok) {
@@ -118,28 +128,3 @@ export async function createDownload(token: string, magnet: string, savePath = "
     throw new Error(String(e));
   }
 }
-export async function deleteTracker(token: string, id: number) {
-  const r = await fetch(`${BASE}/trackers/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok && r.status !== 204) throw new Error(String(r.status));
-}
-
-export async function testTracker(token: string, id: number) {
-  const r = await fetch(`${BASE}/trackers/${id}/test`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const text = await r.text();
-  if (!r.ok) {
-    try {
-      const data = JSON.parse(text);
-      throw new Error(data.detail || text || String(r.status));
-    } catch {
-      throw new Error(text || String(r.status));
-    }
-  }
-  return JSON.parse(text);
-}
-

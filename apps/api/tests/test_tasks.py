@@ -238,7 +238,7 @@ def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
             if self.calls == 1:
                 class R:
                     is_redirect = True
-                    headers = {"Location": "ftp://example.com/file.torrent"\}
+                    headers = {"Location": "ftp://example.com/file.torrent"}
                     content = b""
 
                     def raise_for_status(self):

@@ -3,10 +3,12 @@ from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 import logging
 import base64
+from typing import Any
 
 from app.routers.trackers import router as trackers_router
 from app.db import models
 from app.db.session import get_db
+import httpx
 
 
 @pytest.mark.anyio
@@ -60,6 +62,52 @@ async def test_create_tracker_strips_apikey(db_session, caplog):
     tr = db_session.query(models.Tracker).filter(models.Tracker.id == body["id"]).first()
     assert tr.username == "user1"
     assert tr.password_enc and tr.password_enc != "pass1"
+
+
+@pytest.mark.anyio
+async def test_create_tracker_jackett(db_session, monkeypatch):
+    app = FastAPI()
+    app.include_router(trackers_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+    transport = ASGITransport(app=app)
+
+    monkeypatch.setattr("app.routers.trackers.read_jackett_apikey", lambda: "sekret")
+
+    captured: dict[str, Any] = {}
+
+    class FakeResp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "id": "foo",
+                "apiKey": "sekret",
+                "baseUrl": "http://jackett:9117/api/v2.0/indexers/foo/results/torznab/",
+            }
+
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, params=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        captured["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/v1/trackers",
+            json={"name": "n1", "jackett_id": "foo", "username": "u", "password": "p"},
+        )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["base_url"] == "http://jackett:9117/api/v2.0/indexers/foo/results/torznab/"
+    assert captured["url"].endswith("/api/v2.0/indexers/foo")
+    assert captured["json"]["config"]["username"] == "u"
 
 
 @pytest.mark.anyio

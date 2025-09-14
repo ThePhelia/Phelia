@@ -69,6 +69,63 @@ def list_trackers(db: Session = Depends(get_db)):
 def create_tracker(body: TrackerCreate, db: Session = Depends(get_db)):
     if db.query(models.Tracker).filter(models.Tracker.name == body.name).first():
         raise HTTPException(400, "Tracker with this name already exists")
+
+    # If a Jackett indexer is specified, create it via Jackett's API first
+    if body.jackett_id:
+        jackett_key = read_jackett_apikey()
+        if not jackett_key:
+            raise HTTPException(500, "jackett apikey not found")
+        jackett_root = JACKETT_BASE.split("/api/")[0]
+        jackett_url = f"{jackett_root}/api/v2.0/indexers/{body.jackett_id}"
+        payload: dict[str, Any] = {"name": body.name}
+        cfg: dict[str, str] = {}
+        if body.api_key:
+            cfg["api_key"] = body.api_key
+        if body.username:
+            cfg["username"] = body.username
+        if body.password:
+            cfg["password"] = body.password
+        if cfg:
+            payload["config"] = cfg
+        try:
+            r = httpx.post(
+                jackett_url,
+                params={"apikey": jackett_key},
+                json=payload,
+                timeout=10,
+            )
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            msg = e.response.text if e.response is not None else str(e)
+            logger.error("create_tracker jackett status error id=%s body=%s", body.jackett_id, msg)
+            raise HTTPException(e.response.status_code if e.response else 400, msg)
+        except httpx.HTTPError as e:
+            logger.error("create_tracker jackett error id=%s error=%s", body.jackett_id, e)
+            raise HTTPException(400, str(e))
+        data = r.json()
+        slug = data.get("id") or data.get("slug") or body.jackett_id
+        api_key = data.get("apiKey") or data.get("api_key") or jackett_key
+        base_url = data.get("baseUrl") or data.get("base_url")
+        if not base_url:
+            base_url = f"{jackett_root}/api/v2.0/indexers/{slug}/results/torznab/"
+        creds_enc = json.dumps({"api_key": api_key} if api_key else {})
+        tr = models.Tracker(
+            name=body.name,
+            type="torznab",
+            base_url=base_url,
+            creds_enc=creds_enc,
+            username=None,
+            password_enc=None,
+            enabled=body.enabled,
+        )
+        db.add(tr)
+        db.commit()
+        db.refresh(tr)
+        return tr
+
+    if not body.base_url:
+        raise HTTPException(400, "base_url or jackett_id required")
+
     raw_base = str(body.base_url)
     split = urlsplit(raw_base)
     path = split.path.rstrip("/")

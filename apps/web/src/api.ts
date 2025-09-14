@@ -29,12 +29,11 @@ export async function listTrackers(token: string) {
 export async function createTracker(
   token: string,
   body: {
-    name:string;
-    base_url:string;
-    api_key?:string;
-    enabled?:boolean;
-    username?:string;
-    password?:string;
+    name: string;
+    jackett_id: string;
+    username?: string;
+    password?: string;
+    enabled?: boolean;
   }
 ) {
   const r = await fetch(`${BASE}/trackers`, {

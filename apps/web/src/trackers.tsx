@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker, fetchJackettDefault, fetchJackettIndexers } from "./api";
+import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker } from "./api";
 
 export function Trackers({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [name, setName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  const [jackettId, setJackettId] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,8 +27,10 @@ export function Trackers({ token }: { token: string }) {
 
   async function add() {
     try {
-      await createTracker(token, { name, base_url: baseUrl, api_key: apiKey, username, password, enabled: true });
-      setName(""); setBaseUrl(""); setApiKey(""); setUsername(""); setPassword("");
+      await createTracker(token, { name, jackett_id: jackettId, username, password, enabled: true });
+      setName(""); setJackettId(""); setUsername(""); setPassword("");
+      setInfo("Tracker created");
+      setTimeout(() => setInfo(""), 3000);
       await load();
     } catch (e: any) {
       alert(e.message || String(e));
@@ -59,72 +60,12 @@ export function Trackers({ token }: { token: string }) {
     }
   }
 
-  async function fetchFromJackett() {
-    try {
-      const data = await fetchJackettDefault(token);
-      if (data.base_url) {
-        setBaseUrl(data.base_url);
-        setJackettBase(data.base_url);
-      }
-      if (data.api_key) {
-        setApiKey(data.api_key);
-        setInfo("API key fetched from Jackett");
-        setTimeout(() => setInfo(""), 3000);
-      }
-      const list = await fetchJackettIndexers(token);
-      setJackettIndexers(list || []);
-    } catch (e: any) {
-      alert(e.message || String(e));
-    }
-  }
-
-  function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value;
-    setJackettSel(v);
-    const it = jackettIndexers.find((i: any) => i.name === v || i.id === v);
-    if (it && jackettBase) {
-      const root = jackettBase.replace(/\/all\/results\/torznab\/?$/, "");
-      setBaseUrl(`${root}/${it.id}/results/torznab/`);
-      setName(it.name);
-    }
-  }
-
-  function onBaseUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value;
-    try {
-      const u = new URL(v);
-      let key = u.searchParams.get("apikey");
-      if (key) {
-        u.searchParams.delete("apikey");
-      } else {
-        const m = u.pathname.match(/\/(?:apikey\/)?([a-f0-9]{32})(?=\/|$)/i);
-        if (m) {
-          key = m[1];
-          u.pathname = u.pathname.replace(m[0], "/").replace(/\/+/g, "/");
-        }
-      }
-      if (key) {
-        setApiKey(key);
-        setInfo("API key auto-filled");
-        setTimeout(() => setInfo(""), 3000);
-      }
-      const search = u.searchParams.toString();
-      const normalized = u.origin + u.pathname + (search ? `?${search}` : "") + u.hash;
-      setBaseUrl(normalized);
-      return;
-    } catch {
-      // ignore parse errors and keep the raw value
-    }
-    setBaseUrl(v);
-  }
-
   return (
     <div style={{ padding: 12 }}>
       <h3>Trackers</h3>
       <div style={{ marginBottom: 8 }}>
         <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
-        <input placeholder="base_url" value={baseUrl} onChange={onBaseUrlChange} style={{ width: 420, marginLeft: 6 }} />
-        <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
+        <input placeholder="jackett_id" value={jackettId} onChange={e=>setJackettId(e.target.value)} style={{ width: 180, marginLeft: 6 }} />
         <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
         <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
         {jackettIndexers.length > 0 && (
@@ -144,6 +85,8 @@ export function Trackers({ token }: { token: string }) {
           </>
         )}
         <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
+=======
+>>>>>>> theirs
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
         {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}
       </div>

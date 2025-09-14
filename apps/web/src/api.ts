@@ -10,6 +10,16 @@ export async function login(email: string, password: string) {
   return r.json();
 }
 
+export async function register(email: string, password: string) {
+  const r = await fetch(`${BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
 export async function listTrackers(token: string) {
   const r = await fetch(`${BASE}/trackers`, { headers: { Authorization: `Bearer ${token}` }});
   if (!r.ok) throw new Error(String(r.status));

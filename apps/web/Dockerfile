@@ -8,7 +8,7 @@ ENV VITE_WS_BASE=${VITE_WS_BASE}
 COPY package*.json ./
 RUN [ -f package-lock.json ] && npm ci || npm i
 COPY . .
-RUN npm run build
+RUN npx vite build
 
 # serve
 FROM nginx:1.27-alpine

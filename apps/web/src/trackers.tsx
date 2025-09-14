@@ -145,3 +145,9 @@ export function Trackers({ token }: { token: string }) {
             </tr>
           ))}
           {loading && <tr><td colSpan={6}>Loading...</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  );
+}

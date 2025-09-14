@@ -64,10 +64,26 @@ export function Trackers({ token }: { token: string }) {
     <div style={{ padding: 12 }}>
       <h3>Trackers</h3>
       <div style={{ marginBottom: 8 }}>
-        <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
-        <input placeholder="jackett_id" value={jackettId} onChange={e=>setJackettId(e.target.value)} style={{ width: 180, marginLeft: 6 }} />
-        <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
-        <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
+        <input placeholder="name" value={name} onChange={e => setName(e.target.value)} />
+        <input
+          placeholder="jackett_id"
+          value={jackettId}
+          onChange={e => setJackettId(e.target.value)}
+          style={{ width: 180, marginLeft: 6 }}
+        />
+        <input
+          placeholder="username"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          style={{ marginLeft: 6 }}
+        />
+        <input
+          placeholder="password"
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={{ marginLeft: 6 }}
+        />
         {jackettIndexers.length > 0 && (
           <>
             <input
@@ -85,8 +101,6 @@ export function Trackers({ token }: { token: string }) {
           </>
         )}
         <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
-=======
->>>>>>> theirs
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
         {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}
       </div>

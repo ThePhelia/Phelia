@@ -100,12 +100,13 @@ def enqueue_download(
                                     else:
                                         if loc:
                                             scheme = urlparse(loc).scheme
-                                            if scheme and scheme not in ("http", "https"):
-                                                logger.warning(
-                                                    "Download %s redirect with unexpected scheme: %s",
-                                                    download_id,
-                                                    loc,
-                                                )
+                                        if scheme and scheme not in ("http", "https"):
+                                            logger.warning(
+                                                "Download %s redirect with unexpected scheme: %s",
+                                                download_id,
+                                                loc,
+                                            )
+                                            raise httpx.UnsupportedProtocol(loc)
                                         resp.raise_for_status()
                                         content = resp.content
                                 else:

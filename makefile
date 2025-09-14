@@ -68,9 +68,6 @@ psql:
 redis-cli:
 	$(COMPOSE) exec redis redis-cli
 
-seed-admin:
-	cd $(COMPOSE_DIR) && docker compose exec api python /app/seed_admin.py
-
 health:
 	curl -fsS http://localhost:$${API_PORT:-8000}/api/v1/health >/dev/null && echo "OK" || (echo "FAILED"; exit 1)
 
@@ -86,5 +83,5 @@ help:
 	awk 'BEGIN{FS=":|## "}{if($$0 ~ /:$$/){t=$$1}else if($$0 ~ /^## /){printf "  \033[36m%-18s\033[0m %s\n", t, $$2}}'
 
 .PHONY: up rebuild down down-v restart ps logs api-logs web-logs worker-logs beat-logs jackett-logs db-logs redis-logs \
-        revision migrate api-sh worker-sh web-sh psql redis-cli seed-admin health jackett-apikey api-restart help
+        revision migrate api-sh worker-sh web-sh psql redis-cli health jackett-apikey api-restart help
 

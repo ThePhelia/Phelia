@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import axios from "axios";
 import { Trackers } from "./trackers";
+import { register as registerUser } from "./api";
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
 const WS_BASE = (import.meta as any).env.VITE_WS_BASE || "ws://localhost:8000";
@@ -39,6 +40,11 @@ function App() {
     if (!t) throw new Error("no token");
     localStorage.setItem("token", t);
     setToken(t);
+  }
+  
+  async function register() {
+    await registerUser(email, password);
+    await login();
   }
 
   async function list() {
@@ -135,7 +141,15 @@ function App() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />{" "}
-          <button type="submit">Login</button>
+          <button type="submit">Login</button>{" "}
+          <button
+            type="button"
+            onClick={() =>
+              register().catch((e) => alert("Register failed: " + e))
+            }
+          >
+            Register
+          </button>
         </form>
       ) : (
         <div>

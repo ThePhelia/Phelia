@@ -18,7 +18,6 @@ export function Trackers({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState("");
   const [jackettIndexers, setJackettIndexers] = useState<any[]>([]);
-  const [jackettBase, setJackettBase] = useState("");
   const [jackettSel, setJackettSel] = useState("");
 
   async function load() {
@@ -31,9 +30,27 @@ export function Trackers({ token }: { token: string }) {
     }
   }
 
-  useEffect(() => { if (token) load(); }, [token]);
+  useEffect(() => {
+    if (token) load();
+  }, [token]);
 
-@@ -38,77 +46,112 @@ export function Trackers({ token }: { token: string }) {
+  async function add() {
+    try {
+      await createTracker(token, {
+        name,
+        jackett_id: jackettId,
+        username: username || undefined,
+        password: password || undefined,
+      });
+      setName("");
+      setJackettId("");
+      setUsername("");
+      setPassword("");
+      setInfo("Created");
+      await load();
+    } catch (e: any) {
+      setInfo(e.message || String(e));
+    }
   }
 
   async function toggle(id: number, enabled: boolean) {
@@ -62,7 +79,6 @@ export function Trackers({ token }: { token: string }) {
   async function fetchFromJackett() {
     try {
       const def = await fetchJackettDefault(token);
-      setJackettBase(def.base_url);
       setJackettId(def.api_key);
       const idx = await fetchJackettIndexers(token);
       setJackettIndexers(idx || []);
@@ -74,33 +90,36 @@ export function Trackers({ token }: { token: string }) {
   function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setJackettSel(value);
-    const found = jackettIndexers.find(it => it.name === value);
+    const found = jackettIndexers.find((it) => it.name === value);
     if (found) setJackettId(found.id);
-
   }
 
   return (
     <div style={{ padding: 12 }}>
       <h3>Trackers</h3>
       <div style={{ marginBottom: 8 }}>
-        <input placeholder="name" value={name} onChange={e => setName(e.target.value)} />
+        <input
+          placeholder="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <input
           placeholder="jackett_id"
           value={jackettId}
-          onChange={e => setJackettId(e.target.value)}
+          onChange={(e) => setJackettId(e.target.value)}
           style={{ width: 180, marginLeft: 6 }}
         />
         <input
           placeholder="username"
           value={username}
-          onChange={e => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value)}
           style={{ marginLeft: 6 }}
         />
         <input
           placeholder="password"
           type="password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           style={{ marginLeft: 6 }}
         />
         {jackettIndexers.length > 0 && (
@@ -113,34 +132,60 @@ export function Trackers({ token }: { token: string }) {
               style={{ marginLeft: 6 }}
             />
             <datalist id="jackett-indexers">
-              {jackettIndexers.map(it => (
-                <option key={it.id} value={it.name} label={it.description} />
+              {jackettIndexers.map((it) => (
+                <option
+                  key={it.id}
+                  value={it.name}
+                  label={it.description}
+                />
               ))}
             </datalist>
           </>
         )}
-        <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
-        <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
-        {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}
+        <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>
+          Jackett
+        </button>
+        <button onClick={add} style={{ marginLeft: 6 }}>
+          Add
+        </button>
+        {info && (
+          <span style={{ marginLeft: 6, color: "#555" }}>{info}</span>
+        )}
       </div>
       <table cellPadding={6} style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th>ID</th><th>Name</th><th>URL</th><th>Creds</th><th>Enabled</th><th>Actions</th>
+            <th>ID</th>
+            <th>Name</th>
+            <th>URL</th>
+            <th>Creds</th>
+            <th>Enabled</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {items.map(it=>(
+          {items.map((it) => (
             <tr key={it.id}>
               <td>{it.id}</td>
               <td>{it.name}</td>
-              <td style={{ maxWidth: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.base_url}</td>
+              <td
+                style={{
+                  maxWidth: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {it.base_url}
+              </td>
               <td>{(it.username || it.api_key) ? "Yes" : "No"}</td>
               <td>{String(it.enabled)}</td>
               <td>
-                <button onClick={()=>toggle(it.id, it.enabled)}>Toggle</button>{" "}
-                <button onClick={()=>test(it.id)}>Test</button>{" "}
-                <button onClick={()=>remove(it.id)}>Delete</button>
+                <button onClick={() => toggle(it.id, it.enabled)}>
+                  Toggle
+                </button>{" "}
+                <button onClick={() => test(it.id)}>Test</button>{" "}
+                <button onClick={() => remove(it.id)}>Delete</button>
               </td>
             </tr>
           ))}

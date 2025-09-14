@@ -10,6 +10,11 @@ import httpx
 import base64
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
+from app.services.search.jackett_bootstrap import (
+    read_jackett_apikey,
+    JACKETT_BASE,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trackers", tags=["trackers"])
 
@@ -18,8 +23,13 @@ def _enc(text: str) -> str:
     return base64.b64encode(text.encode()).decode()
 
 
-def _dec(text: str) -> str:
-    return base64.b64decode(text.encode()).decode()
+@router.get("/jackett/default")
+def jackett_default() -> dict[str, str]:
+    """Return the API key and base URL for the bundled Jackett service, if present."""
+    key = read_jackett_apikey()
+    if not key:
+        raise HTTPException(404, "jackett apikey not found")
+    return {"api_key": key, "base_url": JACKETT_BASE}
 
 @router.get("", response_model=list[TrackerOut])
 def list_trackers(db: Session = Depends(get_db)):

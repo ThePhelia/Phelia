@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker } from "./api";
+import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker, fetchJackettDefault } from "./api";
 
 export function Trackers({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -9,6 +9,7 @@ export function Trackers({ token }: { token: string }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState("");
 
   async function load() {
     setLoading(true);
@@ -55,19 +56,43 @@ export function Trackers({ token }: { token: string }) {
     }
   }
 
+  async function fetchFromJackett() {
+    try {
+      const data = await fetchJackettDefault(token);
+      if (data.base_url) setBaseUrl(data.base_url);
+      if (data.api_key) {
+        setApiKey(data.api_key);
+        setInfo("API key fetched from Jackett");
+        setTimeout(() => setInfo(""), 3000);
+      }
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+  }
+
   function onBaseUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
     try {
       const u = new URL(v);
-      const key = u.searchParams.get("apikey");
+      let key = u.searchParams.get("apikey");
+      if (key) {
+        u.searchParams.delete("apikey");
+      } else {
+        const m = u.pathname.match(/\/(?:apikey\/)?([a-f0-9]{32})(?=\/|$)/i);
+        if (m) {
+          key = m[1];
+          u.pathname = u.pathname.replace(m[0], "/").replace(/\/+/g, "/");
+        }
+      }
       if (key) {
         setApiKey(key);
-        u.searchParams.delete("apikey");
-        const search = u.searchParams.toString();
-        const normalized = u.origin + u.pathname + (search ? `?${search}` : "") + u.hash;
-        setBaseUrl(normalized);
-        return;
+        setInfo("API key auto-filled");
+        setTimeout(() => setInfo(""), 3000);
       }
+      const search = u.searchParams.toString();
+      const normalized = u.origin + u.pathname + (search ? `?${search}` : "") + u.hash;
+      setBaseUrl(normalized);
+      return;
     } catch {
       // ignore parse errors and keep the raw value
     }
@@ -81,9 +106,14 @@ export function Trackers({ token }: { token: string }) {
         <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
         <input placeholder="base_url" value={baseUrl} onChange={onBaseUrlChange} style={{ width: 420, marginLeft: 6 }} />
         <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
+<<<<<<< ours
         <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
         <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
+=======
+        <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
+>>>>>>> theirs
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
+        {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}
       </div>
       <table cellPadding={6} style={{ borderCollapse: "collapse" }}>
         <thead>

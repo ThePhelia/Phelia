@@ -57,6 +57,7 @@ async def test_create_tracker_strips_apikey(db_session, caplog):
     assert "apikey" not in body["base_url"]
     assert body["base_url"].endswith("?x=1")
     assert any("stripping apikey" in r.message for r in caplog.records)
+<<<<<<< ours
     tr = db_session.query(models.Tracker).filter(models.Tracker.id == body["id"]).first()
     assert tr.username == "user1"
     assert tr.password_enc and tr.password_enc != "pass1"
@@ -78,11 +79,18 @@ async def test_test_tracker_uses_basic_auth(monkeypatch, db_session):
     db_session.commit()
     db_session.refresh(tr)
 
+=======
+
+
+@pytest.mark.anyio
+async def test_jackett_default(db_session, monkeypatch):
+>>>>>>> theirs
     app = FastAPI()
     app.include_router(trackers_router, prefix="/api/v1")
     app.dependency_overrides[get_db] = lambda: db_session
     transport = ASGITransport(app=app)
 
+<<<<<<< ours
     captured = {}
 
     class MockResp:
@@ -102,3 +110,12 @@ async def test_test_tracker_uses_basic_auth(monkeypatch, db_session):
 
     assert resp.status_code == 200
     assert captured["auth"] == ("user", "pw")
+=======
+    monkeypatch.setattr("app.routers.trackers.read_jackett_apikey", lambda: "sekret")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/trackers/jackett/default")
+
+    assert resp.status_code == 200
+    assert resp.json()["api_key"] == "sekret"
+>>>>>>> theirs

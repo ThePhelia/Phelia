@@ -70,6 +70,15 @@ export async function updateTracker(
 }
 
 
+export async function fetchJackettDefault(token: string) {
+  const r = await fetch(`${BASE}/trackers/jackett/default`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json() as Promise<{ api_key: string; base_url: string }>;
+}
+
+
 export async function searchApi(q: string) {
   const r = await fetch(`${BASE}/search?query=${encodeURIComponent(q)}`);
   if (!r.ok) throw new Error(`search ${r.status}`);

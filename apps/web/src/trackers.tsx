@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { listTrackers, createTracker, updateTracker, deleteTracker, testTracker } from "./api";
+import {
+  listTrackers,
+  createTracker,
+  updateTracker,
+  deleteTracker,
+  testTracker,
+  fetchJackettDefault,
+  fetchJackettIndexers,
+} from "./api";
 
 export function Trackers({ token }: { token: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -25,16 +33,7 @@ export function Trackers({ token }: { token: string }) {
 
   useEffect(() => { if (token) load(); }, [token]);
 
-  async function add() {
-    try {
-      await createTracker(token, { name, jackett_id: jackettId, username, password, enabled: true });
-      setName(""); setJackettId(""); setUsername(""); setPassword("");
-      setInfo("Tracker created");
-      setTimeout(() => setInfo(""), 3000);
-      await load();
-    } catch (e: any) {
-      alert(e.message || String(e));
-    }
+@@ -38,77 +46,112 @@ export function Trackers({ token }: { token: string }) {
   }
 
   async function toggle(id: number, enabled: boolean) {
@@ -57,6 +56,27 @@ export function Trackers({ token }: { token: string }) {
       }
     } catch (e: any) {
       alert(e.message || String(e));
+    }
+  }
+
+  async function fetchFromJackett() {
+    try {
+      const defaults = await fetchJackettDefault(token);
+      if (defaults.base_url) setJackettBase(defaults.base_url);
+      const list = await fetchJackettIndexers(token);
+      setJackettIndexers(list || []);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+  }
+
+  function onJackettIndexer(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setJackettSel(v);
+    const it = jackettIndexers.find(i => i.name === v || i.id === v);
+    if (it) {
+      setJackettId(it.id);
+      setName(it.name);
     }
   }
 
@@ -84,7 +104,6 @@ export function Trackers({ token }: { token: string }) {
           onChange={e => setPassword(e.target.value)}
           style={{ marginLeft: 6 }}
         />
-        {jackettIndexers.length > 0 && (
           <>
             <input
               placeholder="Jackett indexer"
@@ -126,9 +145,3 @@ export function Trackers({ token }: { token: string }) {
             </tr>
           ))}
           {loading && <tr><td colSpan={6}>Loading...</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-

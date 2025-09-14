@@ -106,12 +106,9 @@ export function Trackers({ token }: { token: string }) {
         <input placeholder="name" value={name} onChange={e=>setName(e.target.value)} />
         <input placeholder="base_url" value={baseUrl} onChange={onBaseUrlChange} style={{ width: 420, marginLeft: 6 }} />
         <input placeholder="api_key" value={apiKey} onChange={e=>setApiKey(e.target.value)} style={{ marginLeft: 6 }} />
-<<<<<<< ours
         <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} style={{ marginLeft: 6 }} />
         <input placeholder="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} style={{ marginLeft: 6 }} />
-=======
         <button onClick={fetchFromJackett} style={{ marginLeft: 6 }}>Jackett</button>
->>>>>>> theirs
         <button onClick={add} style={{ marginLeft: 6 }}>Add</button>
         {info && <span style={{ marginLeft: 6, color: '#555' }}>{info}</span>}
       </div>

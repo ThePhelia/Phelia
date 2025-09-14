@@ -23,6 +23,10 @@ def _enc(text: str) -> str:
     return base64.b64encode(text.encode()).decode()
 
 
+def _dec(text: str) -> str:
+    return base64.b64decode(text.encode()).decode()
+
+
 @router.get("/jackett/default")
 def jackett_default() -> dict[str, str]:
     """Return the API key and base URL for the bundled Jackett service, if present."""

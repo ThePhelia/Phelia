@@ -44,22 +44,18 @@ export async function createTracker(
   return JSON.parse(text);
 }
 
-<<<<<<< ours
-export async function updateTracker(token: string, id: number, body: Partial<{name:string;base_url:string;api_key:string;username:string;password:string;enabled:boolean}>) {
-=======
 export async function updateTracker(
   token: string,
   id: number,
   body: Partial<{
-    name:string;
-    base_url:string;
-    api_key:string;
-    enabled:boolean;
-    username:string;
-    password:string;
+    name: string;
+    base_url: string;
+    api_key: string;
+    enabled: boolean;
+    username: string;
+    password: string;
   }>
 ) {
->>>>>>> theirs
   const r = await fetch(`${BASE}/trackers/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

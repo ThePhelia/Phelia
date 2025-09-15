@@ -1,0 +1,42 @@
+From 7e52ac16dde8a1c01b106d563738a686375b92af Mon Sep 17 00:00:00 2001
+From: ChatGPT Patch Bot <patchbot@example.com>
+Date: Mon, 15 Sep 2025 13:02:47 +0000
+Subject: [PATCH] fix(jackett): list_indexers uses GET /api/v2.0/indexers with
+ X-Api-Key; fallback to /all; better JSON check
+
+---
+ apps/api/app/services/jackett.py | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/apps/api/app/services/jackett.py b/apps/api/app/services/jackett.py
+index 0bb15b5..22ea459 100644
+--- a/apps/api/app/services/jackett.py
++++ b/apps/api/app/services/jackett.py
+@@ -18,14 +18,19 @@ class JackettClient:
+         self.api_key = api_key
+         self._c = httpx.AsyncClient(timeout=15, headers={"Accept": "application/json"})
+ 
++    
+     async def list_indexers(self) -> List[Dict[str, Any]]:
+-        # Jackett returns 302 to /UI/Login if apikey is missing/invalid or wrong endpoint is used.
+-        # Use the documented /api/v2.0/indexers/all with ?apikey=... and optional configured=true
+-        url = f"{self.base_url}/api/v2.0/indexers/all"
+-        r = await self._c.get(url, params={"apikey": self.api_key, "configured": "true"})
++        # Prefer official endpoint with header auth; fallback to /all if needed.
++        headers = {"X-Api-Key": self.api_key, "Accept": "application/json"}
++        url1 = f"{self.base_url}/api/v2.0/indexers"
++        r = await self._c.get(url1, headers=headers, params={"configured": "true"})
++        if r.status_code == 405 or r.status_code == 404:
++            # Some builds expose only /all
++            url2 = f"{self.base_url}/api/v2.0/indexers/all"
++            r = await self._c.get(url2, headers=headers, params={"configured": "true"})
+         r.raise_for_status()
+         data = self._ensure_json(r)
+-        out = []
++        out: List[Dict[str, Any]] = []
+         for it in data:
+             out.append({
+                 "id": it.get("id") or it.get("name"),
+-- 
+2.39.2
+

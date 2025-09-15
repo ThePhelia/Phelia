@@ -1,130 +1,99 @@
-const BASE = import.meta.env.VITE_API_BASE as string;
+import axios, { AxiosInstance } from "axios";
 
+// Base URLs
+const RAW_API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
+
+function joinUrl(base: string, path: string) {
+  const b = String(base || "").replace(/\/+$/, "");
+  const p = String(path || "").replace(/^\/+/, "");
+  return `${b}/${p}`;
+}
+
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
+
+const http: AxiosInstance = axios.create({
+  baseURL: API_BASE,
+  withCredentials: false,
+});
+
+// ---------- Auth ----------
 export async function login(email: string, password: string) {
-  const r = await fetch(`${BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+  const { data } = await http.post(joinUrl(API_BASE, "/auth/login"), { email, password });
+  return data;
 }
 
 export async function register(email: string, password: string) {
-  const r = await fetch(`${BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<{ accessToken: string; tokenType: string }>;
+  const { data } = await http.post(joinUrl(API_BASE, "/auth/register"), { email, password });
+  return data;
 }
 
-// ---------------------------------------------------------------------------
-// Trackers API
-// ---------------------------------------------------------------------------
-
-export async function listProviders(token: string) {
-  const r = await fetch(`${BASE}/trackers/providers`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+// ---------- Trackers (configured in our DB) ----------
+export async function listTrackers() {
+  const { data } = await http.get(joinUrl(API_BASE, "/trackers"));
+  return data;
 }
 
-export async function connectProvider(
-  token: string,
-  slug: string,
-  body: Record<string, any> | undefined = undefined,
-) {
-  const r = await fetch(`${BASE}/trackers/providers/${slug}/connect`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await r.text();
-  if (!r.ok) {
-    try {
-      const data = JSON.parse(text);
-      throw new Error(data.error || text || String(r.status));
-    } catch {
-      throw new Error(text || String(r.status));
-    }
+export async function toggleTracker(id: string) {
+  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/toggle`));
+  return data;
+}
+
+export async function testTracker(id: string) {
+  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/test`));
+  return data;
+}
+
+export async function deleteTracker(id: string) {
+  const { data } = await http.delete(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}`));
+  return data;
+}
+
+// ---------- Providers from Jackett (indexers we can add) ----------
+export async function listProviders() {
+  const { data } = await http.get(joinUrl(API_BASE, "/trackers/providers"));
+  return data;
+}
+
+export async function connectProvider(slug: string, creds: Record<string, any>) {
+  // Adds the provider as a configured tracker using given credentials
+  const { data } = await http.post(
+    joinUrl(API_BASE, `/trackers/providers/${encodeURIComponent(slug)}/connect`),
+    creds || {}
+  );
+  return data;
+}
+
+// ---------- Search & Downloads ----------
+export async function searchApi(q: string, trackers?: string[]) {
+  // Backend accepts GET /search?query=... (optionally with trackers list in body or query — keep it simple GET for now)
+  const url = joinUrl(API_BASE, `/search?query=${encodeURIComponent(q)}`);
+  const { data } = await http.get(url);
+  return data;
+}
+
+export async function listDownloads() {
+  const { data } = await http.get(joinUrl(API_BASE, "/downloads"));
+  return data;
+}
+
+export async function createDownload(body: {
+  magnet?: string;
+  url?: string;
+  savePath?: string;
+  category?: string;
+}) {
+  // Body can contain either magnet or url (Jackett result link)
+  const payload: any = { ...body };
+  if (!payload.magnet && !payload.url) {
+    throw new Error("Either magnet or url must be provided");
   }
-  return JSON.parse(text);
+  const { data } = await http.post(joinUrl(API_BASE, "/downloads"), payload);
+  return data;
 }
 
-export async function listTrackers(token: string) {
-  const r = await fetch(`${BASE}/trackers`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
-}
-
-export async function toggleTracker(token: string, id: number) {
-  const r = await fetch(`${BASE}/trackers/${id}/toggle`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
-}
-
-export async function testTracker(token: string, id: number) {
-  const r = await fetch(`${BASE}/trackers/${id}/test`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
-}
-
-export async function deleteTracker(token: string, id: number) {
-  const r = await fetch(`${BASE}/trackers/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok && r.status !== 200 && r.status !== 204)
-    throw new Error(String(r.status));
-}
-
-// ---------------------------------------------------------------------------
-// Misc existing API helpers
-// ---------------------------------------------------------------------------
-
-export async function searchApi(q: string) {
-  const r = await fetch(`${BASE}/search?query=${encodeURIComponent(q)}`);
-  if (!r.ok) throw new Error(`search ${r.status}`);
-  return r.json() as Promise<{
-    total: number;
-    items: Array<{ title: string; magnet?: string }>;
-  }>;
-}
-
-export async function createDownload(
-  token: string,
-  magnet: string,
-  savePath = "/downloads",
-) {
-  try {
-    const r = await fetch(`${BASE}/downloads`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ magnet, savePath }),
-    });
-    if (!r.ok) {
-      const body = await r.text().catch(() => "");
-      throw new Error(`createDownload ${r.status} ${body}`.trim());
-    }
-    return r.json() as Promise<{ id: number }>;
-  } catch (e) {
-    throw new Error(String(e));
-  }
+export async function getMagnetFromRelease(indexerId: string, releaseId: string) {
+  // Optional helper if backend supports a direct magnet endpoint per release
+  const url = joinUrl(API_BASE, `/trackers/${encodeURIComponent(indexerId)}/magnet/${encodeURIComponent(releaseId)}`);
+  const { data } = await http.get(url);
+  return data;
 }

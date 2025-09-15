@@ -1,144 +1,192 @@
+# apps/api/app/services/jackett_adapter.py
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import httpx
+import os
 
 logger = logging.getLogger(__name__)
 
 PROVIDERS_FILE = Path(__file__).with_name("providers.json")
 
+JACKETT_BASE = os.getenv("JACKETT_BASE", "http://jackett:9117")
+# Torznab ключ берём из переменных окружения или из bootstrap'а, если ты его туда пишешь
+JACKETT_API_KEY = os.getenv("JACKETT_API_KEY", "")
 
 class JackettAdapter:
-    """Minimal Jackett adapter used for tests.
-
-    The implementation purposely keeps the logic lightweight.  Network calls are
-    best-effort and may return empty data if Jackett is unreachable.  This
-    behaviour is sufficient for unit tests which typically monkeypatch the
-    methods.
+    """
+    Adapter around Jackett. Prefers live discovery via /api/v2.0/indexers,
+    falls back to providers.json when Jackett discovery fails.
     """
 
-    def __init__(self, base_url: str = "http://jackett:9117"):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self) -> None:
+        self.base = JACKETT_BASE.rstrip("/")
 
-    # ------------------------------------------------------------------
-    # Provider catalogue
-    # ------------------------------------------------------------------
+    # ------------ discovery ------------
     def _read_catalog(self) -> List[Dict[str, Any]]:
-        if PROVIDERS_FILE.exists():
-            try:
-                return json.loads(PROVIDERS_FILE.read_text())
-            except Exception:  # pragma: no cover - defensive
-                logger.warning("failed to read providers catalog")
+        try:
+            if PROVIDERS_FILE.exists():
+                return json.loads(PROVIDERS_FILE.read_text("utf-8"))
+        except Exception as e:
+            logger.warning("providers.json read failed: %s", e)
         return []
 
     def _fetch_indexers(self) -> List[Dict[str, Any]]:
-        """Best-effort fetch of Jackett's indexer catalogue."""
-
-        url = f"{self.base_url}/api/v2.0/server/indexers"
+        """
+        Ask Jackett for indexers (configured & available). Depending on Jackett version,
+        GET /api/v2.0/indexers returns either rich objects or minimal list.
+        We normalize into: slug, name, configured, needs
+        """
+        url = f"{self.base}/api/v2.0/indexers"
         try:
             r = httpx.get(url, timeout=10)
             r.raise_for_status()
             data = r.json()
-            return data if isinstance(data, list) else []
-        except Exception as e:  # pragma: no cover - network best effort
+            if not isinstance(data, list):
+                return []
+            return data
+        except Exception as e:
             logger.warning("indexers fetch failed url=%s error=%s", url, e)
             return []
 
+    def _get_schema(self, slug: str) -> Dict[str, Any]:
+        url = f"{self.base}/api/v2.0/indexers/{slug}/schema"
+        r = httpx.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
     def _normalise(self, it: Dict[str, Any]) -> Dict[str, Any]:
+        # Jackett often exposes "id"/"name"
         slug = it.get("id") or it.get("slug") or it.get("name")
         name = it.get("name") or slug
-        cfg = it.get("config") or {}
+        configured = bool(it.get("configured", False))
         needs: List[str] = []
-        if cfg.get("requiresCredentials") or it.get("requires_auth"):
-            needs = ["username", "password"]
-        type_ = "private" if needs else (it.get("type") or "public")
-        return {
-            "slug": slug,
-            "name": name,
-            "type": type_,
-            "needs": needs,
-            "configured": bool(it.get("configured")),
-        }
 
-    def list_configured(self) -> List[Dict[str, Any]]:
-        """Return providers already configured in Jackett."""
+        # Try to infer required fields from schema (best-effort)
+        try:
+            schema = self._get_schema(slug)
+            fields = schema.get("fields") or []
+            needs = [f["name"] for f in fields if f.get("required")]
+        except Exception:
+            # Fallback: check hints on the object
+            cfg = it.get("config") or {}
+            if cfg.get("requiresCredentials") or it.get("requires_auth"):
+                needs = ["username", "password"]
 
-        items = [self._normalise(p) for p in self._fetch_indexers()]
-        return [p for p in items if p.get("configured")]
+        type_ = "private" if needs else "public"
+        return {"slug": slug, "name": name, "type": type_, "configured": configured, "needs": needs}
 
     def list_available(self) -> List[Dict[str, Any]]:
-        """Return providers available for installation.
+        live = self._fetch_indexers()
+        if live:
+            out = []
+            for it in live:
+                try:
+                    out.append(self._normalise(it))
+                except Exception as e:
+                    logger.debug("normalize failed for %s: %s", it, e)
+            # de-dup by slug
+            seen, uniq = set(), []
+            for p in out:
+                if p["slug"] in seen:
+                    continue
+                seen.add(p["slug"])
+                uniq.append(p)
+            return uniq
 
-        Attempts to query Jackett for the complete catalogue; falls back to
-        a bundled static JSON list if Jackett is unreachable.
+        # fallback to static catalog
+        cat = self._read_catalog()
+        out = []
+        for it in cat:
+            slug = it.get("slug") or it.get("id")
+            name = it.get("name") or slug
+            needs = it.get("needs") or []
+            type_ = it.get("type") or ("private" if needs else "public")
+            out.append({"slug": slug, "name": name, "type": type_, "configured": False, "needs": needs})
+        return out
+
+    def list_configured(self) -> List[str]:
         """
-
-        items = [self._normalise(p) for p in self._fetch_indexers()]
-        avail = [p for p in items if not p.get("configured")]
-        return avail if avail else self._read_catalog()
-
-    # ------------------------------------------------------------------
-    # Installation and configuration
-    # ------------------------------------------------------------------
-    def ensure_installed(self, slug: str, creds: Dict[str, Any] | None) -> Dict[str, Any]:
-        """Ensure that the given provider is installed and configured.
-
-        Real Jackett integration would POST to Jackett's admin API.  For the
-        purposes of the tests we simply validate the slug and return provider
-        metadata.
+        Return slugs of configured/installed indexers in Jackett.
         """
+        live = self._fetch_indexers()
+        slugs: List[str] = []
+        for it in live:
+            slug = it.get("id") or it.get("slug") or it.get("name")
+            if not slug:
+                continue
+            if it.get("configured") is True:
+                slugs.append(slug)
+        return slugs
 
-        providers = {p["slug"]: p for p in self.list_available()}
-        if slug not in providers:
-            raise ValueError("provider_not_found")
-        prov = providers[slug]
-        return prov
+    # ------------ connect / control ------------
+    def ensure_installed(self, slug: str, creds: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Configure indexer by slug. On Jackett, POSTing config usually installs/enables.
+        We try schema->POST config; if no fields required, send empty dict.
+        """
+        try:
+            schema = self._get_schema(slug)
+            fields = schema.get("fields") or []
+            required = [f["name"] for f in fields if f.get("required")]
+            payload = {}
+
+            if required:
+                if not creds:
+                    raise ValueError(f"missing_credentials:{required}")
+                for f in required:
+                    v = (creds or {}).get(f)
+                    if not v:
+                        raise ValueError(f"missing_credentials:{required}")
+                    payload[f] = v
+
+            url = f"{self.base}/api/v2.0/indexers/{slug}/config"
+            r = httpx.post(url, json=payload, timeout=15)
+            r.raise_for_status()
+            return {"slug": slug, "configured": True}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                raise PermissionError("auth_failed") from e
+            raise
+        except ValueError as ve:
+            # propagate our missing credentials marker
+            raise ve
 
     def get_torznab_url(self, slug: str) -> str:
-        return f"{self.base_url}/api/v2.0/indexers/{slug}/results/torznab/"
+        return f"{self.base}/api/v2.0/indexers/{slug}/results/torznab/"
 
-    # ------------------------------------------------------------------
-    # Capability / health checks
-    # ------------------------------------------------------------------
-    def fetch_caps(self, torznab_url: str) -> Dict[str, Any]:
-        url = torznab_url.rstrip("/") + "?t=caps"
-        try:
-            r = httpx.get(url, timeout=10)
-            r.raise_for_status()
-            return r.json() if "application/json" in r.headers.get("content-type", "") else {}
-        except Exception as e:  # pragma: no cover - network best effort
-            logger.warning("fetch_caps failed url=%s error=%s", url, e)
-            return {}
-
-    def test_search(self, torznab_url: str, q: str = "test") -> Tuple[bool, int | None]:
-        url = torznab_url.rstrip("/") + f"?t=search&q={q}"
-        try:
-            r = httpx.get(url, timeout=10)
-            ok = r.status_code == 200
-            latency = int(r.elapsed.total_seconds() * 1000)
-            return ok, latency
-        except Exception as e:  # pragma: no cover - network best effort
-            logger.warning("test_search failed url=%s error=%s", url, e)
-            return False, None
-
-    # ------------------------------------------------------------------
-    # Misc helpers
-    # ------------------------------------------------------------------
-    def enable(self, slug: str, enabled: bool) -> None:
-        """Enable or disable a provider in Jackett.
-
-        The stub implementation does nothing; behaviour can be overridden in
-        tests.
+    def fetch_caps(self, slug: str) -> Dict[str, Any]:
         """
+        Torznab /api?t=caps. Requires apikey.
+        """
+        url = f"{self.get_torznab_url(slug)}api"
+        params = {"t": "caps"}
+        if JACKETT_API_KEY:
+            params["apikey"] = JACKETT_API_KEY
+        r = httpx.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        # feedparser expects XML, но нам хватает JSON если Jackett так отдаёт; иначе вернём текст
+        try:
+            return r.json()
+        except Exception:
+            return {"raw": r.text}
 
+    def test_search(self, torznab_url: str, q: str = "test") -> Tuple[bool, Optional[int]]:
+        url = f"{torznab_url}api"
+        params = {"t": "search", "q": q}
+        if JACKETT_API_KEY:
+            params["apikey"] = JACKETT_API_KEY
+        r = httpx.get(url, params=params, timeout=10)
+        ok = r.status_code == 200
+        return ok, r.elapsed.total_seconds() * 1000 if ok else None
+
+    def enable(self, slug: str, enabled: bool) -> None:
+        # Jackett не имеет явного toggle API для indexer; держим включение на нашей стороне.
         return None
 
     def remove(self, slug: str) -> None:
-        """Remove a provider from Jackett.
-
-        Stub implementation; tests may monkeypatch if required.
-        """
-
+        # При желании можно дернуть DELETE /api/v2.0/indexers/{slug}, если версия поддерживает.
         return None
+

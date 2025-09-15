@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import ConnectModal from "./trackers/ConnectModal";
 import {
   listProviders,
   connectProvider,
@@ -13,8 +14,11 @@ export function Trackers({ token }: { token: string }) {
   const [trackers, setTrackers] = useState<any[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [loadingTrackers, setLoadingTrackers] = useState(false);
-  const [credProvider, setCredProvider] = useState<any | null>(null);
-  const [credValues, setCredValues] = useState<Record<string, string>>({});
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalIndexerId, setModalIndexerId] = useState<string | null>(null);
+  const [modalRequiresCreds, setModalRequiresCreds] = useState(false);
+  const [modalCredentialFields, setModalCredentialFields] = useState<string[]>([]);
+  const [modalProviderName, setModalProviderName] = useState<string | null>(null);
 
 
   async function loadProviders() {
@@ -46,13 +50,22 @@ export function Trackers({ token }: { token: string }) {
 
   function startConnect(p: any) {
     if (p.needs && p.needs.length > 0) {
-      const vals: Record<string, string> = {};
-      for (const f of p.needs) vals[f] = "";
-      setCredProvider(p);
-      setCredValues(vals);
+      setModalIndexerId(p.slug);
+      setModalProviderName(p.name ?? p.slug);
+      setModalRequiresCreds(true);
+      setModalCredentialFields(p.needs);
+      setModalOpen(true);
     } else {
       handleConnect(p.slug, undefined);
     }
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setModalIndexerId(null);
+    setModalRequiresCreds(false);
+    setModalCredentialFields([]);
+    setModalProviderName(null);
   }
 
 
@@ -64,13 +77,6 @@ export function Trackers({ token }: { token: string }) {
     } catch (e: any) {
       alert(e.message || String(e));
     }
-  }
-
-  function submitCreds() {
-    if (!credProvider) return;
-    handleConnect(credProvider.slug, credValues);
-    setCredProvider(null);
-    setCredValues({});
   }
 
   async function onToggle(id: number) {
@@ -140,39 +146,18 @@ export function Trackers({ token }: { token: string }) {
           )}
         </tbody>
       </table>
-      {credProvider && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ background: "#fff", padding: 20, minWidth: 300 }}>
-            <h4>Connect {credProvider.name}</h4>
-            {credProvider.needs.map((f: string) => (
-              <div key={f} style={{ marginBottom: 8 }}>
-                <label>{f}</label>
-                <input
-                  type={f.toLowerCase().includes("password") ? "password" : "text"}
-                  value={credValues[f] || ""}
-                  onChange={(e) =>
-                    setCredValues({ ...credValues, [f]: e.target.value })
-                  }
-                />
-              </div>
-            ))}
-            <button onClick={submitCreds}>Connect</button>{" "}
-            <button onClick={() => setCredProvider(null)}>Cancel</button>
-          </div>
-        </div>
-      )}
+      <ConnectModal
+        open={modalOpen}
+        indexerId={modalIndexerId}
+        requiresCreds={modalRequiresCreds}
+        credentialFields={modalCredentialFields}
+        providerName={modalProviderName ?? undefined}
+        onClose={closeModal}
+        onConnect={async (slug, creds) => {
+          await handleConnect(slug, Object.keys(creds).length ? creds : undefined);
+        }}
+        onSuccess={closeModal}
+      />
     </div>
   );
 }

@@ -16,6 +16,30 @@ const http: AxiosInstance = axios.create({
   withCredentials: false,
 });
 
+function normalizeAuthToken(token: string) {
+  return token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+}
+
+function authConfig(token?: string | null) {
+  const trimmed = token?.trim();
+  if (!trimmed) return undefined;
+  return {
+    headers: {
+      Authorization: normalizeAuthToken(trimmed),
+    },
+  };
+}
+
+export function setToken(token?: string | null) {
+  const cfg = authConfig(token);
+  if (cfg?.headers.Authorization) {
+    http.defaults.headers.common.Authorization = cfg.headers.Authorization;
+  } else {
+    delete http.defaults.headers.common.Authorization;
+  }
+}
+
+
 // ---------- Auth ----------
 export async function login(email: string, password: string) {
   const { data } = await http.post(joinUrl(API_BASE, "/auth/login"), { email, password });
@@ -28,8 +52,12 @@ export async function register(email: string, password: string) {
 }
 
 // ---------- Trackers (configured in our DB) ----------
-export async function listTrackers() {
-  const { data } = await http.get(joinUrl(API_BASE, "/trackers"));
+export async function toggleTracker(id: string | number, token?: string | null) {
+  const { data } = await http.post(
+    joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/toggle`),
+    undefined,
+    authConfig(token)
+  );
   return data;
 }
 
@@ -38,27 +66,39 @@ export async function toggleTracker(id: string) {
   return data;
 }
 
-export async function testTracker(id: string) {
-  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/test`));
+export async function testTracker(id: string | number, token?: string | null) {
+  const { data } = await http.post(
+    joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/test`),
+    undefined,
+    authConfig(token)
+  );
   return data;
 }
 
-export async function deleteTracker(id: string) {
-  const { data } = await http.delete(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}`));
+export async function deleteTracker(id: string | number, token?: string | null) {
+  const { data } = await http.delete(
+    joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}`),
+    authConfig(token)
+  );
   return data;
 }
 
 // ---------- Providers from Jackett (indexers we can add) ----------
-export async function listProviders() {
-  const { data } = await http.get(joinUrl(API_BASE, "/trackers/providers"));
+export async function listProviders(token?: string | null) {
+  const { data } = await http.get(joinUrl(API_BASE, "/trackers/providers"), authConfig(token));
   return data;
 }
 
-export async function connectProvider(slug: string, creds: Record<string, any>) {
+export async function connectProvider(
+  slug: string,
+  creds?: Record<string, any>,
+  token?: string | null
+) {
   // Adds the provider as a configured tracker using given credentials
   const { data } = await http.post(
     joinUrl(API_BASE, `/trackers/providers/${encodeURIComponent(slug)}/connect`),
-    creds || {}
+    creds || {},
+    authConfig(token)
   );
   return data;
 }

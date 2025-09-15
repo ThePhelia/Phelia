@@ -18,14 +18,19 @@ class JackettClient:
         self.api_key = api_key
         self._c = httpx.AsyncClient(timeout=15, headers={"Accept": "application/json"})
 
+    
     async def list_indexers(self) -> List[Dict[str, Any]]:
-        # Jackett returns 302 to /UI/Login if apikey is missing/invalid or wrong endpoint is used.
-        # Use the documented /api/v2.0/indexers/all with ?apikey=... and optional configured=true
-        url = f"{self.base_url}/api/v2.0/indexers/all"
-        r = await self._c.get(url, params={"apikey": self.api_key, "configured": "true"})
+        # Prefer official endpoint with header auth; fallback to /all if needed.
+        headers = {"X-Api-Key": self.api_key, "Accept": "application/json"}
+        url1 = f"{self.base_url}/api/v2.0/indexers"
+        r = await self._c.get(url1, headers=headers, params={"configured": "true"})
+        if r.status_code == 405 or r.status_code == 404:
+            # Some builds expose only /all
+            url2 = f"{self.base_url}/api/v2.0/indexers/all"
+            r = await self._c.get(url2, headers=headers, params={"configured": "true"})
         r.raise_for_status()
         data = self._ensure_json(r)
-        out = []
+        out: List[Dict[str, Any]] = []
         for it in data:
             out.append({
                 "id": it.get("id") or it.get("name"),

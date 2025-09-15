@@ -56,18 +56,9 @@ export function Trackers({ token }: { token: string }) {
   }
 
 
-  async function onConnect(p: any) {
+  async function handleConnect(slug: string, body?: Record<string, string>) {
     try {
-      let body: any = undefined;
-      if (p.needs && p.needs.length > 0) {
-        body = {};
-        for (const f of p.needs) {
-          const v = window.prompt(f);
-          if (!v) return;
-          body[f] = v;
-        }
-      }
-      await connectProvider(token, p.slug, body);
+      await connectProvider(token, slug, body);
       await loadProviders();
       await loadTrackers();
     } catch (e: any) {

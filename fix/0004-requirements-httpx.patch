@@ -1,4 +1,0 @@
---- a/apps/api/requirements.txt
-+++ b/apps/api/requirements.txt
-@@
-+httpx>=0.27

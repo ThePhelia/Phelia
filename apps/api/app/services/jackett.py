@@ -16,19 +16,23 @@ class JackettClient:
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
-        self._c = httpx.AsyncClient(timeout=15)
+        self._c = httpx.AsyncClient(timeout=15, headers={"Accept": "application/json"})
 
     async def list_indexers(self) -> List[Dict[str, Any]]:
-        r = await self._c.get(f"{self.base_url}/api/v2.0/indexers/all/results", params={"apikey": self.api_key})
+        # Jackett returns 302 to /UI/Login if apikey is missing/invalid or wrong endpoint is used.
+        # Use the documented /api/v2.0/indexers/all with ?apikey=... and optional configured=true
+        url = f"{self.base_url}/api/v2.0/indexers/all"
+        r = await self._c.get(url, params={"apikey": self.api_key, "configured": "true"})
         r.raise_for_status()
         data = self._ensure_json(r)
         out = []
         for it in data:
             out.append({
-                "id": it["id"],
-                "name": it.get("name", it["id"]),
-                "is_private": it.get("privacy") == "private",
-                "configured": bool(it.get("configured")),
+                "id": it.get("id") or it.get("name"),
+                "name": it.get("name"),
+                "configured": bool(it.get("configured", False)),
+                "public": bool(it.get("type") == "public" or it.get("privacy") == "public"),
+                "caps": it.get("caps", {}),
             })
         return out
 

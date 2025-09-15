@@ -13,7 +13,7 @@ export default function ConnectModal({ open, onClose, indexerId, requiresCreds, 
   const [password, setPassword] = useState("");
   const [apikey, setApikey] = useState("");
   const [loading, setLoading] = useState(false);
-  const disabled = loading || !indexerId;
+  const disabled = loading || !indexerId || (requiresCreds && !username && !password && !apikey);
 
   if (!open) return null;
 

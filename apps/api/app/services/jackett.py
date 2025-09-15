@@ -2,6 +2,17 @@ import httpx
 from typing import List, Dict, Any
 
 class JackettClient:
+
+    def _ensure_json(self, r: httpx.Response):
+        ct = r.headers.get("content-type", "")
+        if "application/json" not in ct.lower():
+            raise httpx.HTTPStatusError(
+                f"Expected JSON from Jackett, got {ct}. Likely invalid or missing API key (302 to UI/Login).",
+                request=r.request,
+                response=r
+            )
+        return self._ensure_json(r)
+
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -10,7 +21,7 @@ class JackettClient:
     async def list_indexers(self) -> List[Dict[str, Any]]:
         r = await self._c.get(f"{self.base_url}/api/v2.0/indexers/all/results", params={"apikey": self.api_key})
         r.raise_for_status()
-        data = r.json()
+        data = self._ensure_json(r)
         out = []
         for it in data:
             out.append({
@@ -35,5 +46,5 @@ class JackettClient:
             params={"apikey": self.api_key}
         )
         r.raise_for_status()
-        return r.json()
+        return self._ensure_json(r)
 

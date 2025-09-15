@@ -1,0 +1,11 @@
+*** /dev/null
+--- a/apps/api/deps.py
+@@
++import os
++from apps.services.jackett.client import JackettClient
++
++def get_jackett() -> JackettClient:
++    return JackettClient(
++        base_url=os.getenv("JACKETT_URL", "http://jackett:9117"),
++        api_key=os.getenv("JACKETT_API_KEY", ""),
++    )

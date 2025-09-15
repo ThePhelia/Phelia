@@ -1,3 +1,4 @@
+import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
@@ -25,6 +26,8 @@ class FakeAdapter:
         ]
 
     def ensure_installed(self, slug, creds):
+        if not creds:
+            raise ValueError('missing_credentials:["username", "password"]')
         assert creds == {"username": "u", "password": "p"}
         return {
             "slug": slug,
@@ -76,7 +79,7 @@ async def test_connect_toggle_and_test(db_session, monkeypatch):
         tid = resp.json()["tracker"]["id"]
 
         # Toggle
-        resp = await ac.post(f"/api/v1/trackers/{tid}/toggle")
+        resp = await ac.post(f"/api/v1/trackers/{tid}/toggle", json={"enabled": False})
         assert resp.status_code == 200
         assert resp.json()["enabled"] is False
 
@@ -89,3 +92,26 @@ async def test_connect_toggle_and_test(db_session, monkeypatch):
         resp = await ac.delete(f"/api/v1/trackers/{tid}")
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
+
+
+def test_jackett_adapter_raises_on_redirect(monkeypatch):
+    adapter = jackett_adapter.JackettAdapter()
+
+    seen_kwargs: dict[str, object] = {}
+
+    def fake_get(url: str, **kwargs):
+        seen_kwargs.update(kwargs)
+        request = httpx.Request("GET", url, params=kwargs.get("params"))
+        return httpx.Response(
+            302,
+            headers={"Location": "http://jackett/redirect"},
+            request=request,
+        )
+
+    monkeypatch.setattr(jackett_adapter.httpx, "get", fake_get)
+
+    with pytest.raises(RuntimeError) as exc:
+        adapter.fetch_caps("slug")
+
+    assert "redirect" in str(exc.value)
+    assert seen_kwargs.get("follow_redirects") is True

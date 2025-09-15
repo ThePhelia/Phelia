@@ -33,27 +33,38 @@ class JackettAdapter:
             logger.warning("providers.json read failed: %s", e)
         return []
 
+    def _ensure_no_redirect(self, response: httpx.Response, url: str, action: str) -> None:
+        if response.is_redirect or any(prev.is_redirect for prev in response.history):
+            raise RuntimeError(
+                "Jackett returned a redirect while "
+                f"{action} (url={url}). This likely means authentication is missing or the Jackett base path is incorrect."
+            )
+
     def _fetch_indexers(self) -> List[Dict[str, Any]]:
         """
         Ask Jackett for indexers (configured & available). Depending on Jackett version,
         GET /api/v2.0/indexers returns either rich objects or minimal list.
         We normalize into: slug, name, configured, needs
         """
-        url = f"{self.base}/api/v2.0/indexers"
+        url = f"{self.base}/api/v2.0/indexers/"
         try:
-            r = httpx.get(url, timeout=10)
+            r = httpx.get(url, timeout=10, follow_redirects=True)
+            self._ensure_no_redirect(r, url, "fetching indexers")
             r.raise_for_status()
             data = r.json()
             if not isinstance(data, list):
                 return []
             return data
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.warning("indexers fetch failed url=%s error=%s", url, e)
             return []
 
     def _get_schema(self, slug: str) -> Dict[str, Any]:
-        url = f"{self.base}/api/v2.0/indexers/{slug}/schema"
-        r = httpx.get(url, timeout=10)
+        url = f"{self.base}/api/v2.0/indexers/{slug}/schema/"
+        r = httpx.get(url, timeout=10, follow_redirects=True)
+        self._ensure_no_redirect(r, url, f"fetching schema for '{slug}'")
         r.raise_for_status()
         return r.json()
 
@@ -142,8 +153,9 @@ class JackettAdapter:
                         raise ValueError(f"missing_credentials:{required}")
                     payload[f] = v
 
-            url = f"{self.base}/api/v2.0/indexers/{slug}/config"
-            r = httpx.post(url, json=payload, timeout=15)
+            url = f"{self.base}/api/v2.0/indexers/{slug}/config/"
+            r = httpx.post(url, json=payload, timeout=15, follow_redirects=True)
+            self._ensure_no_redirect(r, url, f"configuring '{slug}'")
             r.raise_for_status()
             return {"slug": slug, "configured": True}
         except httpx.HTTPStatusError as e:
@@ -165,7 +177,8 @@ class JackettAdapter:
         params = {"t": "caps"}
         if JACKETT_API_KEY:
             params["apikey"] = JACKETT_API_KEY
-        r = httpx.get(url, params=params, timeout=10)
+        r = httpx.get(url, params=params, timeout=10, follow_redirects=True)
+        self._ensure_no_redirect(r, url, f"fetching caps for '{slug}'")
         r.raise_for_status()
         # feedparser expects XML, но нам хватает JSON если Jackett так отдаёт; иначе вернём текст
         try:

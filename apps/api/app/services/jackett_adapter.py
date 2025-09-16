@@ -35,12 +35,6 @@ class JackettAdapter:
             return {}
         return {"apikey": self.api_key}
 
-    def _auth_params(self) -> Dict[str, str]:
-        params: Dict[str, str] = {}
-        if JACKETT_API_KEY:
-            params["apikey"] = JACKETT_API_KEY
-        return params
-
     # ------------ discovery ------------
     def _read_catalog(self) -> List[Dict[str, Any]]:
         try:
@@ -63,12 +57,15 @@ class JackettAdapter:
         GET /api/v2.0/indexers returns either rich objects or minimal list.
         We normalize into: slug, name, configured, needs
         """
-        url = f"{self.base}/api/v2.0/indexers/
+        url = f"{self.base}/api/v2.0/indexers/"
         params = self._auth_params()
+        headers = self._auth_headers()
         try:
             kwargs = {"timeout": 10, "follow_redirects": True}
             if params:
                 kwargs["params"] = params
+            if headers:
+                kwargs["headers"] = headers
             r = httpx.get(url, **kwargs)
             self._ensure_no_redirect(r, url, "fetching indexers")
             r.raise_for_status()
@@ -85,9 +82,12 @@ class JackettAdapter:
     def _get_schema(self, slug: str) -> Dict[str, Any]:
         url = f"{self.base}/api/v2.0/indexers/{slug}/schema/"
         params = self._auth_params()
+        headers = self._auth_headers()
         kwargs = {"timeout": 10, "follow_redirects": True}
         if params:
             kwargs["params"] = params
+        if headers:
+            kwargs["headers"] = headers
         r = httpx.get(url, **kwargs)
         self._ensure_no_redirect(r, url, f"fetching schema for '{slug}'")
         r.raise_for_status()

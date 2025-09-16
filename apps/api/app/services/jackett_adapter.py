@@ -23,6 +23,23 @@ class JackettAdapter:
 
     def __init__(self) -> None:
         self.base = JACKETT_BASE.rstrip("/")
+        self.api_key = (JACKETT_API_KEY or "").strip()
+
+    def _auth_headers(self) -> Dict[str, str]:
+        if not self.api_key:
+            return {}
+        return {"X-Api-Key": self.api_key}
+
+    def _auth_params(self) -> Dict[str, str]:
+        if not self.api_key:
+            return {}
+        return {"apikey": self.api_key}
+
+    def _auth_params(self) -> Dict[str, str]:
+        params: Dict[str, str] = {}
+        if JACKETT_API_KEY:
+            params["apikey"] = JACKETT_API_KEY
+        return params
 
     # ------------ discovery ------------
     def _read_catalog(self) -> List[Dict[str, Any]]:
@@ -46,9 +63,13 @@ class JackettAdapter:
         GET /api/v2.0/indexers returns either rich objects or minimal list.
         We normalize into: slug, name, configured, needs
         """
-        url = f"{self.base}/api/v2.0/indexers/"
+        url = f"{self.base}/api/v2.0/indexers/
+        params = self._auth_params()
         try:
-            r = httpx.get(url, timeout=10, follow_redirects=True)
+            kwargs = {"timeout": 10, "follow_redirects": True}
+            if params:
+                kwargs["params"] = params
+            r = httpx.get(url, **kwargs)
             self._ensure_no_redirect(r, url, "fetching indexers")
             r.raise_for_status()
             data = r.json()
@@ -63,7 +84,11 @@ class JackettAdapter:
 
     def _get_schema(self, slug: str) -> Dict[str, Any]:
         url = f"{self.base}/api/v2.0/indexers/{slug}/schema/"
-        r = httpx.get(url, timeout=10, follow_redirects=True)
+        params = self._auth_params()
+        kwargs = {"timeout": 10, "follow_redirects": True}
+        if params:
+            kwargs["params"] = params
+        r = httpx.get(url, **kwargs)
         self._ensure_no_redirect(r, url, f"fetching schema for '{slug}'")
         r.raise_for_status()
         return r.json()
@@ -154,7 +179,16 @@ class JackettAdapter:
                     payload[f] = v
 
             url = f"{self.base}/api/v2.0/indexers/{slug}/config/"
-            r = httpx.post(url, json=payload, timeout=15, follow_redirects=True)
+            headers = self._auth_headers()
+            params = self._auth_params()
+            r = httpx.post(
+                url,
+                json=payload,
+                timeout=15,
+                follow_redirects=True,
+                headers=headers,
+                params=params if params else None,
+            )
             self._ensure_no_redirect(r, url, f"configuring '{slug}'")
             r.raise_for_status()
             return {"slug": slug, "configured": True}
@@ -174,10 +208,16 @@ class JackettAdapter:
         Torznab /api?t=caps. Requires apikey.
         """
         url = f"{self.get_torznab_url(slug)}api"
-        params = {"t": "caps"}
-        if JACKETT_API_KEY:
-            params["apikey"] = JACKETT_API_KEY
-        r = httpx.get(url, params=params, timeout=10, follow_redirects=True)
+        params = self._auth_params()
+        params.update({"t": "caps"})
+        headers = self._auth_headers()
+        r = httpx.get(
+            url,
+            params=params,
+            timeout=10,
+            follow_redirects=True,
+            headers=headers,
+        )
         self._ensure_no_redirect(r, url, f"fetching caps for '{slug}'")
         r.raise_for_status()
         # feedparser expects XML, но нам хватает JSON если Jackett так отдаёт; иначе вернём текст
@@ -188,10 +228,10 @@ class JackettAdapter:
 
     def test_search(self, torznab_url: str, q: str = "test") -> Tuple[bool, Optional[int]]:
         url = f"{torznab_url}api"
-        params = {"t": "search", "q": q}
-        if JACKETT_API_KEY:
-            params["apikey"] = JACKETT_API_KEY
-        r = httpx.get(url, params=params, timeout=10)
+        params = self._auth_params()
+        params.update({"t": "search", "q": q})
+        headers = self._auth_headers()
+        r = httpx.get(url, params=params, timeout=10, headers=headers)
         ok = r.status_code == 200
         return ok, r.elapsed.total_seconds() * 1000 if ok else None
 

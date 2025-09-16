@@ -39,6 +39,11 @@ export function setToken(token?: string | null) {
   }
 }
 
+export async function listTrackers(token?: string | null) {
+  const { data } = await http.get(joinUrl(API_BASE, "/trackers"), authConfig(token));
+  return data;
+}
+
 
 // ---------- Auth ----------
 export async function login(email: string, password: string) {
@@ -58,11 +63,6 @@ export async function toggleTracker(id: string | number, token?: string | null) 
     undefined,
     authConfig(token)
   );
-  return data;
-}
-
-export async function toggleTracker(id: string) {
-  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/toggle`));
   return data;
 }
 

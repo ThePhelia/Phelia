@@ -39,11 +39,6 @@ export function setToken(token?: string | null) {
   }
 }
 
-export async function listTrackers(token?: string | null) {
-  const { data } = await http.get(joinUrl(API_BASE, "/trackers"), authConfig(token));
-  return data;
-}
-
 
 // ---------- Auth ----------
 export async function login(email: string, password: string) {

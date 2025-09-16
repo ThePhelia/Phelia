@@ -71,7 +71,7 @@ export function Trackers({ token }: { token: string }) {
 
   async function handleConnect(slug: string, body?: Record<string, string>) {
     try {
-      await connectProvider(token, slug, body);
+      await connectProvider(slug, body, token);
       await loadProviders();
       await loadTrackers();
     } catch (e: any) {
@@ -80,18 +80,18 @@ export function Trackers({ token }: { token: string }) {
   }
 
   async function onToggle(id: number) {
-    await toggleTracker(token, id);
+    await toggleTracker(id, token);
     await loadTrackers();
   }
 
   async function onDelete(id: number) {
-    await deleteTracker(token, id);
+    await deleteTracker(id, token);
     await loadTrackers();
   }
 
   async function onTest(id: number) {
     try {
-      const r = await testTracker(token, id);
+      const r = await testTracker(id, token);
       alert(`ok=${r.ok} latency=${r.latency_ms ?? "?"}`);
     } catch (e: any) {
       alert(e.message || String(e));

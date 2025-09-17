@@ -24,6 +24,11 @@ class JackettAdapter:
     def __init__(self) -> None:
         self.base = JACKETT_BASE.rstrip("/")
 
+    def _auth_headers(self) -> Dict[str, str]:
+        if JACKETT_API_KEY:
+            return {"X-Api-Key": JACKETT_API_KEY}
+        return {}
+
     # ------------ discovery ------------
     def _read_catalog(self) -> List[Dict[str, Any]]:
         try:
@@ -41,7 +46,7 @@ class JackettAdapter:
         """
         url = f"{self.base}/api/v2.0/indexers"
         try:
-            r = httpx.get(url, timeout=10)
+            r = httpx.get(url, timeout=10, headers=self._auth_headers())
             r.raise_for_status()
             data = r.json()
             if not isinstance(data, list):
@@ -53,7 +58,7 @@ class JackettAdapter:
 
     def _get_schema(self, slug: str) -> Dict[str, Any]:
         url = f"{self.base}/api/v2.0/indexers/{slug}/schema"
-        r = httpx.get(url, timeout=10)
+        r = httpx.get(url, timeout=10, headers=self._auth_headers())
         r.raise_for_status()
         return r.json()
 
@@ -143,7 +148,7 @@ class JackettAdapter:
                     payload[f] = v
 
             url = f"{self.base}/api/v2.0/indexers/{slug}/config"
-            r = httpx.post(url, json=payload, timeout=15)
+            r = httpx.post(url, json=payload, timeout=15, headers=self._auth_headers())
             r.raise_for_status()
             return {"slug": slug, "configured": True}
         except httpx.HTTPStatusError as e:

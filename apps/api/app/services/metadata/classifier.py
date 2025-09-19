@@ -106,8 +106,31 @@ class Classifier:
 
         normalized_title = title or ""
         category = (jackett_category_desc or "").lower()
-        indexer = (indexer_name or "").lower()
 
+        def _normalise_indexer(value: Optional[str | dict[str, object]]) -> str:
+            """Convert Jackett indexer hints to a lowercase slug.
+
+            Jackett may emit indexer metadata as a plain string (common case) or
+            as a mapping containing ``name``/``id`` keys when the torznab feed
+            is richer.  The classifier only needs a best-effort identifier for
+            matching priors, so we coerce the value deterministically.
+            """
+
+            if not value:
+                return ""
+            if isinstance(value, str):
+                return value.lower()
+            if isinstance(value, dict):
+                for key in ("name", "slug", "id"):
+                    candidate = value.get(key)
+                    if isinstance(candidate, str):
+                        return candidate.lower()
+                return str(value).lower()
+            return str(value).lower()
+
+
+        indexer = (indexer_name or "").lower()
+        
         scores: Dict[MediaType, float] = defaultdict(float)
         total_weight = 0.0
         reasons: list[str] = []

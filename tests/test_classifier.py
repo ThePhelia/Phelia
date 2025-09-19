@@ -37,6 +37,17 @@ def test_indexer_prior_guides_ambiguous_title():
     assert result.confidence > 0.9
 
 
+def test_indexer_dict_normalisation():
+    classifier = Classifier()
+    result = classifier.classify_torrent(
+        "Live Bootleg",
+        None,
+        {"name": "Redacted", "id": "redacted"},
+    )
+    assert result.type == "music"
+    assert result.confidence > 0.9
+
+
 def test_ambiguous_title_requires_confirmation():
     classifier = Classifier()
     result = classifier.classify_torrent("Untitled Release")

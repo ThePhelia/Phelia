@@ -7,10 +7,14 @@ import {
   searchApi,
   listDownloads,
   createDownload,
+  pauseDownload,
+  resumeDownload,
+  deleteDownload,
 } from "./api";
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
-const WS_BASE = (import.meta as any).env.VITE_WS_BASE || "ws://localhost:8000";
+
+type DownloadActionKey = "pause" | "resume" | "delete";
 
 function App() {
   const [token, setToken] = useState<string>(localStorage.getItem("token") || "");
@@ -24,6 +28,11 @@ function App() {
   const [results, setResults] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [showJackettHelp, setShowJackettHelp] = useState(false);
+  const [actionBusy, setActionBusy] = useState<
+    Record<string, Partial<Record<DownloadActionKey, boolean>>>
+  >({});
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+  const [deleteWithFiles, setDeleteWithFiles] = useState(false);
 
   const jackettUrl = useMemo(() => {
     if (typeof window === "undefined") return "http://localhost:9117";
@@ -93,20 +102,73 @@ function App() {
     }
   }
 
-  function openJackett() {
-    window.open(jackettUrl, "_blank", "noopener,noreferrer");
+  function updateActionBusy(id: string, key: DownloadActionKey, value: boolean) {
+    setActionBusy((prev) => {
+      const prevEntry = prev[id] || {};
+      if (value) {
+        return { ...prev, [id]: { ...prevEntry, [key]: true } };
+      }
+      const nextEntry = { ...prevEntry };
+      delete nextEntry[key];
+      if (Object.keys(nextEntry).length === 0) {
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [id]: nextEntry };
+    });
   }
 
-  function attachWS(id: string) {
+  async function handleAction(
+    id: string,
+    key: DownloadActionKey,
+    action: () => Promise<any>
+  ) {
+    updateActionBusy(id, key, true);
     try {
-      const ws = new WebSocket(`${WS_BASE.replace(/\/+$/,"")}/ws/downloads/${encodeURIComponent(id)}`);
-      ws.onmessage = (ev) => console.log("WS", id, ev.data);
-      ws.onopen = () => console.log("WS open", id);
-      ws.onerror = (e) => console.warn("WS error", e);
-      ws.onclose = () => console.log("WS close", id);
-    } catch (e) {
-      console.warn("WS not available", e);
+      await action();
+      await refreshDownloads();
+    } catch (error: any) {
+      console.error(error);
+      const message =
+        error?.response?.data?.detail || error?.message || "Unknown error";
+      window.alert(`Failed to ${key} download: ${message}`);
+    } finally {
+      updateActionBusy(id, key, false);
     }
+  }
+
+  function requestPause(id: string) {
+    void handleAction(id, "pause", () => pauseDownload(id));
+  }
+
+  function requestResume(id: string) {
+    void handleAction(id, "resume", () => resumeDownload(id));
+  }
+
+  function openDeleteModal(id: string, name?: string) {
+    setDeleteTarget({ id, name });
+    setDeleteWithFiles(false);
+  }
+
+  function closeDeleteModal() {
+    setDeleteTarget(null);
+    setDeleteWithFiles(false);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    try {
+      await handleAction(id, "delete", () =>
+        deleteDownload(id, { withFiles: deleteWithFiles })
+      );
+    } finally {
+      closeDeleteModal();
+    }
+  }
+
+  function openJackett() {
+    window.open(jackettUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -223,12 +285,87 @@ function App() {
                     <td>{d.id}</td>
                     <td>{d.name || d.title || d.hash}</td>
                     <td>{d.status || d.state}</td>
-                    <td><button onClick={() => attachWS(d.id)}>WS</button></td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          disabled={!!actionBusy[d.id]?.pause}
+                          onClick={() => requestPause(String(d.id))}
+                        >
+                          Pause
+                        </button>
+                        <button
+                          disabled={!!actionBusy[d.id]?.resume}
+                          onClick={() => requestResume(String(d.id))}
+                        >
+                          Stop
+                        </button>
+                        <button
+                          disabled={!!actionBusy[d.id]?.delete}
+                          onClick={() =>
+                            openDeleteModal(String(d.id), d.name || d.title || d.hash)
+                          }
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {deleteTarget && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0, 0, 0, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 999,
+              }}
+            >
+              <div
+                style={{
+                  background: "#fff",
+                  padding: 20,
+                  borderRadius: 8,
+                  boxShadow: "0 10px 24px rgba(0,0,0,0.2)",
+                  minWidth: 320,
+                  maxWidth: "90vw",
+                }}
+              >
+                <h3 style={{ marginTop: 0 }}>Delete download</h3>
+                <p style={{ marginTop: 8 }}>
+                  Are you sure you want to delete
+                  {" "}
+                  <strong>{deleteTarget.name || deleteTarget.id}</strong>?
+                </p>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={deleteWithFiles}
+                    onChange={(e) => setDeleteWithFiles(e.target.checked)}
+                  />
+                  Also delete downloaded files
+                </label>
+                <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button onClick={closeDeleteModal} disabled={!!actionBusy[deleteTarget.id]?.delete}>
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    disabled={!!actionBusy[deleteTarget.id]?.delete}
+                    style={{ background: "#d32f2f", color: "white", border: "none", padding: "6px 12px" }}
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </>
       )}

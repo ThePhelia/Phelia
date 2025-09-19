@@ -54,3 +54,32 @@ export async function createDownload(body: {
   const { data } = await http.post(joinUrl(API_BASE, "/downloads"), payload);
   return data;
 }
+
+export async function pauseDownload(id: string) {
+  const { data } = await http.post(
+    joinUrl(API_BASE, `/downloads/${encodeURIComponent(id)}/pause`),
+    {}
+  );
+  return data;
+}
+
+export async function resumeDownload(id: string) {
+  const { data } = await http.post(
+    joinUrl(API_BASE, `/downloads/${encodeURIComponent(id)}/resume`),
+    {}
+  );
+  return data;
+}
+
+export async function deleteDownload(
+  id: string,
+  options: { withFiles?: boolean } = {}
+) {
+  const baseUrl = joinUrl(API_BASE, `/downloads/${encodeURIComponent(id)}`);
+  const url =
+    typeof options.withFiles === "boolean"
+      ? `${baseUrl}?withFiles=${options.withFiles ? "true" : "false"}`
+      : baseUrl;
+  const { data } = await http.delete(url);
+  return data;
+}

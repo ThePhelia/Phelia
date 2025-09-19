@@ -136,5 +136,22 @@ class Classifier:
                     reasons.append(f"title:{label}")
 
         _apply(self.music_tokens, "music")
+        _apply(self.tv_tokens, "tv")
+        _apply(self.movie_tokens, "movie")
+
+        best_type: MediaType = "other"
+        best_score = 0.0
+        confidence = 0.0
+
+        if scores:
+            priority = {"music": 3, "movie": 2, "tv": 1, "other": 0}
+            best_type, best_score = max(
+                scores.items(),
+                key=lambda item: (item[1], priority.get(item[0], -1)),
+            )
+            if total_weight > 0:
+                confidence = max(0.0, min(best_score / total_weight, 1.0))
+
+        return Classification(type=best_type, confidence=confidence, reasons=reasons)
        
 

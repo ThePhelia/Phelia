@@ -1,28 +1,43 @@
-# apps/api/app/services/jackett_adapter.py
+"""Jackett adapter with metadata classification hooks."""
+
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-import os
+
+from app.core.config import settings
+from app.schemas.media import Classification, EnrichedCard
+from app.services.metadata import get_classifier, get_metadata_router
+from app.services.metadata.classifier import Classifier
+from app.services.metadata.router import MetadataRouter
+from app.services.search.torznab import TorznabClient
+
 
 logger = logging.getLogger(__name__)
 
 PROVIDERS_FILE = Path(__file__).with_name("providers.json")
 
-JACKETT_BASE = os.getenv("JACKETT_BASE", "http://jackett:9117")
-# Torznab ключ берём из переменных окружения или из bootstrap'а, если ты его туда пишешь
-JACKETT_API_KEY = os.getenv("JACKETT_API_KEY", "")
+JACKETT_BASE = settings.JACKETT_BASE
+JACKETT_API_KEY = settings.JACKETT_API_KEY or ""
+
 
 class JackettAdapter:
-    """
-    Adapter around Jackett. Prefers live discovery via /api/v2.0/indexers,
-    falls back to providers.json when Jackett discovery fails.
-    """
+    """Adapter around Jackett's administrative and search APIs."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        classifier: Classifier | None = None,
+        router: MetadataRouter | None = None,
+    ) -> None:
         self.base = JACKETT_BASE.rstrip("/")
+        self.classifier = classifier or get_classifier()
+        self.router = router or get_metadata_router()
+        self._torznab = TorznabClient()
 
     def _auth_headers(self) -> Dict[str, str]:
         if JACKETT_API_KEY:
@@ -34,16 +49,13 @@ class JackettAdapter:
         try:
             if PROVIDERS_FILE.exists():
                 return json.loads(PROVIDERS_FILE.read_text("utf-8"))
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - defensive log
             logger.warning("providers.json read failed: %s", e)
         return []
 
     def _fetch_indexers(self) -> List[Dict[str, Any]]:
-        """
-        Ask Jackett for indexers (configured & available). Depending on Jackett version,
-        GET /api/v2.0/indexers returns either rich objects or minimal list.
-        We normalize into: slug, name, configured, needs
-        """
+        """Ask Jackett for indexers (configured & available)."""
+
         url = f"{self.base}/api/v2.0/indexers"
         try:
             r = httpx.get(url, timeout=10, headers=self._auth_headers())
@@ -52,7 +64,7 @@ class JackettAdapter:
             if not isinstance(data, list):
                 return []
             return data
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - defensive log
             logger.warning("indexers fetch failed url=%s error=%s", url, e)
             return []
 
@@ -63,19 +75,16 @@ class JackettAdapter:
         return r.json()
 
     def _normalise(self, it: Dict[str, Any]) -> Dict[str, Any]:
-        # Jackett often exposes "id"/"name"
         slug = it.get("id") or it.get("slug") or it.get("name")
         name = it.get("name") or slug
         configured = bool(it.get("configured", False))
         needs: List[str] = []
 
-        # Try to infer required fields from schema (best-effort)
         try:
             schema = self._get_schema(slug)
             fields = schema.get("fields") or []
             needs = [f["name"] for f in fields if f.get("required")]
         except Exception:
-            # Fallback: check hints on the object
             cfg = it.get("config") or {}
             if cfg.get("requiresCredentials") or it.get("requires_auth"):
                 needs = ["username", "password"]
@@ -92,7 +101,6 @@ class JackettAdapter:
                     out.append(self._normalise(it))
                 except Exception as e:
                     logger.debug("normalize failed for %s: %s", it, e)
-            # de-dup by slug
             seen, uniq = set(), []
             for p in out:
                 if p["slug"] in seen:
@@ -101,7 +109,6 @@ class JackettAdapter:
                 uniq.append(p)
             return uniq
 
-        # fallback to static catalog
         cat = self._read_catalog()
         out = []
         for it in cat:
@@ -113,9 +120,6 @@ class JackettAdapter:
         return out
 
     def list_configured(self) -> List[str]:
-        """
-        Return slugs of configured/installed indexers in Jackett.
-        """
         live = self._fetch_indexers()
         slugs: List[str] = []
         for it in live:
@@ -128,10 +132,6 @@ class JackettAdapter:
 
     # ------------ connect / control ------------
     def ensure_installed(self, slug: str, creds: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Configure indexer by slug. On Jackett, POSTing config usually installs/enables.
-        We try schema->POST config; if no fields required, send empty dict.
-        """
         try:
             schema = self._get_schema(slug)
             fields = schema.get("fields") or []
@@ -156,23 +156,18 @@ class JackettAdapter:
                 raise PermissionError("auth_failed") from e
             raise
         except ValueError as ve:
-            # propagate our missing credentials marker
             raise ve
 
     def get_torznab_url(self, slug: str) -> str:
         return f"{self.base}/api/v2.0/indexers/{slug}/results/torznab/"
 
     def fetch_caps(self, slug: str) -> Dict[str, Any]:
-        """
-        Torznab /api?t=caps. Requires apikey.
-        """
         url = f"{self.get_torznab_url(slug)}api"
         params = {"t": "caps"}
         if JACKETT_API_KEY:
             params["apikey"] = JACKETT_API_KEY
         r = httpx.get(url, params=params, timeout=10)
         r.raise_for_status()
-        # feedparser expects XML, но нам хватает JSON если Jackett так отдаёт; иначе вернём текст
         try:
             return r.json()
         except Exception:
@@ -188,10 +183,101 @@ class JackettAdapter:
         return ok, r.elapsed.total_seconds() * 1000 if ok else None
 
     def enable(self, slug: str, enabled: bool) -> None:
-        # Jackett не имеет явного toggle API для indexer; держим включение на нашей стороне.
         return None
 
     def remove(self, slug: str) -> None:
-        # При желании можно дернуть DELETE /api/v2.0/indexers/{slug}, если версия поддерживает.
         return None
+
+    # ------------ search + metadata ------------
+    async def search_with_metadata(self, query: str, limit: int = 40) -> tuple[list[EnrichedCard], dict[str, Any]]:
+        """Run an aggregated Jackett search and enrich the results."""
+
+        meta: dict[str, Any] = {}
+        if not JACKETT_API_KEY:
+            meta["jackett_ui_url"] = settings.jackett_public_url
+            meta["message"] = "Open Jackett to configure trackers"
+
+        torznab_url = f"{self.base}/api/v2.0/indexers/all/results/torznab/"
+        try:
+            raw_results = await asyncio.to_thread(self._torznab.search, torznab_url, query)
+        except Exception as exc:  # pragma: no cover - defensive log
+            logger.warning("jackett search failed query=%s error=%s", query, exc)
+            meta["error"] = str(exc)
+            return [], meta
+
+        selected = raw_results[:limit]
+        cards: list[Optional[EnrichedCard]] = [None] * len(selected)
+        enrich_tasks: list[tuple[int, asyncio.Task[EnrichedCard], Classification]] = []
+
+        for idx, item in enumerate(selected):
+            title = item.get("title") or ""
+            classification = self.classifier.classify_torrent(
+                title=title,
+                jackett_category_desc=item.get("category"),
+                indexer_name=item.get("indexer"),
+            )
+
+            if title and classification.confidence >= self.classifier.threshold_low:
+                enrich_tasks.append(
+                    (
+                        idx,
+                        asyncio.create_task(self.router.enrich(classification, title)),
+                        classification,
+                    )
+                )
+            else:
+                card = self._build_base_card(classification, title)
+                card.reasons.append(
+                    f"confidence_below_threshold:{classification.confidence:.2f}"
+                )
+                cards[idx] = card
+
+        for idx, task, classification in enrich_tasks:
+            try:
+                card = await task
+            except Exception as exc:  # pragma: no cover - defensive safety
+                logger.warning(
+                    "metadata enrichment failed title=%s error=%s",
+                    selected[idx].get("title"),
+                    exc,
+                )
+                fallback = self._build_base_card(classification, selected[idx].get("title") or "")
+                fallback.reasons.append("enrichment_failed")
+                fallback.needs_confirmation = True
+                card = fallback
+            cards[idx] = card
+
+        output_cards: list[EnrichedCard] = []
+        for idx, card in enumerate(cards):
+            if card is None:
+                continue
+            item = selected[idx]
+            card.details.setdefault("jackett", {}).update(
+                {
+                    "magnet": item.get("magnet"),
+                    "url": item.get("url"),
+                    "size": item.get("size"),
+                    "seeders": item.get("seeders"),
+                    "leechers": item.get("leechers"),
+                    "tracker": item.get("tracker"),
+                    "indexer": item.get("indexer"),
+                    "category": item.get("category"),
+                    "title": item.get("title"),
+                }
+            )
+            output_cards.append(card)
+
+        return output_cards, meta
+
+    def _build_base_card(self, classification: Classification, title: str) -> EnrichedCard:
+        return EnrichedCard(
+            media_type=classification.type,
+            confidence=classification.confidence,
+            title=title,
+            ids={},
+            details={},
+            providers=[],
+            reasons=list(classification.reasons),
+            needs_confirmation=True,
+        )
 

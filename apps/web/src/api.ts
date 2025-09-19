@@ -28,11 +28,45 @@ export async function register(email: string, password: string) {
 }
 
 // ---------- Search & Downloads ----------
-export async function searchApi(q: string, trackers?: string[]) {
-  // Backend accepts GET /search?query=... (optionally with trackers list in body or query — keep it simple GET for now)
-  const url = joinUrl(API_BASE, `/search?query=${encodeURIComponent(q)}`);
+export interface EnrichedProvider {
+  name: string;
+  used: boolean;
+  extra?: Record<string, any> | null;
+}
+
+export interface EnrichedCard {
+  media_type: "music" | "movie" | "tv" | "other";
+  confidence: number;
+  title: string;
+  parsed?: Record<string, any> | null;
+  ids: Record<string, any>;
+  details: Record<string, any>;
+  providers: EnrichedProvider[];
+  reasons: string[];
+  needs_confirmation: boolean;
+}
+
+export interface SearchResponse {
+  items: EnrichedCard[];
+  jackett_ui_url?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface LookupBody {
+  title: string;
+  hint: "music" | "movie" | "tv" | "other" | "auto";
+}
+
+export async function searchMetadata(q: string, limit = 40): Promise<SearchResponse> {
+  const url = joinUrl(API_BASE, `/search?q=${encodeURIComponent(q)}&limit=${limit}`);
   const { data } = await http.get(url);
-  return data;
+  return data as SearchResponse;
+}
+
+export async function lookupMetadata(body: LookupBody): Promise<EnrichedCard> {
+  const { data } = await http.post(joinUrl(API_BASE, "/meta/lookup"), body);
+  return data as EnrichedCard;
 }
 
 export async function listDownloads() {

@@ -4,7 +4,10 @@ import urllib.parse
 
 import feedparser
 
-from app.services.jackett_adapter import JACKETT_API_KEY
+from app.core.config import settings
+
+
+JACKETT_API_KEY = settings.JACKETT_API_KEY or ""
 
 def _pick_magnet(entry: dict) -> str | None:
     cand = entry.get("torrent_magneturi") or entry.get("magneturi") or entry.get("magneturl") or entry.get("magnet")
@@ -45,8 +48,9 @@ class TorznabClient:
 
         params = urllib.parse.parse_qsl(query_string, keep_blank_values=True)
 
-        if JACKETT_API_KEY and not any(k == "apikey" for k, _ in params):
-            params.append(("apikey", JACKETT_API_KEY))
+        api_key = JACKETT_API_KEY or settings.JACKETT_API_KEY
+        if api_key and not any(k == "apikey" for k, _ in params):
+            params.append(("apikey", api_key))
 
         params.append(("t", "search"))
         params.append(("q", q))
@@ -69,6 +73,10 @@ class TorznabClient:
             size = e.get("torrent_contentlength") or e.get("size")
             seeders = e.get("torrent_seeders") or e.get("seeders")
             leechers = e.get("torrent_leechers") or e.get("leechers")
+            category = e.get("category") or e.get("categories")
+            if isinstance(category, list):
+                category = ", ".join(str(c) for c in category)
+            indexer = e.get("jackettindexer") or e.get("indexer") or host
             items.append({
                 "title": title,
                 "magnet": magnet,
@@ -77,6 +85,8 @@ class TorznabClient:
                 "seeders": seeders,
                 "leechers": leechers,
                 "tracker": host,
+                "indexer": indexer,
+                "category": category,
             })
         return items
 

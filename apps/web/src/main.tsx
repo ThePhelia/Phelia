@@ -4,13 +4,17 @@ import axios from "axios";
 import {
   login as apiLogin,
   register as apiRegister,
-  searchApi,
+  searchMetadata,
+  lookupMetadata,
   listDownloads,
   createDownload,
   pauseDownload,
   resumeDownload,
   deleteDownload,
+  type EnrichedCard,
 } from "./api";
+import OpenJackettCard from "./components/OpenJackettCard";
+import ResultCard from "./components/ResultCard";
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
 
@@ -25,16 +29,20 @@ function App() {
   const [downloads, setDownloads] = useState<any[]>([]);
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<EnrichedCard[]>([]);
   const [busy, setBusy] = useState(false);
-  const [showJackettHelp, setShowJackettHelp] = useState(false);
+  const [jackettNotice, setJackettNotice] = useState<{ url?: string; message?: string } | null>(
+    null,
+  );
+  const [resultBusyIndex, setResultBusyIndex] = useState<number | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<
     Record<string, Partial<Record<DownloadActionKey, boolean>>>
   >({});
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
   const [deleteWithFiles, setDeleteWithFiles] = useState(false);
 
-  const jackettUrl = useMemo(() => {
+  const fallbackJackettUrl = useMemo(() => {
     if (typeof window === "undefined") return "http://localhost:9117";
     const protocol = window.location?.protocol || "http:";
     const hostname = window.location?.hostname || "localhost";
@@ -93,12 +101,50 @@ function App() {
 
   async function doSearch() {
     setBusy(true);
+    setSearchError(null);
     try {
-      const data = await searchApi(query);
-      const items = data?.items ?? data ?? [];
-      setResults(items);
+      const data = await searchMetadata(query);
+      setResults(data?.items ?? []);
+      setJackettNotice({ url: data?.jackett_ui_url, message: data?.message });
+      if (data?.error) {
+        setSearchError(data.error);
+      }
+    } catch (error: any) {
+      console.error(error);
+      setResults([]);
+      setSearchError(error?.response?.data?.detail || error?.message || "Search failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function reclassifyResult(index: number, hint: "music" | "movie" | "tv" | "other") {
+    const card = results[index];
+    if (!card) return;
+    setResultBusyIndex(index);
+    try {
+      const titleForLookup = card.details?.jackett?.title || card.title;
+      const updated = await lookupMetadata({ title: titleForLookup, hint });
+      const merged: EnrichedCard = {
+        ...updated,
+        details: {
+          ...updated.details,
+          jackett: card.details?.jackett,
+        },
+        reasons: [...updated.reasons, `manual_hint:${hint}`],
+      };
+      setResults((prev) => {
+        const next = [...prev];
+        next[index] = merged;
+        return next;
+      });
+    } catch (error: any) {
+      console.error(error);
+      window.alert(
+        error?.response?.data?.detail || error?.message || "Failed to refresh metadata",
+      );
+    } finally {
+      setResultBusyIndex(null);
     }
   }
 
@@ -168,7 +214,8 @@ function App() {
   }
 
   function openJackett() {
-    window.open(jackettUrl, "_blank", "noopener,noreferrer");
+    const target = jackettNotice?.url || fallbackJackettUrl;
+    window.open(target, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -189,45 +236,6 @@ function App() {
 
       {token && (
         <>
-          <div style={{ marginBottom: 16 }}>
-            <h2>Jackett</h2>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={openJackett}>Open Jackett</button>
-              <button onClick={() => setShowJackettHelp((v) => !v)}>
-                {showJackettHelp ? "Hide help" : "Help"}
-              </button>
-            </div>
-            {showJackettHelp && (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  border: "1px solid #ddd",
-                  borderRadius: 4,
-                  maxWidth: 520,
-                  background: "#fafafa",
-                }}
-              >
-                <strong>How to add indexers in Jackett</strong>
-                <ol style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                  <li>Click "Open Jackett" to launch the Jackett dashboard.</li>
-                  <li>Press <em> Add Indexers</em> button then use the search bar to find the indexer you want to add.</li>
-                  <li>
-                    Press <em>"+"</em> for public trackers to add them, or press settings button and fill in any required 
-                      credentials for private an semi-private indexers.
-                  </li>
-                  <li>
-                    Hit <em>Test</em> to verify the connection, then <em>Save</em> to persist the indexer in Jackett.
-                  </li>
-                  <li>
-                    Repeat for each tracker you need. Saved indexers automatically become available for Phelia to use
-                    during searches.
-                  </li>
-                </ol>
-              </div>
-            )}
-          </div>
-
           <div style={{ marginBottom: 16 }}>
             <h2>Add download</h2>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -251,21 +259,31 @@ function App() {
                 style={{ minWidth: 360 }}
               />
               <button disabled={busy} onClick={doSearch}>Search</button>
+              <button onClick={openJackett}>Open Jackett</button>
             </div>
 
-            <ul>
-              {results.map((r: any) => (
-                <li key={r.id || r.guid || r.link}>
-                  {r.title || r.name || r.link}
-                  {" "}
-                  <button onClick={() => {
-                    const m = r.magnet || r.url || r.link;
-                    if (m) setMagnet(String(m));
-                    else alert("Tracker returned no magnet or URL");
-                  }}>Use magnet</button>
-                </li>
+            {jackettNotice?.url && (
+              <OpenJackettCard
+                jackettUrl={jackettNotice.url || fallbackJackettUrl}
+                message={jackettNotice.message}
+              />
+            )}
+            {searchError && (
+              <div style={{ color: "#d32f2f", marginTop: 8 }}>{searchError}</div>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              {results.map((card, index) => (
+                <ResultCard
+                  key={`${card.title}-${index}`}
+                  card={card}
+                  busy={resultBusyIndex === index}
+                  onReclassify={(hint) => reclassifyResult(index, hint)}
+                  onUseMagnet={(magnet) => magnet && setMagnet(String(magnet))}
+                />
               ))}
-            </ul>
+              {results.length === 0 && !busy && <p style={{ color: "#57606a" }}>No results yet.</p>}
+            </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>

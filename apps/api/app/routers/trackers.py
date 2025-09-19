@@ -99,7 +99,7 @@ def connect_provider(
 ):
     try:
         adapter.ensure_installed(slug, body if body else None)
-    except ValueError as ve:
+    except (ValueError, AssertionError) as ve:
         msg = str(ve)
         if msg.startswith("missing_credentials"):
             needs: List[str] = []
@@ -110,6 +110,8 @@ def connect_provider(
                 except Exception:
                     needs = []
             raise HTTPException(status_code=400, detail={"error": "missing_credentials", "needs": needs})
+        if isinstance(ve, AssertionError):
+            raise HTTPException(status_code=400, detail={"error": "missing_credentials", "needs": []})
         raise
     except PermissionError:
         raise HTTPException(status_code=400, detail={"error": "auth_failed"})
@@ -152,13 +154,16 @@ def connect_provider(
 @router.post("/{tracker_id}/toggle", response_model=ToggleOut)
 def toggle_tracker(
     tracker_id: int,
-    payload: ToggleIn,
+    payload: Optional[ToggleIn] = Body(default=None),
     db: Session = Depends(get_db),
 ):
     tr = db.query(models.Tracker).filter(models.Tracker.id == tracker_id).one_or_none()
     if tr is None:
         raise HTTPException(status_code=404, detail="not_found")
-    tr.enabled = bool(payload.enabled)
+    if payload is None:
+        tr.enabled = not bool(tr.enabled)
+    else:
+        tr.enabled = bool(payload.enabled)
     db.commit()
     return ToggleOut(enabled=tr.enabled)
 

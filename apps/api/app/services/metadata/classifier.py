@@ -128,8 +128,9 @@ class Classifier:
                 return str(value).lower()
             return str(value).lower()
 
-        indexer = _normalise_indexer(indexer_name)
 
+        indexer = (indexer_name or "").lower()
+        
         scores: Dict[MediaType, float] = defaultdict(float)
         total_weight = 0.0
         reasons: list[str] = []

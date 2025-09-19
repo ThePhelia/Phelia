@@ -97,9 +97,16 @@ function App() {
     return i;
   }, [token]);
 
+  function extractToken(data: any): string | null {
+    if (!data) return null;
+    const token = data.accessToken ?? data.access_token ?? data.token;
+    if (!token) return null;
+    return typeof token === "string" ? token : String(token);
+  }
+
   async function doLogin() {
     const data = await apiLogin(email, password);
-    const t = data?.access_token || data?.token;
+    const t = extractToken(data);
     if (!t) throw new Error("no token");
     localStorage.setItem("token", t);
     setToken(t);
@@ -107,7 +114,7 @@ function App() {
 
   async function doRegister() {
     const data = await apiRegister(email, password);
-    const t = data?.access_token || data?.token;
+    const t = extractToken(data);
     if (!t) throw new Error("no token");
     localStorage.setItem("token", t);
     setToken(t);

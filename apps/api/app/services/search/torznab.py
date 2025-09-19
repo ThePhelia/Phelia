@@ -1,6 +1,10 @@
 from __future__ import annotations
+
 import urllib.parse
+
 import feedparser
+
+from app.services.jackett_adapter import JACKETT_API_KEY
 
 def _pick_magnet(entry: dict) -> str | None:
     cand = entry.get("torrent_magneturi") or entry.get("magneturi") or entry.get("magneturl") or entry.get("magnet")
@@ -29,11 +33,29 @@ def _pick_url(entry: dict) -> str | None:
 
 class TorznabClient:
     def _build_url(self, base_url: str, q: str) -> str:
-        base = base_url.rstrip("/")
-        sep = "&" if "?" in base else "?"
-        params = {"t": "search", "q": q}
+        cleaned = base_url.rstrip("/")
+        fragment = ""
+        if "#" in cleaned:
+            cleaned, fragment = cleaned.split("#", 1)
+
+        query_string = ""
+        base = cleaned
+        if "?" in cleaned:
+            base, query_string = cleaned.split("?", 1)
+
+        params = urllib.parse.parse_qsl(query_string, keep_blank_values=True)
+
+        if JACKETT_API_KEY and not any(k == "apikey" for k, _ in params):
+            params.append(("apikey", JACKETT_API_KEY))
+
+        params.append(("t", "search"))
+        params.append(("q", q))
+
         qs = urllib.parse.urlencode(params)
-        return f"{base}{sep}{qs}"
+        url = f"{base}?{qs}"
+        if fragment:
+            url = f"{url}#{fragment}"
+        return url
 
     def search(self, base_url: str, query: str) -> list[dict]:
         url = self._build_url(base_url, query)

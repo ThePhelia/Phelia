@@ -149,10 +149,10 @@ function App() {
                 <strong>How to add indexers in Jackett</strong>
                 <ol style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
                   <li>Click "Open Jackett" to launch the Jackett dashboard.</li>
-                  <li>Use the search bar to find the indexer you want to add.</li>
+                  <li>Press <em> Add Indexers</em> button then use the search bar to find the indexer you want to add.</li>
                   <li>
-                    Press <em>Add Indexer</em>, then fill in any required credentials or API keys requested by the
-                    indexer.
+                    Press <em>"+"</em> for public trackers to add them, or press settings button and fill in any required 
+                      credentials for private an semi-private indexers.
                   </li>
                   <li>
                     Hit <em>Test</em> to verify the connection, then <em>Save</em> to persist the indexer in Jackett.
@@ -230,8 +230,6 @@ function App() {
             </table>
           </div>
 
-          {/* Trackers manager (providers + configured trackers) */}
-          <Trackers token={token} />
         </>
       )}
     </div>

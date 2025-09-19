@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+  min-height: 100vh;
+  background-image: radial-gradient(circle at 15% 15%, rgba(226, 132, 6, 0.12), transparent 55%),
+    radial-gradient(circle at 85% 25%, rgba(138, 92, 246, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+a {
+  @apply text-accent hover:text-primary transition-colors;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: black;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+#root,
+#dialog-root {
+  isolation: isolate;
+}

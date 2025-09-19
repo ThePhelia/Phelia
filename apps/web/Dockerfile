@@ -1,16 +1,20 @@
-# build
-FROM node:20-alpine AS build
+# Stage 1 - install dependencies
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Stage 2 - build the Vite app
+FROM deps AS build
 WORKDIR /app
 ARG VITE_API_BASE=http://localhost:8000/api/v1
-ARG VITE_WS_BASE=ws://localhost:8000
 ENV VITE_API_BASE=${VITE_API_BASE}
-ENV VITE_WS_BASE=${VITE_WS_BASE}
-COPY package*.json ./
-RUN [ -f package-lock.json ] && npm ci || npm i
 COPY . .
-RUN npx vite build
+RUN npm run build
 
-# serve
-FROM nginx:1.27-alpine
+# Stage 3 - run static server
+FROM nginx:1.27-alpine AS runner
 COPY --from=build /app/dist /usr/share/nginx/html
-
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -8,7 +8,6 @@ import {
   listDownloads,
   createDownload,
 } from "./api";
-import { Trackers } from "./trackers";
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000/api/v1";
 const WS_BASE = (import.meta as any).env.VITE_WS_BASE || "ws://localhost:8000";
@@ -24,6 +23,14 @@ function App() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showJackettHelp, setShowJackettHelp] = useState(false);
+
+  const jackettUrl = useMemo(() => {
+    if (typeof window === "undefined") return "http://localhost:9117";
+    const protocol = window.location?.protocol || "http:";
+    const hostname = window.location?.hostname || "localhost";
+    return `${protocol}//${hostname}:9117`;
+  }, []);
 
   const ax = useMemo(() => {
     const i = axios.create({ baseURL: API_BASE });
@@ -86,6 +93,10 @@ function App() {
     }
   }
 
+  function openJackett() {
+    window.open(jackettUrl, "_blank", "noopener,noreferrer");
+  }
+
   function attachWS(id: string) {
     try {
       const ws = new WebSocket(`${WS_BASE.replace(/\/+$/,"")}/ws/downloads/${encodeURIComponent(id)}`);
@@ -116,6 +127,45 @@ function App() {
 
       {token && (
         <>
+          <div style={{ marginBottom: 16 }}>
+            <h2>Jackett</h2>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={openJackett}>Open Jackett</button>
+              <button onClick={() => setShowJackettHelp((v) => !v)}>
+                {showJackettHelp ? "Hide help" : "Help"}
+              </button>
+            </div>
+            {showJackettHelp && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  border: "1px solid #ddd",
+                  borderRadius: 4,
+                  maxWidth: 520,
+                  background: "#fafafa",
+                }}
+              >
+                <strong>How to add indexers in Jackett</strong>
+                <ol style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+                  <li>Click "Open Jackett" to launch the Jackett dashboard.</li>
+                  <li>Use the search bar to find the indexer you want to add.</li>
+                  <li>
+                    Press <em>Add Indexer</em>, then fill in any required credentials or API keys requested by the
+                    indexer.
+                  </li>
+                  <li>
+                    Hit <em>Test</em> to verify the connection, then <em>Save</em> to persist the indexer in Jackett.
+                  </li>
+                  <li>
+                    Repeat for each tracker you need. Saved indexers automatically become available for Phelia to use
+                    during searches.
+                  </li>
+                </ol>
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: 16 }}>
             <h2>Add download</h2>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

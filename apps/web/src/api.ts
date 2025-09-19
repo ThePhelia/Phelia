@@ -27,42 +27,6 @@ export async function register(email: string, password: string) {
   return data;
 }
 
-// ---------- Trackers (configured in our DB) ----------
-export async function listTrackers() {
-  const { data } = await http.get(joinUrl(API_BASE, "/trackers"));
-  return data;
-}
-
-export async function toggleTracker(id: string) {
-  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/toggle`));
-  return data;
-}
-
-export async function testTracker(id: string) {
-  const { data } = await http.post(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}/test`));
-  return data;
-}
-
-export async function deleteTracker(id: string) {
-  const { data } = await http.delete(joinUrl(API_BASE, `/trackers/${encodeURIComponent(id)}`));
-  return data;
-}
-
-// ---------- Providers from Jackett (indexers we can add) ----------
-export async function listProviders() {
-  const { data } = await http.get(joinUrl(API_BASE, "/trackers/providers"));
-  return data;
-}
-
-export async function connectProvider(slug: string, creds: Record<string, any>) {
-  // Adds the provider as a configured tracker using given credentials
-  const { data } = await http.post(
-    joinUrl(API_BASE, `/trackers/providers/${encodeURIComponent(slug)}/connect`),
-    creds || {}
-  );
-  return data;
-}
-
 // ---------- Search & Downloads ----------
 export async function searchApi(q: string, trackers?: string[]) {
   // Backend accepts GET /search?query=... (optionally with trackers list in body or query — keep it simple GET for now)
@@ -88,12 +52,5 @@ export async function createDownload(body: {
     throw new Error("Either magnet or url must be provided");
   }
   const { data } = await http.post(joinUrl(API_BASE, "/downloads"), payload);
-  return data;
-}
-
-export async function getMagnetFromRelease(indexerId: string, releaseId: string) {
-  // Optional helper if backend supports a direct magnet endpoint per release
-  const url = joinUrl(API_BASE, `/trackers/${encodeURIComponent(indexerId)}/magnet/${encodeURIComponent(releaseId)}`);
-  const { data } = await http.get(url);
   return data;
 }

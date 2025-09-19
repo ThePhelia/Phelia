@@ -1,5 +1,20 @@
+"""Application configuration utilities.
+
+This module centralises all environment driven configuration so that
+other parts of the application can rely on a single source of truth.
+
+New metadata pipeline components rely on a variety of third-party
+provider API keys.  They are expressed here with sensible defaults so
+that the rest of the application can reason about provider
+availability without defensive environment checks scattered across the
+codebase.
+"""
+
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings
 from pydantic import AnyHttpUrl, ValidationError
+
 
 class Settings(BaseSettings):
     APP_ENV: str = "dev"
@@ -23,6 +38,45 @@ class Settings(BaseSettings):
     DEFAULT_SAVE_DIR: str = "/downloads"
 
     CORS_ORIGINS: str = "*"
+
+    # -------- Metadata / Provider configuration --------
+    # TMDb is the primary enrichment provider for movies and TV series.
+    # The API key is required for deep enrichment but the application
+    # handles a missing key gracefully by returning classification-only
+    # results so that the UI can still prompt the user for action.
+    TMDB_API_KEY: str | None = None
+
+    # Optional OMDb key.  When provided we can enhance TMDb results
+    # with IMDb ratings/Metascore; otherwise the feature is skipped.
+    OMDB_API_KEY: str | None = None
+
+    # Optional Discogs token for music metadata.  Discogs allows
+    # unauthenticated requests in limited fashion but we keep it
+    # configurable to respect the API's expected authentication.
+    DISCOGS_TOKEN: str | None = None
+
+    # Optional Last.fm key used to surface listening metrics and tags.
+    LASTFM_API_KEY: str | None = None
+
+    # MusicBrainz encourages clients to send an informative user agent.
+    # We ship a sensible default that complies with their etiquette.
+    MB_USER_AGENT: str = "Phelia/0.1 (https://example.local)"
+
+    # Jackett connectivity for search + metadata classification.
+    JACKETT_BASE: str = "http://jackett:9117"
+    JACKETT_API_KEY: str | None = None
+
+    # Public URL used by the web UI when opening the Jackett dashboard.
+    PHELIA_PUBLIC_BASE_URL: str | None = None
+
+    @property
+    def jackett_public_url(self) -> str:
+        """Return the URL that should be used to open the Jackett UI."""
+
+        if self.PHELIA_PUBLIC_BASE_URL:
+            base = self.PHELIA_PUBLIC_BASE_URL.rstrip("/")
+            return f"{base}/jackett"
+        return self.JACKETT_BASE.rstrip("/")
 
     class Config:
         extra = "ignore"

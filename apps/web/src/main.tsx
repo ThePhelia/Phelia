@@ -20,6 +20,45 @@ const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:800
 
 type DownloadActionKey = "pause" | "resume" | "delete";
 
+function normalizeErrorDetail(detail: unknown): string | null {
+  if (!detail) return null;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (!item) return null;
+        if (typeof item === "string") return item;
+        if (typeof item === "object") {
+          const msg = (item as any)?.msg || (item as any)?.message || (item as any)?.detail;
+          const loc = (item as any)?.loc;
+          const locText = Array.isArray(loc) ? loc.join(".") : loc;
+          if (msg && locText) return `${locText}: ${msg}`;
+          if (msg) return msg;
+          try {
+            return JSON.stringify(item);
+          } catch {
+            return String(item);
+          }
+        }
+        return String(item);
+      })
+      .filter((part): part is string => Boolean(part));
+    if (parts.length) return parts.join("; ");
+    return null;
+  }
+  if (typeof detail === "object") {
+    const nested =
+      (detail as any)?.message || (detail as any)?.msg || normalizeErrorDetail((detail as any)?.detail);
+    if (nested) return nested;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return String(detail);
+    }
+  }
+  return String(detail);
+}
+
 function App() {
   const [token, setToken] = useState<string>(localStorage.getItem("token") || "");
   const [email, setEmail] = useState("");
@@ -112,7 +151,9 @@ function App() {
     } catch (error: any) {
       console.error(error);
       setResults([]);
-      setSearchError(error?.response?.data?.detail || error?.message || "Search failed");
+      const detailMessage = normalizeErrorDetail(error?.response?.data?.detail);
+      const fallback = typeof error?.message === "string" ? error.message : null;
+      setSearchError(detailMessage || fallback || "Search failed");
     } finally {
       setBusy(false);
     }

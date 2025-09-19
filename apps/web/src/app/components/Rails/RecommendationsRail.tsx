@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useRef } from 'react';
 import MovieCard from '@/app/components/MediaCard/MovieCard';
 import TvCard from '@/app/components/MediaCard/TvCard';
@@ -12,7 +13,7 @@ interface RecommendationsRailProps {
 function RecommendationsRail({ title, items = [] }: RecommendationsRailProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
     containerRef.current.scrollBy({ left: event.deltaY, behavior: 'smooth' });

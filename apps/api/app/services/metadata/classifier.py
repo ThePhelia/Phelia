@@ -1,5 +1,3 @@
-"""Deterministic torrent classifier using lightweight heuristics."""
-
 from __future__ import annotations
 
 import re
@@ -12,13 +10,7 @@ MediaType = Literal["music", "movie", "tv", "other"]
 
 
 class Classifier:
-    """Apply heuristic scoring to Torznab/Jackett search results.
-
-    The classifier is intentionally deterministic and explainable.  Each
-    heuristic contributes a weighted vote to one of the supported media
-    types.  The final classification is selected via argmax with the
-    reported confidence derived from the weight distribution.
-    """
+    """Apply heuristic scoring to Torznab/Jackett search results."""
 
     category_weights: Dict[str, tuple[MediaType, float]]
     indexer_priors: Dict[str, tuple[MediaType, float]]
@@ -30,8 +22,6 @@ class Classifier:
 
     def __init__(self, threshold_low: float = 0.55) -> None:
         self.threshold_low = threshold_low
-        # Common Torznab category labels.  Mapping is substring based so
-        # we normalise to lowercase before matching.
         self.category_weights = {
             "movies": ("movie", 0.9),
             "movie": ("movie", 0.9),
@@ -44,15 +34,11 @@ class Classifier:
             "mp3": ("music", 0.8),
             "flac": ("music", 0.8),
         }
-
-        # Prior knowledge about popular music indexers helps the model
-        # converge quickly even when the torrent title is ambiguous.
         self.indexer_priors = {
             "redacted": ("music", 0.95),
             "orpheus": ("music", 0.95),
             "broadcasthenet": ("tv", 0.75),
         }
-
         self.music_tokens = [
             (re.compile(r"\bFLAC\b", re.I), 0.5, "FLAC token"),
             (re.compile(r"\bAPE\b", re.I), 0.5, "APE token"),
@@ -66,13 +52,8 @@ class Classifier:
             (re.compile(r"\b16bit\b", re.I), 0.3, "16bit token"),
             (re.compile(r"\bCUE\b", re.I), 0.3, "CUE token"),
             (re.compile(r"\bLOG\b", re.I), 0.3, "LOG token"),
-            (
-                re.compile(r"^[\w .'-]+ - [\w .'-]+ \((19|20)\d{2}\)", re.I),
-                0.55,
-                "Artist - Album pattern",
-            ),
+            (re.compile(r"^[\w .'-]+ - [\w .'-]+ \((19|20)\d{2}\)", re.I), 0.55, "Artist - Album pattern"),
         ]
-
         self.tv_tokens = [
             (re.compile(r"S\d{1,2}E\d{1,2}", re.I), 0.45, "SxxEyy pattern"),
             (re.compile(r"Season\s+\d+", re.I), 0.4, "Season pattern"),
@@ -80,7 +61,6 @@ class Classifier:
             (re.compile(r"E\d{2}\b", re.I), 0.25, "Episode shorthand"),
             (re.compile(r"Complete Series", re.I), 0.4, "Complete series"),
         ]
-
         self.movie_tokens = [
             (re.compile(r"(19|20)\d{2}"), 0.3, "Year token"),
             (re.compile(r"\b2160p\b", re.I), 0.35, "2160p token"),
@@ -101,21 +81,20 @@ class Classifier:
         title: str,
         jackett_category_desc: Optional[str] = None,
         indexer_name: Optional[str] = None,
+        indexer: Optional[dict[str, object]] = None,
     ) -> Classification:
-        """Return a :class:`Classification` for the provided torrent."""
+        """Return a Classification for the provided torrent."""
 
         normalized_title = title or ""
         category = (jackett_category_desc or "").lower()
 
+        # Defensive: handle dict passed as indexer_name
+        if isinstance(indexer_name, dict):
+            indexer = indexer or indexer_name
+            indexer_name = indexer_name.get("name") or indexer_name.get("id") or ""
+        indexer_name = (indexer_name or "")
+
         def _normalise_indexer(value: Optional[str | dict[str, object]]) -> str:
-            """Convert Jackett indexer hints to a lowercase slug.
-
-            Jackett may emit indexer metadata as a plain string (common case) or
-            as a mapping containing ``name``/``id`` keys when the torznab feed
-            is richer.  The classifier only needs a best-effort identifier for
-            matching priors, so we coerce the value deterministically.
-            """
-
             if not value:
                 return ""
             if isinstance(value, str):
@@ -128,9 +107,8 @@ class Classifier:
                 return str(value).lower()
             return str(value).lower()
 
+        indexer_slug = _normalise_indexer(indexer_name)
 
-        indexer = (indexer_name or "").lower()
-        
         scores: Dict[MediaType, float] = defaultdict(float)
         total_weight = 0.0
         reasons: list[str] = []
@@ -143,11 +121,11 @@ class Classifier:
                 reasons.append(f"category:{needle}")
 
         # Indexer priors
-        if indexer and indexer in self.indexer_priors:
-            media_type, weight = self.indexer_priors[indexer]
+        if indexer_slug and indexer_slug in self.indexer_priors:
+            media_type, weight = self.indexer_priors[indexer_slug]
             scores[media_type] += weight
             total_weight += weight
-            reasons.append(f"indexer_prior:{indexer}")
+            reasons.append(f"indexer_prior:{indexer_slug}")
 
         def _apply(patterns: Iterable[tuple[re.Pattern[str], float, str]], media_type: MediaType) -> None:
             nonlocal total_weight
@@ -158,21 +136,5 @@ class Classifier:
                     reasons.append(f"title:{label}")
 
         _apply(self.music_tokens, "music")
-        _apply(self.tv_tokens, "tv")
-        _apply(self.movie_tokens, "movie")
-
-        if total_weight <= 0.0:
-            reasons.append("no_signals")
-            return Classification(type="other", confidence=0.0, reasons=reasons)
-
-        # Pick the best scoring type; use deterministic order for ties.
-        ordering = ["music", "movie", "tv", "other"]
-        best_media = max(ordering, key=lambda m: (scores[m], -ordering.index(m)))
-        best_score = scores[best_media]
-        confidence = best_score / total_weight if total_weight else 0.0
-
-        return Classification(type=best_media, confidence=min(confidence, 1.0), reasons=reasons)
-
-
-__all__ = ["Classifier"]
+       
 

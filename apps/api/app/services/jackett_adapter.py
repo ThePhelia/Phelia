@@ -1,5 +1,3 @@
-"""Jackett adapter with metadata classification hooks."""
-
 from __future__ import annotations
 
 import asyncio
@@ -49,7 +47,7 @@ class JackettAdapter:
         try:
             if PROVIDERS_FILE.exists():
                 return json.loads(PROVIDERS_FILE.read_text("utf-8"))
-        except Exception as e:  # pragma: no cover - defensive log
+        except Exception as e:  # defensive log
             logger.warning("providers.json read failed: %s", e)
         return []
 
@@ -64,7 +62,7 @@ class JackettAdapter:
             if not isinstance(data, list):
                 return []
             return data
-        except Exception as e:  # pragma: no cover - defensive log
+        except Exception as e:  # defensive log
             logger.warning("indexers fetch failed url=%s error=%s", url, e)
             return []
 
@@ -200,7 +198,7 @@ class JackettAdapter:
         torznab_url = f"{self.base}/api/v2.0/indexers/all/results/torznab/"
         try:
             raw_results = await asyncio.to_thread(self._torznab.search, torznab_url, query)
-        except Exception as exc:  # pragma: no cover - defensive log
+        except Exception as exc:  # defensive log
             logger.warning("jackett search failed query=%s error=%s", query, exc)
             meta["error"] = str(exc)
             return [], meta
@@ -211,10 +209,21 @@ class JackettAdapter:
 
         for idx, item in enumerate(selected):
             title = item.get("title") or ""
+
+            # normalize indexer (string or dict)
+            idxr = item.get("indexer")
+            if isinstance(idxr, dict):
+                _indexer_name = idxr.get("name") or idxr.get("id") or ""
+                _indexer_obj = idxr
+            else:
+                _indexer_name = idxr or ""
+                _indexer_obj = None
+
             classification = self.classifier.classify_torrent(
                 title=title,
                 jackett_category_desc=item.get("category"),
-                indexer_name=item.get("indexer"),
+                indexer_name=_indexer_name,
+                indexer=_indexer_obj,
             )
 
             if title and classification.confidence >= self.classifier.threshold_low:
@@ -235,7 +244,7 @@ class JackettAdapter:
         for idx, task, classification in enrich_tasks:
             try:
                 card = await task
-            except Exception as exc:  # pragma: no cover - defensive safety
+            except Exception as exc:  # defensive safety
                 logger.warning(
                     "metadata enrichment failed title=%s error=%s",
                     selected[idx].get("title"),

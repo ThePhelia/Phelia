@@ -23,6 +23,8 @@ export const API_BASE: string =
 
 const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
 
+const DEFAULT_JACKETT_URL = 'http://localhost:9117';
+
 function buildUrl(path: string, query?: Record<string, QueryRecordValue>): string {
   const normalizedPath = path.replace(/^\//, '');
   const url = new URL(normalizedPath, API_BASE_WITH_SLASH);
@@ -164,6 +166,20 @@ export function useCapabilities() {
     queryKey: ['capabilities'],
     queryFn: () => http<CapabilitiesResponse>('capabilities'),
     staleTime: 10 * 60_000,
+    select: (capabilities) => {
+      if (capabilities.jackettUrl) {
+        return capabilities;
+      }
+
+      if (capabilities.services['jackett']) {
+        return {
+          ...capabilities,
+          jackettUrl: DEFAULT_JACKETT_URL,
+        };
+      }
+
+      return capabilities;
+    },
   });
 }
 

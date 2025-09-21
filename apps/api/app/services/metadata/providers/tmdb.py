@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, Tuple
 
 import httpx
 
@@ -143,6 +143,49 @@ class TMDBClient:
             "extra": {"tmdb": details},
         }
         return result
+
+
+    async def discover_media(
+        self,
+        media_type: Literal["movie", "tv"],
+        sort: str = "trending",
+        page: int = 1,
+        language: str = "en-US",
+    ) -> dict[str, Any] | None:
+        """Return paginated discovery results for the requested ``media_type``."""
+
+        if page < 1:
+            page = 1
+        path, params = self._discovery_request(media_type, sort, page, language)
+        return await self._get(path, params)
+
+    def _discovery_request(
+        self,
+        media_type: Literal["movie", "tv"],
+        sort: str,
+        page: int,
+        language: str,
+    ) -> Tuple[str, dict[str, Any]]:
+        normalized = (sort or "trending").lower()
+        params: dict[str, Any] = {"page": page, "language": language}
+        if normalized == "popular":
+            path = f"/{media_type}/popular"
+        elif normalized == "new":
+            path = "/movie/now_playing" if media_type == "movie" else "/tv/on_the_air"
+        elif normalized == "az":
+            path = f"/discover/{media_type}"
+            params.update(
+                {
+                    "sort_by": "original_title.asc"
+                    if media_type == "movie"
+                    else "name.asc",
+                    "include_adult": False,
+                }
+            )
+        else:
+            # Default to trending over the past week which aligns best with discovery UI expectations.
+            path = f"/trending/{media_type}/week"
+        return path, params
 
 
 __all__ = ["TMDBClient"]

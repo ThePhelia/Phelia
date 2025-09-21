@@ -4,6 +4,7 @@ import { Label } from '@/app/components/ui/label';
 import { useCapabilities } from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
+import { Button } from '@/app/components/ui/button';
 
 function SettingsPage() {
   const { data, isLoading } = useCapabilities();
@@ -17,6 +18,7 @@ function SettingsPage() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
+          <TabsTrigger value="jackett">Jackett</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="space-y-4 rounded-3xl border border-border/60 bg-background/50 p-6">
           <div>
@@ -61,6 +63,31 @@ function SettingsPage() {
             <p className="text-sm text-muted-foreground">Service status unavailable.</p>
           )}
           {data ? <p className="text-xs text-muted-foreground">Phelia version {data.version}</p> : null}
+        </TabsContent>
+        <TabsContent value="jackett" className="space-y-4 rounded-3xl border border-border/60 bg-background/50 p-6">
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold text-foreground">Jackett Dashboard</h2>
+            <p className="text-sm text-muted-foreground">
+              Jackett lets you manage and configure torrent indexers that Phelia can search against when looking for
+              new media.
+            </p>
+          </div>
+          {isLoading ? (
+            <Skeleton className="h-12 w-48 rounded-full" />
+          ) : data?.jackettUrl ? (
+            <Button asChild>
+              <a href={data.jackettUrl} target="_blank" rel="noopener noreferrer">
+                Open Jackett Dashboard
+              </a>
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <Button disabled>Jackett Dashboard Unavailable</Button>
+              <p className="text-xs text-muted-foreground">
+                The server did not provide a Jackett dashboard link. Contact your administrator if you expect one.
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

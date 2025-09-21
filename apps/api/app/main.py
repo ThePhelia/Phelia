@@ -8,6 +8,7 @@ import redis.asyncio as redis
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.routers import health, auth, downloads, trackers
+from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
 from app.api.v1.endpoints import search as metadata_search
 from app.api.v1.endpoints import capabilities as capabilities_endpoints
@@ -37,6 +38,7 @@ app.include_router(meta_endpoints.router, prefix="/api/v1")
 app.include_router(capabilities_endpoints.router, prefix="/api/v1")
 app.include_router(library_endpoints.router, prefix="/api/v1")
 app.include_router(details_endpoints.router, prefix="/api/v1")
+
 
 @app.on_event("startup")
 async def startup_event():

@@ -129,7 +129,7 @@ export interface CapabilitiesResponse {
     jackett?: string;
     [key: string]: string | undefined;
   };
-}
+
 
 export interface ListMutationInput {
   action: 'add' | 'remove';

@@ -11,6 +11,9 @@ from app.routers import health, auth, downloads, trackers
 from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
 from app.api.v1.endpoints import search as metadata_search
+from app.api.v1.endpoints import capabilities as capabilities_endpoints
+from app.api.v1.endpoints import library as library_endpoints
+from app.api.v1.endpoints import details as details_endpoints
 from app.services.search.jackett_bootstrap import ensure_jackett_tracker
 from app.services.bt.qbittorrent import health_check as qb_health_check
 
@@ -32,7 +35,10 @@ app.include_router(downloads.router, prefix="/api/v1")
 app.include_router(trackers.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.router, prefix="/api/v1")
-app.include_router(discover_endpoints.router, prefix="/api/v1")
+app.include_router(capabilities_endpoints.router, prefix="/api/v1")
+app.include_router(library_endpoints.router, prefix="/api/v1")
+app.include_router(details_endpoints.router, prefix="/api/v1")
+
 
 @app.on_event("startup")
 async def startup_event():

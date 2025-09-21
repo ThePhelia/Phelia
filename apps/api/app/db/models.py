@@ -10,6 +10,8 @@ from sqlalchemy import (
     text,
     DateTime,
     func,
+    JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
@@ -58,6 +60,49 @@ class Tracker(Base):
     torznab_url: Mapped[str] = mapped_column(String(255))
     jackett_indexer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requires_auth: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
+
+
+class LibraryEntry(Base):
+    __tablename__ = "library_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    list_type: Mapped[str] = mapped_column(String(32), index=True)
+    item_kind: Mapped[str] = mapped_column(String(16), index=True)
+    item_id: Mapped[str] = mapped_column(String(256), index=True)
+    playlist_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("list_type", "item_kind", "item_id", "playlist_slug", name="uq_library_entry"),
+    )
+
+
+class LibraryPlaylist(Base):
+    __tablename__ = "library_playlists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
     )

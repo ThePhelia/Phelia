@@ -125,8 +125,11 @@ export interface DownloadItem {
 export interface CapabilitiesResponse {
   services: Record<string, boolean>;
   version: string;
-  jackettUrl?: string;
-}
+  links?: {
+    jackett?: string;
+    [key: string]: string | undefined;
+  };
+
 
 export interface ListMutationInput {
   action: 'add' | 'remove';

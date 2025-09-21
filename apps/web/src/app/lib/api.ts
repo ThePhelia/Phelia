@@ -5,6 +5,7 @@ import type {
   DetailResponse,
   DiscoverItem,
   DiscoverParams,
+  DownloadItem,
   LibraryItemSummary,
   ListMutationInput,
   MediaKind,
@@ -54,10 +55,12 @@ export function createClient(baseUrl: string) {
   }
 
   return {
-    discover: (kind: Exclude<MediaKind, 'album'> | 'album', params: DiscoverParams = {}) =>
+    discover: (kind: DiscoverKind, params: DiscoverParams = {}) =>
       request<PaginatedResponse<DiscoverItem>>(
-        `/discover/${kind}${toQueryString(params)}`,
-      ),
+        `/discover/${kind === 'album' ? 'music' : kind}${toQueryString(params)}`,
+      )  
+    }
+
     getDetails: (kind: MediaKind, id: string) => request<DetailResponse>(`/details/${kind}/${id}`),
     search: (params: SearchParams) => request<PaginatedResponse<DiscoverItem>>(
         `/search${toQueryString(params)}`,

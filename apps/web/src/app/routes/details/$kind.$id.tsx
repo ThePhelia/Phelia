@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import DetailContent from '@/app/components/Detail/DetailContent';
@@ -7,23 +7,17 @@ import type { MediaKind } from '@/app/lib/types';
 import { Skeleton } from '@/app/components/ui/skeleton';
 
 function DetailPage() {
-  const params = useParams();
+  const { kind = 'movie', id } = useParams();
   const navigate = useNavigate();
-  const detailId = params.id;
+  const mappedKind = useMemo<MediaKind>(() => (kind === 'music' ? 'album' : (kind as MediaKind)), [kind]);
 
-  if (!detailId) {
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">Unable to load details.</p>
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          Go back
-        </Button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!id) navigate(-1);
+  }, [id, navigate]);
 
-  const mappedKind = useMemo<MediaKind>(() => (params.kind === 'music' ? 'album' : (params.kind as MediaKind)), [params.kind]);
-  const { data, isLoading, isError } = useDetails(mappedKind, detailId);
+  if (!id) return null;
+
+  const { data, isLoading, isError } = useDetails(mappedKind, id);
 
   if (isLoading) {
     return (

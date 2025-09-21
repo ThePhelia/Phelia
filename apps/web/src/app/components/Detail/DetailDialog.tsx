@@ -1,96 +1,68 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import type { ReactNode } from "react";
+import { Dialog, DialogContent, DialogFooter } from "@/app/components/ui/dialog";
+import { Button } from "@/app/components/ui/button";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import DetailContent from "@/app/components/Detail/DetailContent";
+import { useDetails } from "@/app/lib/api";
+import type { MediaKind } from "@/app/lib/types";
 
-type MediaItem = {
-  id: string | number;
-  title: string;
-  subtitle?: string;
-  year?: string | number;
-  coverUrl?: string;
-  description?: string;
-};
 
-type DetailDialogProps = {
+interface DetailDialogProps {
+  kind: MediaKind;
+  id: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  item: MediaItem | null;
-  onPrimary?: (item: MediaItem) => void;
-  primaryLabel?: string;
-};
+}
 
-export function DetailDialog({
-  open,
-  onOpenChange,
-  item,
-  onPrimary,
-  primaryLabel = "Add",
-}: DetailDialogProps) {
-  if (!item) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nothing selected</DialogTitle>
-            <DialogDescription>Select an item to see details.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
+function LoadingState() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <Skeleton className="h-7 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-[2fr_3fr]">
+        <Skeleton className="aspect-[2/3] w-full rounded-3xl" />
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorState() {
+  return (
+    <div className="space-y-2 text-center">
+      <p className="text-lg font-semibold text-foreground">Failed to load details.</p>
+      <p className="text-sm text-muted-foreground">Please try again later.</p>
+    </div>
+  );
+}
+
+function DetailDialog({ kind, id, open, onOpenChange }: DetailDialogProps) {
+  const { data, isLoading, isError } = useDetails(kind, id);
+
+  let content: ReactNode = null;
+
+  if (isLoading) {
+    content = <LoadingState />;
+  } else if (isError) {
+    content = <ErrorState />;
+  } else if (data) {
+    content = <DetailContent detail={data} />;
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="line-clamp-2">{item.title}</DialogTitle>
-          {item.subtitle ? (
-            <DialogDescription className="line-clamp-2">
-              {item.subtitle}
-              {item.year ? ` • ${item.year}` : ""}
-            </DialogDescription>
-          ) : item.year ? (
-            <DialogDescription>{item.year}</DialogDescription>
-          ) : null}
-        </DialogHeader>
-
-        <div className="mt-3 grid grid-cols-3 gap-4">
-          <div className="col-span-1">
-            {item.coverUrl ? (
-              <img
-                src={item.coverUrl}
-                alt={item.title}
-                className="w-full rounded-xl object-cover"
-              />
-            ) : (
-              <div className="aspect-square w-full rounded-xl border" />
-            )}
-          </div>
-          <div className="col-span-2">
-            <p className="text-sm leading-relaxed whitespace-pre-line">
-              {item.description ?? "No description available."}
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter className="mt-4">
+      <DialogContent className="sm:max-w-3xl">
+        {content}
+        <DialogFooter className="mt-6">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          {onPrimary ? (
-            <Button onClick={() => onPrimary(item)}>{primaryLabel}</Button>
-          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -98,4 +70,3 @@ export function DetailDialog({
 }
 
 export default DetailDialog;
-

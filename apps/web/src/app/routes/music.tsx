@@ -4,29 +4,23 @@ import { useQueryParams } from '@/app/hooks/useQueryParams';
 import { useDiscover, useSearch } from '@/app/lib/api';
 import type { DiscoverParams } from '@/app/lib/types';
 
-type FilterState = DiscoverParams & {
-  [key: string]: string | number | boolean | null | undefined;
-  search: string;
+type FilterState = {
   sort: NonNullable<DiscoverParams['sort']>;
   year: string;
   genre: string;
+  type: DiscoverParams['type'];
+  search: string;
 };
 
-const defaults: FilterState = {
-  sort: 'trending',
-  year: '',
-  genre: '',
-  type: undefined,
-  search: '',
-};
+const defaults: FilterState = { sort: 'trending', year: '', genre: '', type: undefined, search: '' };
 
 function MusicPage() {
   const [filters, setFilters] = useQueryParams<FilterState>(defaults);
-  const discoverParams: DiscoverParams = {
+  const discoverParams = {
     sort: filters.sort,
     year: filters.year || undefined,
     genre: filters.genre || undefined,
-    type: filters.type ?? undefined,
+    type: filters.type,
   };
 
   const discoverQuery = useDiscover('album', discoverParams);

@@ -15,7 +15,7 @@ const defaults: FilterState = { sort: 'trending', year: '', genre: '', search: '
 
 function TvPage() {
   const [filters, setFilters] = useQueryParams<FilterState>(defaults);
-  const discoverParams: DiscoverParams = {
+  const discoverParams = {
     sort: filters.sort,
     year: filters.year || undefined,
     genre: filters.genre || undefined,

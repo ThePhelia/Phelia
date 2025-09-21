@@ -2,18 +2,31 @@ import CatalogGrid from '@/app/components/CatalogGrid';
 import FiltersBar from '@/app/components/FiltersBar';
 import { useQueryParams } from '@/app/hooks/useQueryParams';
 import { useDiscover, useSearch } from '@/app/lib/api';
+import type { DiscoverParams } from '@/app/lib/types';
 
-const defaults = { sort: 'trending', year: '', genre: '', type: '', search: '' } as const;
+type FilterState = DiscoverParams & {
+  [key: string]: string | number | boolean | null | undefined;
+  search: string;
+  sort: NonNullable<DiscoverParams['sort']>;
+  year: string;
+  genre: string;
+};
 
-type FilterState = typeof defaults;
+const defaults: FilterState = {
+  sort: 'trending',
+  year: '',
+  genre: '',
+  type: undefined,
+  search: '',
+};
 
 function MusicPage() {
   const [filters, setFilters] = useQueryParams<FilterState>(defaults);
-  const discoverParams = {
-    sort: filters.sort as FilterState['sort'],
+  const discoverParams: DiscoverParams = {
+    sort: filters.sort,
     year: filters.year || undefined,
     genre: filters.genre || undefined,
-    type: (filters.type as 'album' | 'ep' | 'single') || undefined,
+    type: filters.type ?? undefined,
   };
 
   const discoverQuery = useDiscover('album', discoverParams);

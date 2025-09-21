@@ -9,8 +9,21 @@ import { Skeleton } from '@/app/components/ui/skeleton';
 function DetailPage() {
   const params = useParams();
   const navigate = useNavigate();
+  const detailId = params.id;
+
+  if (!detailId) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">Unable to load details.</p>
+        <Button variant="ghost" onClick={() => navigate(-1)}>
+          Go back
+        </Button>
+      </div>
+    );
+  }
+
   const mappedKind = useMemo<MediaKind>(() => (params.kind === 'music' ? 'album' : (params.kind as MediaKind)), [params.kind]);
-  const { data, isLoading, isError } = useDetails(mappedKind, params.id);
+  const { data, isLoading, isError } = useDetails(mappedKind, detailId);
 
   if (isLoading) {
     return (

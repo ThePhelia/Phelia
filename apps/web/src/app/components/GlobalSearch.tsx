@@ -135,7 +135,11 @@ function GlobalSearch() {
       </div>
       {visible ? (
         <div className="absolute left-0 right-0 z-40 mt-2 rounded-2xl border border-border/60 bg-background/95 shadow-2xl backdrop-blur-xl">
-          <Tabs value={kind} onValueChange={(value) => setKind(value as SearchKind)}>
+          <Tabs
+            defaultValue="all"
+            value={kind}
+            onValueChange={(value) => setKind(value as SearchKind)}
+          >
             <TabsList className="mx-auto mt-3 flex w-fit">
               {SEARCH_KINDS.map((option) => (
                 <TabsTrigger key={option} value={option} className="capitalize">

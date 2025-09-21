@@ -8,6 +8,7 @@ import redis.asyncio as redis
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.routers import health, auth, downloads, trackers
+from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
 from app.api.v1.endpoints import search as metadata_search
 from app.services.search.jackett_bootstrap import ensure_jackett_tracker
@@ -31,6 +32,7 @@ app.include_router(downloads.router, prefix="/api/v1")
 app.include_router(trackers.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.router, prefix="/api/v1")
+app.include_router(discover_endpoints.router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup_event():

@@ -154,6 +154,26 @@ export function useDownloads(enabled = true) {
   });
 }
 
+export interface CreateDownloadInput {
+  magnet?: string;
+  url?: string;
+}
+
+export function useCreateDownload() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ success: boolean }, Error, CreateDownloadInput>({
+    mutationFn: (input) =>
+      http<{ success: boolean }>('downloads', {
+        method: 'POST',
+        json: input,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+  });
+}
+
 export function useLibrary() {
   return useQuery<LibraryItemSummary, Error>({
     queryKey: ['library'],

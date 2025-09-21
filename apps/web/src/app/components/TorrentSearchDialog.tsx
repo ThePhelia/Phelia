@@ -5,6 +5,7 @@ import { Button } from '@/app/components/ui/button';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { useTorrentSearch } from '@/app/stores/torrent-search';
 import type { JackettSearchItem, JackettTorrentDetails } from '@/app/lib/types';
+import { useCreateDownload } from '@/app/lib/api';
 
 function TorrentSearchDialog() {
   const {
@@ -156,6 +157,23 @@ function TorrentResultCard({ item }: { item: JackettSearchItem }) {
   const tracker = typeof details.tracker === 'string' ? details.tracker : undefined;
   const providers = Array.isArray(item.providers) ? item.providers.filter((provider) => provider.used) : [];
 
+  const { mutateAsync, isPending, error, reset } = useCreateDownload();
+  const hasDownloadSource = Boolean(magnetLink || downloadUrl);
+  const errorMessage = error instanceof Error ? error.message : undefined;
+
+  const handleAddDownload = async () => {
+    if (!hasDownloadSource || isPending) return;
+    const payload = magnetLink ? { magnet: magnetLink } : downloadUrl ? { url: downloadUrl } : undefined;
+    if (!payload) return;
+
+    reset();
+    try {
+      await mutateAsync(payload);
+    } catch {
+      // Error is surfaced via mutation state for the user.
+    }
+  };
+
   return (
     <div className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -196,20 +214,41 @@ function TorrentResultCard({ item }: { item: JackettSearchItem }) {
           ))}
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        {magnetLink ? (
-          <Button asChild size="sm" variant="ghost">
-            <a href={magnetLink} target="_blank" rel="noreferrer">
-              <Magnet className="mr-2 h-4 w-4" /> Magnet link
-            </a>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={handleAddDownload}
+            disabled={!hasDownloadSource || isPending}
+            variant="default"
+          >
+            {isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <DownloadCloud className="mr-2 h-4 w-4" />
+            )}
+            {isPending ? 'Adding…' : 'Add download'}
           </Button>
+          {magnetLink ? (
+            <Button asChild size="sm" variant="ghost">
+              <a href={magnetLink} target="_blank" rel="noreferrer">
+                <Magnet className="mr-2 h-4 w-4" /> Magnet link (advanced)
+              </a>
+            </Button>
+          ) : null}
+          {downloadUrl ? (
+            <Button asChild size="sm" variant="ghost">
+              <a href={downloadUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="mr-2 h-4 w-4" /> Open source
+              </a>
+            </Button>
+          ) : null}
+        </div>
+        {errorMessage ? (
+          <p className="text-xs text-destructive">Failed to add download: {errorMessage}</p>
         ) : null}
-        {downloadUrl ? (
-          <Button asChild size="sm" variant="ghost">
-            <a href={downloadUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-2 h-4 w-4" /> Open source
-            </a>
-          </Button>
+        {!hasDownloadSource ? (
+          <p className="text-xs text-muted-foreground">No download sources are available for this torrent.</p>
         ) : null}
       </div>
       {reasons.length ? (

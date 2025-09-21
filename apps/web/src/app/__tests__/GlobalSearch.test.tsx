@@ -76,7 +76,7 @@ describe("GlobalSearch", () => {
       vi.advanceTimersByTime(400);
     });
 
-    await screen.findByText("The Matrix");
+    expect(screen.getByText("The Matrix")).toBeInTheDocument();
 
     await user.keyboard("{ArrowDown}{Enter}");
 

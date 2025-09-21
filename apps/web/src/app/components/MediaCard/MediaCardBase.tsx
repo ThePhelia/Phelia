@@ -8,6 +8,7 @@ import { useMutateList } from '@/app/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/app/components/ui/badge';
 import { cn } from '@/app/utils/cn';
+import { useTorrentSearch } from '@/app/stores/torrent-search';
 
 interface MediaCardBaseProps {
   item: DiscoverItem;
@@ -21,6 +22,7 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
   const location = useLocation();
   const [hovered, setHovered] = useState(false);
   const mutation = useMutateList();
+  const fetchTorrentSearch = useTorrentSearch((state) => state.fetchForItem);
 
   const openDetails = () => {
     navigate(`/details/${item.kind === 'album' ? 'music' : item.kind}/${item.id}`, {
@@ -135,9 +137,15 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
               variant="ghost"
               size="sm"
               className="h-8 rounded-full px-3"
+              aria-label="Open torrent search"
               onClick={(event) => {
                 event.stopPropagation();
-                toast('Download queued', { description: `${item.title} will download shortly.` });
+                void fetchTorrentSearch({
+                  id: item.id,
+                  title: item.title,
+                  kind: item.kind,
+                  year: item.year,
+                });
               }}
             >
               <Download className="mr-2 h-4 w-4" />

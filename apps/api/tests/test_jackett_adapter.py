@@ -128,3 +128,19 @@ async def test_search_with_metadata_returns_cards(monkeypatch):
     assert cards[1].media_type == "other"
     assert cards[1].needs_confirmation is True
     assert "jackett_ui_url" in meta
+
+
+@pytest.mark.anyio
+async def test_search_with_metadata_filters_by_kind(monkeypatch):
+    adapter = jackett_adapter.JackettAdapter(
+        classifier=Classifier(),
+        router=DummyRouter(),
+    )
+    adapter._torznab = DummyTorznab()
+
+    tv_cards, _ = await adapter.search_with_metadata("example query", limit=2, kind="tv")
+    assert len(tv_cards) == 1
+    assert tv_cards[0].media_type == "tv"
+
+    music_cards, _ = await adapter.search_with_metadata("example query", limit=2, kind="music")
+    assert music_cards == []

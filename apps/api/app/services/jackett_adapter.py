@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
 
@@ -187,7 +187,12 @@ class JackettAdapter:
         return None
 
     # ------------ search + metadata ------------
-    async def search_with_metadata(self, query: str, limit: int = 40) -> tuple[list[EnrichedCard], dict[str, Any]]:
+    async def search_with_metadata(
+        self,
+        query: str,
+        limit: int = 40,
+        kind: Literal["all", "movie", "tv", "music"] = "all",
+    ) -> tuple[list[EnrichedCard], dict[str, Any]]:
         """Run an aggregated Jackett search and enrich the results."""
 
         meta: dict[str, Any] = {}
@@ -275,6 +280,9 @@ class JackettAdapter:
                 }
             )
             output_cards.append(card)
+
+        if kind != "all":
+            output_cards = [card for card in output_cards if card.media_type == kind]
 
         return output_cards, meta
 

@@ -1,13 +1,21 @@
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import type { DetailResponse } from '@/app/lib/types';
-import { Play } from 'lucide-react';
+import { DownloadCloud, Loader2, Play } from 'lucide-react';
+import { useTorrentSearch } from '@/app/stores/torrent-search';
 
 interface DetailHeaderProps {
   detail: DetailResponse;
 }
 
 function DetailHeader({ detail }: DetailHeaderProps) {
+  const fetchTorrents = useTorrentSearch((state) => state.fetchForItem);
+  const { isLoading, activeItem } = useTorrentSearch((state) => ({
+    isLoading: state.isLoading,
+    activeItem: state.activeItem,
+  }));
+  const isCurrentLoading = isLoading && activeItem?.id === detail.id;
+
   return (
     <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-background/80">
       {detail.backdrop ? (
@@ -50,11 +58,32 @@ function DetailHeader({ detail }: DetailHeaderProps) {
           </div>
           <p className="max-w-2xl text-sm leading-relaxed text-white/80">{detail.overview}</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="lg" className="rounded-full bg-[color:var(--accent)] text-black hover:bg-[color:var(--accent)]/90">
-              <Play className="mr-2 h-5 w-5" /> Play
+            <Button
+              size="lg"
+              variant="accent"
+              className="rounded-full"
+              disabled={isCurrentLoading}
+              onClick={() =>
+                void fetchTorrents({
+                  id: detail.id,
+                  title: detail.title,
+                  kind: detail.kind,
+                  year: detail.year,
+                })
+              }
+            >
+              {isCurrentLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Fetching…
+                </>
+              ) : (
+                <>
+                  <DownloadCloud className="mr-2 h-5 w-5" /> Fetch Torrents
+                </>
+              )}
             </Button>
             <Button variant="secondary" size="lg" className="rounded-full bg-white/10 text-white hover:bg-white/20">
-              Add to queue
+              <Play className="mr-2 h-5 w-5" /> Play
             </Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import type {
   DiscoverItem,
   DiscoverParams,
   DownloadItem,
+  JackettSearchResponse,
   LibraryItemSummary,
   ListMutationInput,
   PaginatedResponse,
@@ -187,6 +188,16 @@ export function useCapabilities() {
       }
 
       return capabilities;
+    },
+  });
+}
+
+export function fetchJackettSearch(query: string, options?: { limit?: number }) {
+  const limit = options?.limit;
+  return http<JackettSearchResponse>('search', {
+    query: {
+      q: query,
+      ...(typeof limit === 'number' ? { limit } : {}),
     },
   });
 }

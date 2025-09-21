@@ -4,6 +4,7 @@ import Header from '@/app/components/Header';
 import Sidebar from '@/app/components/Sidebar';
 import CommandPalette from '@/app/components/CommandPalette';
 import DownloadsDrawer from '@/app/components/DownloadsDrawer';
+import TorrentSearchDialog from '@/app/components/TorrentSearchDialog';
 import { useUiState } from '@/app/stores/ui';
 
 function AppShell() {
@@ -27,6 +28,7 @@ function AppShell() {
       </div>
       <CommandPalette />
       <DownloadsDrawer />
+      <TorrentSearchDialog />
     </div>
   );
 }

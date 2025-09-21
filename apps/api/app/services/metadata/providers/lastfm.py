@@ -71,6 +71,58 @@ class LastFMClient:
             "extra": album_data,
         }
 
+    async def get_top_albums(self, page: int = 1, limit: int = 20) -> dict[str, Any] | None:
+        """Return the global Last.fm top albums chart."""
+
+        if not self.api_key:
+            logger.debug("lastfm: missing API key, skipping chart lookup")
+            return None
+        if page < 1:
+            page = 1
+        params = {
+            "method": "chart.gettopalbums",
+            "api_key": self.api_key,
+            "format": "json",
+            "page": page,
+            "limit": limit,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(self.base_url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning("lastfm http error chart page=%s status=%s", page, exc.response.status_code)
+            return None
+        except httpx.RequestError as exc:
+            logger.warning("lastfm request error chart page=%s error=%s", page, exc)
+            return None
+
+        container = data.get("albums") or data.get("topalbums")
+        if not isinstance(container, dict):
+            return None
+        items = container.get("album") or []
+        if not isinstance(items, list):
+            items = []
+        attrs = container.get("@attr") or {}
+
+        def _int(value: Any) -> int | None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        page_value = _int(attrs.get("page")) or page
+        total_pages = _int(attrs.get("totalPages")) or page_value
+        total_items = _int(attrs.get("total"))
+
+        return {
+            "items": items,
+            "page": page_value,
+            "total_pages": total_pages,
+            "total_items": total_items,
+        }
+
 
 __all__ = ["LastFMClient"]
 

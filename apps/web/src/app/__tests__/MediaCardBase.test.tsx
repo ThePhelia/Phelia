@@ -4,13 +4,17 @@ import MediaCardBase from "@/app/components/MediaCard/MediaCardBase";
 import type { DiscoverItem } from "@/app/lib/types";
 import { renderWithProviders } from "@/app/test-utils";
 
-const mutateAsync = vi.fn();
-const navigateMock = vi.fn();
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
-const toastMock = Object.assign(vi.fn(), {
-  success: toastSuccess,
-  error: toastError,
+const { mutateAsync, navigateMock, toastSuccess, toastError, toastMock, fetchForItemMock } = vi.hoisted(() => {
+  const mutateAsync = vi.fn();
+  const navigateMock = vi.fn();
+  const toastSuccess = vi.fn();
+  const toastError = vi.fn();
+  const toastMock = Object.assign(vi.fn(), {
+    success: toastSuccess,
+    error: toastError,
+  });
+  const fetchForItemMock = vi.fn();
+  return { mutateAsync, navigateMock, toastSuccess, toastError, toastMock, fetchForItemMock };
 });
 
 vi.mock("sonner", () => ({
@@ -19,6 +23,11 @@ vi.mock("sonner", () => ({
 
 vi.mock("@/app/lib/api", () => ({
   useMutateList: () => ({ mutateAsync }),
+}));
+
+vi.mock("@/app/stores/torrent-search", () => ({
+  useTorrentSearch: (selector?: (state: { fetchForItem: typeof fetchForItemMock }) => unknown) =>
+    selector ? selector({ fetchForItem: fetchForItemMock }) : { fetchForItem: fetchForItemMock },
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -50,6 +59,7 @@ describe("MediaCardBase", () => {
     toastMock.mockClear();
     toastSuccess.mockClear();
     toastError.mockClear();
+    fetchForItemMock.mockReset();
   });
 
   it("renders media information and opens details when card clicked", async () => {
@@ -59,7 +69,11 @@ describe("MediaCardBase", () => {
     expect(screen.getByRole("heading", { name: item.title })).toBeInTheDocument();
     expect(screen.getByText("Sci-Fi, Thriller", { exact: false })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /details/i }));
+    const detailsButton = screen
+      .getAllByRole("button", { name: /details/i })
+      .find((element) => element.tagName === "BUTTON");
+    expect(detailsButton).toBeDefined();
+    await user.click(detailsButton!);
     expect(navigateMock).toHaveBeenCalledWith(
       `/details/${item.kind}/${item.id}`,
       expect.objectContaining({
@@ -84,5 +98,21 @@ describe("MediaCardBase", () => {
 
     expect(navigateMock).not.toHaveBeenCalled();
     expect(toastMock.success).toHaveBeenCalledWith(`Added ${item.title} to your watchlist.`);
+  });
+
+  it("opens the torrent search dialog when download button clicked", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MediaCardBase item={item} />);
+
+    const downloadButton = screen.getByRole("button", { name: /torrent search/i });
+    await user.click(downloadButton);
+
+    expect(fetchForItemMock).toHaveBeenCalledWith({
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      year: item.year,
+    });
+    expect(toastMock).not.toHaveBeenCalled();
   });
 });

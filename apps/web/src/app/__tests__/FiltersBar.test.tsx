@@ -11,10 +11,18 @@ describe("FiltersBar", () => {
   };
 
   it("updates search and sort filters", async () => {
+    let currentFilters = { ...baseFilters };
     const onChange = vi.fn();
     const user = userEvent.setup();
 
-    renderWithProviders(<FiltersBar kind="movie" filters={baseFilters} onChange={onChange} />);
+    const { rerender } = renderWithProviders(
+      <FiltersBar kind="movie" filters={currentFilters} onChange={onChange} />,
+    );
+
+    onChange.mockImplementation((next) => {
+      currentFilters = { ...currentFilters, ...next };
+      rerender(<FiltersBar kind="movie" filters={currentFilters} onChange={onChange} />);
+    });
 
     const searchInput = screen.getByPlaceholderText(/search movies/i);
     await user.type(searchInput, "Matrix");

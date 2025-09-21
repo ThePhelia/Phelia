@@ -3,10 +3,12 @@ import DetailDialog from "@/app/components/Detail/DetailDialog";
 import type { DetailResponse } from "@/app/lib/types";
 import { renderWithProviders } from "@/app/test-utils";
 
-const useDetailsMock = vi.fn();
-const detailContentSpy = vi.fn(({ detail }: { detail: DetailResponse }) => (
-  <div data-testid="detail-content">{detail.title}</div>
-));
+const { useDetailsMock, detailContentSpy } = vi.hoisted(() => ({
+  useDetailsMock: vi.fn(),
+  detailContentSpy: vi.fn(({ detail }: { detail: DetailResponse }) => (
+    <div data-testid="detail-content">{detail.title}</div>
+  )),
+}));
 
 vi.mock("@/app/lib/api", () => ({
   useDetails: useDetailsMock,
@@ -50,7 +52,7 @@ describe("DetailDialog", () => {
     useDetailsMock.mockReturnValue({ data: detail, isLoading: false, isError: false });
     renderWithProviders(<DetailDialog kind="movie" id="42" open onOpenChange={() => {}} />);
 
-    expect(detailContentSpy).toHaveBeenCalledWith({ detail });
+    expect(detailContentSpy).toHaveBeenCalledWith({ detail }, expect.anything());
     expect(screen.getByTestId("detail-content")).toHaveTextContent(detail.title);
   });
 });

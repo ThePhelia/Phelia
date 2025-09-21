@@ -10,7 +10,7 @@ interface TabsContextValue {
 const TabsContext = createContext<TabsContextValue | null>(null);
 
 interface TabsProps {
-  defaultValue: string;
+  defaultValue?: string;
   value?: string;
   onValueChange?: (value: string) => void;
   children: ReactNode;
@@ -18,7 +18,7 @@ interface TabsProps {
 }
 
 function Tabs({ defaultValue, value: valueProp, onValueChange, children, className }: TabsProps) {
-  const [valueState, setValueState] = useState(defaultValue);
+  const [valueState, setValueState] = useState(defaultValue ?? valueProp ?? '');
   const value = valueProp ?? valueState;
 
   const context = useMemo<TabsContextValue>(

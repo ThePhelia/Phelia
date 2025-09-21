@@ -2,14 +2,24 @@ import CatalogGrid from '@/app/components/CatalogGrid';
 import FiltersBar from '@/app/components/FiltersBar';
 import { useQueryParams } from '@/app/hooks/useQueryParams';
 import { useDiscover, useSearch } from '@/app/lib/api';
+import type { DiscoverParams } from '@/app/lib/types';
 
-const defaults = { sort: 'trending', year: '', genre: '', search: '' } as const;
+type FilterState = {
+  sort: NonNullable<DiscoverParams['sort']>;
+  year: string;
+  genre: string;
+  search: string;
+};
 
-type FilterState = typeof defaults;
+const defaults: FilterState = { sort: 'trending', year: '', genre: '', search: '' };
 
 function TvPage() {
   const [filters, setFilters] = useQueryParams<FilterState>(defaults);
-  const discoverParams = { sort: filters.sort as FilterState['sort'], year: filters.year || undefined, genre: filters.genre || undefined };
+  const discoverParams = {
+    sort: filters.sort,
+    year: filters.year || undefined,
+    genre: filters.genre || undefined,
+  };
 
   const discoverQuery = useDiscover('tv', discoverParams);
   const searchQuery = useSearch({ q: filters.search ?? '', kind: 'tv' });

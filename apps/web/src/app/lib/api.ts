@@ -171,6 +171,14 @@ export function useCapabilities() {
         return capabilities;
       }
 
+      const jackettLink = capabilities.links?.jackett;
+      if (jackettLink) {
+        return {
+          ...capabilities,
+          jackettUrl: jackettLink,
+        };
+      }
+
       if (capabilities.services['jackett']) {
         return {
           ...capabilities,

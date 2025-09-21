@@ -30,6 +30,9 @@ function HeroCarousel({ items }: HeroCarouselProps) {
   const current = slides[index];
   if (!current) return null;
 
+  const imageSrc = current.backdrop ?? current.poster;
+  const hasImage = Boolean(imageSrc);
+
   const goTo = (next: number) => {
     const length = slides.length;
     setIndex((next + length) % length);
@@ -46,15 +49,19 @@ function HeroCarousel({ items }: HeroCarouselProps) {
           transition={{ duration: 0.6 }}
           className="relative h-[440px] w-full"
         >
-          {current.backdrop ? (
-            <img
-              src={current.backdrop}
-              alt={current.title}
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : null}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent" />
+          {hasImage ? (
+            <>
+              <img
+                src={imageSrc}
+                alt={current.title}
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-foreground/10 via-background/80 to-background" />
+          )}
           <div className="relative z-10 flex h-full flex-col justify-center gap-6 px-10 py-12 text-white md:max-w-xl">
             <div className="space-y-3">
               <p className="text-xs uppercase tracking-[0.4em] text-white/60">Featured</p>

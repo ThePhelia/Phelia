@@ -56,6 +56,47 @@ export interface AvailabilityInfo {
   torrents?: Array<{ provider: string; seeders?: number; size?: string }>;
 }
 
+export interface EnrichedProvider {
+  name: string;
+  used: boolean;
+  extra?: Record<string, unknown> | null;
+}
+
+export interface JackettTorrentDetails {
+  magnet?: string | null;
+  url?: string | null;
+  size?: string | number | null;
+  seeders?: number | null;
+  leechers?: number | null;
+  tracker?: string | null;
+  indexer?: string | Record<string, unknown> | null;
+  category?: string | string[] | null;
+  title?: string | null;
+}
+
+export interface JackettSearchItem {
+  media_type: 'music' | 'movie' | 'tv' | 'other';
+  confidence: number;
+  title: string;
+  parsed?: Record<string, unknown> | null;
+  ids: Record<string, unknown>;
+  details: Record<string, unknown> & { jackett?: JackettTorrentDetails };
+  providers: EnrichedProvider[];
+  reasons: string[];
+  needs_confirmation: boolean;
+}
+
+export interface JackettSearchResponseMeta {
+  message?: string;
+  jackett_ui_url?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface JackettSearchResponse extends JackettSearchResponseMeta {
+  items: JackettSearchItem[];
+}
+
 export interface ExternalLink {
   label: string;
   url: string;

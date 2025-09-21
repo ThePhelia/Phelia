@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DownloadCloud, Loader2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import type { DiscoverItem } from '@/app/lib/types';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTorrentSearch } from '@/app/stores/torrent-search';
 
 interface HeroCarouselProps {
   items: DiscoverItem[];
@@ -27,11 +28,17 @@ function HeroCarousel({ items }: HeroCarouselProps) {
     setIndex(0);
   }, [slides.length]);
 
+  const fetchTorrents = useTorrentSearch((state) => state.fetchForItem);
+  const { isLoading, activeItem } = useTorrentSearch((state) => ({
+    isLoading: state.isLoading,
+    activeItem: state.activeItem,
+  }));
   const current = slides[index];
   if (!current) return null;
 
   const imageSrc = current.backdrop ?? current.poster;
   const hasImage = Boolean(imageSrc);
+  const isCurrentLoading = isLoading && activeItem?.id === current.id;
 
   const goTo = (next: number) => {
     const length = slides.length;
@@ -81,14 +88,27 @@ function HeroCarousel({ items }: HeroCarouselProps) {
             <div className="flex items-center gap-3">
               <Button
                 size="lg"
-                className="rounded-full bg-[color:var(--accent)] text-black shadow-lg hover:bg-[color:var(--accent)]/90"
+                variant="accent"
+                className="rounded-full shadow-lg"
+                disabled={isCurrentLoading}
                 onClick={() =>
-                  navigate(`/details/${current.kind === 'album' ? 'music' : current.kind}/${current.id}`, {
-                    state: { backgroundLocation: location },
+                  void fetchTorrents({
+                    id: current.id,
+                    title: current.title,
+                    kind: current.kind,
+                    year: current.year,
                   })
                 }
               >
-                <Play className="mr-2 h-5 w-5" /> Play Now
+                {isCurrentLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Fetching…
+                  </>
+                ) : (
+                  <>
+                    <DownloadCloud className="mr-2 h-5 w-5" /> Fetch Torrents
+                  </>
+                )}
               </Button>
               <Button
                 variant="ghost"

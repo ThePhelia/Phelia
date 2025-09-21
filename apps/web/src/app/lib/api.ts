@@ -1,92 +1,179 @@
-// Basic API helper for your Vite/React app.
-// Uses axios with a typed wrapper and clean braces/semicolons to avoid TS1005/TS1109.
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  CapabilitiesResponse,
+  DetailResponse,
+  DiscoverItem,
+  DiscoverParams,
+  DownloadItem,
+  LibraryItemSummary,
+  ListMutationInput,
+  PaginatedResponse,
+  SearchParams,
+} from './types';
 
-import axios, { AxiosInstance } from "axios";
+type QueryRecordValue = string | number | boolean | null | undefined;
+
+interface RequestOptions extends Omit<RequestInit, 'body'> {
+  query?: Record<string, QueryRecordValue>;
+  json?: unknown;
+}
 
 export const API_BASE: string =
-  (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:8000/api/v1";
+  (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
 
-const http: AxiosInstance = axios.create({
-  baseURL: API_BASE,
-  withCredentials: false,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
 
-// ---- Types ----
-export type LoginPayload = { username: string; password: string };
-export type RegisterPayload = { username: string; password: string; email?: string };
+function buildUrl(path: string, query?: Record<string, QueryRecordValue>): string {
+  const normalizedPath = path.replace(/^\//, '');
+  const url = new URL(normalizedPath, API_BASE_WITH_SLASH);
 
-export type SearchResult = {
-  id: string | number;
-  title: string;
-  subtitle?: string;
-  year?: string | number;
-  coverUrl?: string;
-  description?: string;
-};
+  if (query) {
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      url.searchParams.set(key, String(value));
+    });
+  }
 
-export type TrackerProvider = {
-  id: string;
-  name: string;
-  public: boolean;
-};
-
-export type ConnectTrackerPayload = {
-  providerId: string;
-  username?: string;
-  password?: string;
-  apikey?: string;
-};
-
-export type DownloadItem = {
-  id: string | number;
-  name: string;
-  progress: number; // 0..100
-  state: string;
-};
-
-// ---- Helpers ----
-const ok = <T,>(v: T): T => v;
-
-// ---- Auth ----
-export async function login(payload: LoginPayload): Promise<void> {
-  await http.post("/auth/login", payload);
+  return url.toString();
 }
 
-export async function register(payload: RegisterPayload): Promise<void> {
-  await http.post("/auth/register", payload);
+async function http<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { query, json, headers, method, ...rest } = options;
+  const url = buildUrl(path, query);
+  const finalHeaders = new Headers(headers);
+
+  let body: BodyInit | undefined;
+  let finalMethod = method ?? (json ? 'POST' : 'GET');
+
+  if (json !== undefined) {
+    if (!finalHeaders.has('Content-Type')) {
+      finalHeaders.set('Content-Type', 'application/json');
+    }
+    body = JSON.stringify(json);
+  }
+
+  if (!finalHeaders.has('Accept')) {
+    finalHeaders.set('Accept', 'application/json');
+  }
+
+  const response = await fetch(url, {
+    ...rest,
+    method: finalMethod,
+    headers: finalHeaders,
+    body,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const errorData = await response.json();
+      if (errorData && typeof errorData.message === 'string') {
+        message = errorData.message;
+      }
+    } catch {
+      // ignore JSON parse errors and fall back to status text
+      if (response.statusText) {
+        message = response.statusText;
+      }
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    return (await response.json()) as T;
+  }
+
+  return (await response.text()) as unknown as T;
 }
 
-// ---- Search ----
-export async function searchApi(q: string, limit = 40): Promise<SearchResult[]> {
-  const res = await http.get("/search", { params: { q, limit } });
-  return ok(res.data as SearchResult[]);
+type SearchQueryKey = ['search', SearchParams];
+type DiscoverQueryKey = ['discover', string, DiscoverParams | undefined];
+
+function getNextPageParam<T>(lastPage: PaginatedResponse<T>): number | undefined {
+  if (typeof lastPage.total_pages !== 'number' || typeof lastPage.page !== 'number') {
+    return undefined;
+  }
+  return lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined;
 }
 
-// ---- Trackers ----
-export async function getTrackers(): Promise<TrackerProvider[]> {
-  const res = await http.get("/trackers/providers");
-  return ok(res.data as TrackerProvider[]);
+export function useSearch(params: SearchParams) {
+  const enabled = Boolean(params.q && params.q.trim().length > 1);
+
+  return useInfiniteQuery({
+    queryKey: ['search', params],
+    queryFn: ({ pageParam = 1, queryKey }) => {
+      const [, keyParams] = queryKey as SearchQueryKey;
+      return http<PaginatedResponse<DiscoverItem>>('search', {
+        query: { ...keyParams, page: pageParam },
+      });
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => getNextPageParam(lastPage),
+    enabled,
+    staleTime: 60_000,
+  });
 }
 
-export async function connectTracker(
-  payload: ConnectTrackerPayload
-): Promise<{ ok: true }> {
-  await http.post("/trackers/connect", payload);
-  return { ok: true };
+export function useDiscover(kind: string, params?: DiscoverParams) {
+  return useInfiniteQuery({
+    queryKey: ['discover', kind, params],
+    queryFn: ({ pageParam = 1, queryKey }) => {
+      const [, keyKind, keyParams] = queryKey as DiscoverQueryKey;
+      return http<PaginatedResponse<DiscoverItem>>(`discover/${keyKind}`, {
+        query: { ...(keyParams ?? {}), page: pageParam },
+      });
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => getNextPageParam(lastPage),
+    staleTime: 5 * 60_000,
+  });
 }
 
-// ---- Downloads ----
-export async function listDownloads(): Promise<DownloadItem[]> {
-  const res = await http.get("/downloads");
-  return ok(res.data as DownloadItem[]);
+export function useDetails(kind: string, id: string) {
+  return useQuery<DetailResponse, Error>({
+    queryKey: ['details', kind, id],
+    queryFn: () => http<DetailResponse>(`details/${kind}/${id}`),
+    staleTime: 5 * 60_000,
+  });
 }
 
-// ---- Utility: jackett ping (optional) ----
-export async function jackettIndexers(): Promise<any> {
-  const res = await http.get("/trackers");
-  return res.data;
+export function useDownloads(enabled = true) {
+  return useQuery<DownloadItem[], Error>({
+    queryKey: ['downloads'],
+    queryFn: () => http<DownloadItem[]>('downloads'),
+    enabled,
+    refetchInterval: enabled ? 5_000 : false,
+  });
 }
 
+export function useLibrary() {
+  return useQuery<LibraryItemSummary, Error>({
+    queryKey: ['library'],
+    queryFn: () => http<LibraryItemSummary>('library'),
+    staleTime: 60_000,
+  });
+}
+
+export function useCapabilities() {
+  return useQuery<CapabilitiesResponse, Error>({
+    queryKey: ['capabilities'],
+    queryFn: () => http<CapabilitiesResponse>('capabilities'),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useMutateList() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ success: boolean }, Error, ListMutationInput>({
+    mutationFn: (input) => http<{ success: boolean }>('library/list', { method: 'POST', json: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['library'] });
+    },
+  });
+}

@@ -113,3 +113,25 @@ class LibraryPlaylist(Base):
         onupdate=datetime.utcnow,
         server_default=func.now(),
     )
+
+
+class ProviderCredential(Base):
+    __tablename__ = "provider_credentials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("provider", name="uq_provider_credentials_provider"),
+    )

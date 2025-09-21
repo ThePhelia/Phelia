@@ -6,6 +6,7 @@ import DetailContent from "@/app/components/Detail/DetailContent";
 import { useDetails } from "@/app/lib/api";
 import type { MediaKind } from "@/app/lib/types";
 
+
 interface DetailDialogProps {
   kind: MediaKind;
   id: string;

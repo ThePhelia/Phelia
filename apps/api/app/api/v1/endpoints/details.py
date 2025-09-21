@@ -46,6 +46,10 @@ def _safe_float(value: Any) -> float | None:
     return None
 
 
+def _ensure_dict(value: Any) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
 def _parse_genres(extra: dict | None) -> list[str] | None:
     if not extra:
         return None
@@ -133,9 +137,10 @@ def _extract_similar(payload: dict | None, kind: str) -> list[DiscoverItem] | No
 
 
 def _extract_tracks(discogs: dict | None) -> list[dict[str, Any]] | None:
-    if not discogs:
+    discogs_data = _ensure_dict(discogs)
+    if not discogs_data:
         return None
-    tracklist = discogs.get("extra", {}).get("tracklist")
+    tracklist = _ensure_dict(discogs_data.get("extra")).get("tracklist")
     if not isinstance(tracklist, list):
         return None
     tracks = []
@@ -158,19 +163,20 @@ def _extract_tracks(discogs: dict | None) -> list[dict[str, Any]] | None:
 
 
 def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None) -> DetailResponse:
-    parsed = card.parsed or {}
-    tmdb_data = card.details.get("tmdb") if isinstance(card.details, dict) else {}
-    omdb_data = card.details.get("omdb") if isinstance(card.details, dict) else {}
-    discogs_data = card.details.get("discogs") if isinstance(card.details, dict) else {}
-    lastfm_data = card.details.get("lastfm") if isinstance(card.details, dict) else {}
-    musicbrainz_data = card.details.get("musicbrainz") if isinstance(card.details, dict) else {}
-    tmdb_extra = (
-        tmdb_data.get("extra", {}) if isinstance(tmdb_data, dict) else {}
-    ).get("tmdb")
+    parsed = card.parsed if isinstance(card.parsed, dict) else {}
+    snapshot_data = snapshot if isinstance(snapshot, dict) else {}
+    details = card.details if isinstance(card.details, dict) else {}
 
-    cast_items, crew_items = _collect_people(
-        tmdb_extra.get("credits") if isinstance(tmdb_extra, dict) else None
-    )
+    tmdb_data = _ensure_dict(details.get("tmdb"))
+    omdb_data = _ensure_dict(details.get("omdb"))
+    discogs_data = _ensure_dict(details.get("discogs"))
+    lastfm_data = _ensure_dict(details.get("lastfm"))
+    musicbrainz_data = _ensure_dict(details.get("musicbrainz"))
+
+    tmdb_extra_container = _ensure_dict(tmdb_data.get("extra"))
+    tmdb_extra = _ensure_dict(tmdb_extra_container.get("tmdb"))
+
+    cast_items, crew_items = _collect_people(_ensure_dict(tmdb_extra.get("credits")))
 
     detail = DetailResponse(
         id=item_id,
@@ -178,17 +184,17 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
         title=tmdb_data.get("title") or card.title,
         year=tmdb_data.get("year")
         or parsed.get("year")
-        or (snapshot or {}).get("year"),
-        tagline=(tmdb_extra or {}).get("tagline"),
+        or snapshot_data.get("year"),
+        tagline=tmdb_extra.get("tagline"),
         overview=tmdb_data.get("overview")
         or lastfm_data.get("summary")
-        or (snapshot or {}).get("overview"),
+        or snapshot_data.get("overview"),
         poster=tmdb_data.get("poster")
         or discogs_data.get("cover_image")
-        or (snapshot or {}).get("poster"),
-        backdrop=tmdb_data.get("backdrop") or (snapshot or {}).get("backdrop"),
+        or snapshot_data.get("poster"),
+        backdrop=tmdb_data.get("backdrop") or snapshot_data.get("backdrop"),
         rating=_safe_float(omdb_data.get("imdbRating")),
-        genres=_parse_genres(tmdb_extra) or (snapshot or {}).get("genres"),
+        genres=_parse_genres(tmdb_extra) or snapshot_data.get("genres"),
         cast=[
             {"name": item["name"], "role": item.get("role"), "photo": item.get("photo")}
             for item in cast_items
@@ -206,11 +212,9 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
             for track in (_extract_tracks(discogs_data) or [])
         ]
         or None,
-        similar=_extract_similar(
-            (tmdb_extra or {}).get("similar"), card.media_type
-        ),
+        similar=_extract_similar(tmdb_extra.get("similar"), card.media_type),
         recommended=_extract_similar(
-            (tmdb_extra or {}).get("recommendations"), card.media_type
+            tmdb_extra.get("recommendations"), card.media_type
         ),
     )
 
@@ -235,8 +239,8 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
                 detail.seasons = parsed_seasons
 
     availability = {}
-    jackett = card.details.get("jackett") if isinstance(card.details, dict) else None
-    if isinstance(jackett, dict):
+    jackett = _ensure_dict(details.get("jackett"))
+    if jackett:
         torrents = []
         if any(jackett.get(field) for field in ("magnet", "seeders", "tracker")):
             torrents.append(
@@ -252,7 +256,8 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
         detail.availability = availability
 
     links = []
-    imdb_id = card.ids.get("imdb_id") if isinstance(card.ids, dict) else None
+    ids = card.ids if isinstance(card.ids, dict) else {}
+    imdb_id = ids.get("imdb_id")
     if imdb_id:
         links.append({"label": "IMDb", "url": f"https://www.imdb.com/title/{imdb_id}"})
     if links:

@@ -86,6 +86,61 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
 
 
 @pytest.mark.anyio
+async def test_details_returns_when_tmdb_missing(monkeypatch, db_session):
+    app = FastAPI()
+    app.include_router(details_router.router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    mutation = ListMutationInput(
+        action="add",
+        list="watchlist",
+        item=ListMutationItem(
+            kind="movie", id="blade-runner-2049", title="Blade Runner 2049", year=2017
+        ),
+    )
+    library_service.apply_mutation(db_session, mutation)
+
+    card = EnrichedCard(
+        media_type="movie",
+        confidence=0.9,
+        title="Blade Runner 2049",
+        parsed={"year": 2017},
+        ids={},
+        details={
+            "lastfm": {"summary": "Officer K discovers a secret."},
+            "discogs": {
+                "cover_image": "http://example/discogs.jpg",
+                "extra": {
+                    "tracklist": [
+                        {"title": "2049", "duration": "03:36"},
+                        {"title": "Sapper's Tree", "duration": "04:53"},
+                    ]
+                },
+            },
+        },
+        providers=[],
+        reasons=[],
+        needs_confirmation=False,
+    )
+
+    monkeypatch.setattr(details_router, "get_metadata_router", lambda: DummyRouter(card))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/details/movie/blade-runner-2049")
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["title"] == "Blade Runner 2049"
+    assert payload["overview"] == "Officer K discovers a secret."
+    assert payload["poster"] == "http://example/discogs.jpg"
+    assert [track["title"] for track in payload.get("tracks", [])] == [
+        "2049",
+        "Sapper's Tree",
+    ]
+
+
+@pytest.mark.anyio
 async def test_details_handles_metadata_failure(monkeypatch, db_session):
     app = FastAPI()
     app.include_router(details_router.router, prefix="/api/v1")

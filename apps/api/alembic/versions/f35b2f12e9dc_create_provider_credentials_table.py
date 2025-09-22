@@ -1,7 +1,7 @@
 """create provider credentials table
 
 Revision ID: f35b2f12e9dc
-Revises: 53c5c7dc5baf
+Revises: e6f4f3021f2b
 Create Date: 2024-11-01
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 revision = "f35b2f12e9dc"
-down_revision = "53c5c7dc5baf"
+down_revision = "e6f4f3021f2b"
 branch_labels = None
 depends_on = None
 

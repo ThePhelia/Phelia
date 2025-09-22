@@ -307,7 +307,7 @@ function SettingsPage() {
                   const payload = trimmed.length > 0 ? trimmed : null;
 
                   try {
-                    await updateProvider.mutateAsync({ provider: provider.provider, key: payload });
+                    await updateProvider.mutateAsync({ provider: provider.provider, api_key: payload });
                     const successMessage =
                       payload === null
                         ? `${meta.label} ${meta.fieldLabel} cleared.`

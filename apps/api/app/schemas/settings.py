@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ProviderCredentialPayload(BaseModel):
     """Input payload when updating a provider API key."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     api_key: str | None = Field(
         default=None,
         description="API key/token to store for the provider.",
+        validation_alias=AliasChoices("api_key", "apiKey"),
     )
 
 

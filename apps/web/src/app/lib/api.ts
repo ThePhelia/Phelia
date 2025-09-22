@@ -253,8 +253,8 @@ export function useUpdateProviderSetting() {
   const queryClient = useQueryClient();
 
   return useMutation<ProviderSettingStatus, Error, ProviderSettingMutationVariables>({
-    mutationFn: ({ provider, key }) => {
-      const payload: ProviderSettingUpdateRequest = { key };
+    mutationFn: ({ provider, api_key }) => {
+      const payload: ProviderSettingUpdateRequest = { api_key };
       return http<ProviderSettingStatus>(`settings/providers/${provider}`, {
         method: 'PUT',
         json: payload,

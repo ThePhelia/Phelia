@@ -67,7 +67,7 @@ async def test_settings_router_updates_credentials(db_session, monkeypatch):
 
         resp = await client.put(
             "/api/v1/settings/providers/tmdb",
-            json={"api_key": "tmdb-secret"},
+            json={"apiKey": "tmdb-secret", "ignored": "value"},
         )
         assert resp.status_code == 200
         body = resp.json()

@@ -32,7 +32,7 @@ const { providerQueryState, capabilitiesState, mutationState, mutateAsync, toast
       mutationState.variables = variables;
       await Promise.resolve();
       mutationState.isPending = false;
-      return { provider: variables.provider, configured: Boolean(variables.key) } as ProviderSettingStatus;
+      return { provider: variables.provider, configured: Boolean(variables.api_key) } as ProviderSettingStatus;
     });
 
     const toastSuccess = vi.fn();
@@ -111,8 +111,11 @@ describe('SettingsPage services tab', () => {
     await user.click(screen.getByRole('button', { name: /save tmdb key/i }));
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith({ provider: 'tmdb', key: 'abcd1234' });
+      expect(mutateAsync).toHaveBeenCalledWith({ provider: 'tmdb', api_key: 'abcd1234' });
     });
+
+    const result = await mutateAsync.mock.results.at(-1)?.value;
+    expect(result).toEqual({ provider: 'tmdb', configured: true });
     expect(toastSuccess).toHaveBeenCalledWith('TMDb API key saved.');
     expect(toastError).not.toHaveBeenCalled();
   });

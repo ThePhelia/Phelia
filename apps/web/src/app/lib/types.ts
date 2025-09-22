@@ -203,9 +203,9 @@ export type ProviderSettingsApiResponse =
 
 export interface ProviderSettingMutationVariables {
   provider: MetadataProviderSlug;
-  key: string | null;
+  api_key: string | null;
 }
 
 export interface ProviderSettingUpdateRequest {
-  key: string | null;
+  api_key: string | null;
 }

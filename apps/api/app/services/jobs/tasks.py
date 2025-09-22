@@ -166,6 +166,9 @@ def enqueue_download(
                 if cand:
                     dl.name = cand.get("name") or dl.name
                     dl.status = cand.get("state") or dl.status
+                    cand_hash = cand.get("hash")
+                    if cand_hash:
+                        dl.hash = cand_hash
                     db.commit()
                     broadcast_download(dl)
             return True
@@ -217,6 +220,9 @@ def poll_status() -> int:
             t = _pick_candidate(stats, d)
             if not t:
                 continue
+            t_hash = t.get("hash")
+            if t_hash:
+                d.hash = t_hash
             d.progress = t.get("progress") or d.progress
             d.dlspeed = t.get("dlspeed") or d.dlspeed
             d.upspeed = t.get("upspeed") or d.upspeed

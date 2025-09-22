@@ -71,7 +71,11 @@ class TMDBClient:
         tmdb_id: int,
         language: str = "en-US",
     ) -> dict[str, Any] | None:
-        params = {"language": language, "append_to_response": "external_ids"}
+        append_sections = ["external_ids", "credits", "recommendations", "similar"]
+        params = {
+            "language": language,
+            "append_to_response": ",".join(append_sections),
+        }
         return await self._get(f"/{media_type}/{tmdb_id}", params)
 
     async def movie_lookup(self, title: str, year: int | None = None) -> dict[str, Any] | None:

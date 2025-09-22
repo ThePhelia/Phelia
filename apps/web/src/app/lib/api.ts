@@ -164,12 +164,16 @@ export interface CreateDownloadInput {
   url?: string;
 }
 
+interface CreateDownloadResponse {
+  id: number;
+}
+
 export function useCreateDownload() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ success: boolean }, Error, CreateDownloadInput>({
+  return useMutation<CreateDownloadResponse, Error, CreateDownloadInput>({
     mutationFn: (input) =>
-      http<{ success: boolean }>('downloads', {
+      http<CreateDownloadResponse>('downloads', {
         method: 'POST',
         json: input,
       }),

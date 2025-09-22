@@ -1,6 +1,6 @@
 import { forwardRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Play, Info, PlusCircle, Download } from 'lucide-react';
+import { Info, PlusCircle, Download } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import type { DiscoverItem } from '@/app/lib/types';
@@ -23,6 +23,15 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
   const [hovered, setHovered] = useState(false);
   const mutation = useMutateList();
   const fetchTorrentSearch = useTorrentSearch((state) => state.fetchForItem);
+
+  const openTorrentSearch = () => {
+    void fetchTorrentSearch({
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      year: item.year,
+    });
+  };
 
   const openDetails = () => {
     navigate(`/details/${item.kind === 'album' ? 'music' : item.kind}/${item.id}`, {
@@ -87,12 +96,21 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
         ) : null}
         <div
           className={cn(
-            'pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity',
+            'absolute inset-0 flex items-center justify-center gap-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 transition-opacity',
             hovered ? 'opacity-100' : 'opacity-0',
           )}
         >
-          <Button variant="accent" size="icon" className="h-12 w-12 rounded-full" aria-label="Play">
-            <Play className="h-5 w-5" />
+          <Button
+            variant="accent"
+            size="icon"
+            className="h-12 w-12 rounded-full"
+            aria-label="Open torrent search"
+            onClick={(event) => {
+              event.stopPropagation();
+              openTorrentSearch();
+            }}
+          >
+            <Download className="h-5 w-5" />
           </Button>
           <Button
             variant="secondary"
@@ -140,12 +158,7 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
               aria-label="Open torrent search"
               onClick={(event) => {
                 event.stopPropagation();
-                void fetchTorrentSearch({
-                  id: item.id,
-                  title: item.title,
-                  kind: item.kind,
-                  year: item.year,
-                });
+                openTorrentSearch();
               }}
             >
               <Download className="mr-2 h-4 w-4" />

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from app.core.config import settings
 from app.routers.downloads import router as downloads_router
 from app.db import models
 from app.db.session import get_db
@@ -147,3 +148,67 @@ async def test_pause_resume_success(monkeypatch, db_session):
     assert resp_resume.json() == {}
     assert resume_mock.await_count == 1
     assert resume_mock.await_args.args == (dl.hash,)
+
+
+@pytest.mark.anyio
+async def test_pause_after_candidate_hash(monkeypatch, db_session):
+    app = FastAPI()
+    app.include_router(downloads_router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+    transport = ASGITransport(app=app)
+
+    candidate = {"hash": "abcd1234", "name": "Test", "state": "downloading"}
+
+    class FakeQB:
+        def login(self):
+            return None
+
+        def add_magnet(self, magnet, save_path=None):
+            return None
+
+        def add_torrent_file(self, content, save_path=None):
+            return None
+
+        def list_torrents(self):
+            return [dict(candidate, save_path=settings.DEFAULT_SAVE_DIR)]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+    monkeypatch.setattr(tasks, "_pick_candidate", lambda stats, dl: candidate)
+    monkeypatch.setattr(tasks, "broadcast_download", lambda dl: None)
+
+    def fake_send_task(name, args):
+        enqueue_download(*args)
+        return SimpleNamespace(failed=lambda: False)
+
+    monkeypatch.setattr(celery_app, "send_task", fake_send_task)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp_create = await ac.post(
+            "/api/v1/downloads",
+            json={"magnet": "magnet:?xt=urn:btih:abcd"},
+        )
+
+    assert resp_create.status_code == 201
+
+    db_session.expire_all()
+    dl = db_session.query(models.Download).first()
+    assert dl.hash == candidate["hash"]
+
+    pause_mock = AsyncMock()
+    login_mock = AsyncMock()
+
+    @asynccontextmanager
+    async def fake_qb():
+        yield SimpleNamespace(login=login_mock, pause_torrent=pause_mock)
+
+    monkeypatch.setattr("app.routers.downloads._qb", lambda: fake_qb())
+
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp_pause = await ac.post(f"/api/v1/downloads/{dl.id}/pause")
+
+    assert resp_pause.status_code == 204
+    assert pause_mock.await_count == 1
+    assert pause_mock.await_args.args == (candidate["hash"],)

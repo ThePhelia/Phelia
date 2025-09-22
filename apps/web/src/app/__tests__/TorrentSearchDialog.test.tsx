@@ -66,7 +66,7 @@ vi.mock("@/app/lib/api", async () => {
 
 describe("TorrentSearchDialog", () => {
   beforeEach(() => {
-    mutateAsync.mockReset().mockResolvedValue({ success: true });
+    mutateAsync.mockReset().mockResolvedValue({ id: 1 });
     resetMock.mockReset();
     setOpenMock.mockReset();
     mockTorrentState.results = [mockResult];

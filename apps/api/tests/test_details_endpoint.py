@@ -57,8 +57,20 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
                             ],
                             "crew": [{"name": "Denis Villeneuve", "job": "Director"}],
                         },
-                        "similar": {"results": [{"id": 102, "title": "Arrival", "poster_path": "/arrival.jpg"}]},
-                        "recommendations": {"results": []},
+                        "similar": {
+                            "results": [
+                                {"id": 102, "title": "Arrival", "poster_path": "/arrival.jpg"}
+                            ]
+                        },
+                        "recommendations": {
+                            "results": [
+                                {
+                                    "id": 103,
+                                    "title": "Dune",
+                                    "poster_path": "/dune.jpg",
+                                }
+                            ]
+                        },
                         "seasons": [],
                     }
                 },
@@ -83,6 +95,7 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
     assert payload["genres"] == ["Science Fiction"]
     assert payload["cast"][0]["name"] == "Ryan Gosling"
     assert payload["similar"][0]["title"] == "Arrival"
+    assert payload["recommended"][0]["title"] == "Dune"
 
 
 @pytest.mark.anyio

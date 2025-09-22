@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TorrentSearchDialog from "@/app/components/TorrentSearchDialog";
-import type { JackettSearchItem } from "@/app/lib/types";
+import type { SearchResultItem } from "@/app/lib/types";
 import { renderWithProviders } from "@/app/test-utils";
 
 const { mutateAsync, resetMock, setOpenMock } = vi.hoisted(() => ({
@@ -10,12 +10,12 @@ const { mutateAsync, resetMock, setOpenMock } = vi.hoisted(() => ({
   setOpenMock: vi.fn(),
 }));
 
-const mockResult: JackettSearchItem = {
-  media_type: "movie",
-  confidence: 0.87,
+const mockResult: SearchResultItem = {
+  id: "example",
+  kind: "movie",
   title: "Example Torrent",
-  ids: {},
-  details: {
+  meta: {
+    confidence: 0.87,
     jackett: {
       magnet: "magnet:?xt=urn:btih:example",
       url: "https://example.com/torrent",
@@ -26,10 +26,11 @@ const mockResult: JackettSearchItem = {
       leechers: 3,
       tracker: "ExampleTracker",
     },
+    providers: [],
+    reasons: [],
+    needs_confirmation: false,
+    source_kind: "movie",
   },
-  providers: [],
-  reasons: [],
-  needs_confirmation: false,
 };
 
 const mockTorrentState = {

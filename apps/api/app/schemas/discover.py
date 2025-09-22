@@ -37,3 +37,15 @@ class PaginatedResponse(BaseModel, Generic[T]):
     total_pages: int = Field(ge=1)
     items: list[T] = Field(default_factory=list)
 
+
+class SearchResponse(PaginatedResponse[DiscoverItem]):
+    """Paginated response with optional Jackett metadata for search results."""
+
+    message: str | None = None
+    jackett_ui_url: str | None = None
+    error: str | None = None
+
+    model_config = {
+        "extra": "allow",
+    }
+

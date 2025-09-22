@@ -4,7 +4,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { useTorrentSearch } from '@/app/stores/torrent-search';
-import type { JackettSearchItem, JackettTorrentDetails } from '@/app/lib/types';
+import type { JackettTorrentDetails, SearchResultItem } from '@/app/lib/types';
 import { useCreateDownload } from '@/app/lib/api';
 
 function TorrentSearchDialog() {
@@ -131,31 +131,35 @@ function JackettLink({ jackettUiUrl }: { jackettUiUrl?: string }) {
   );
 }
 
-function ResultsList({ items }: { items: JackettSearchItem[] }) {
+function ResultsList({ items }: { items: SearchResultItem[] }) {
   return (
     <ScrollArea className="max-h-[60vh] pr-2">
       <div className="space-y-4">
         {items.map((item, index) => (
-          <TorrentResultCard key={`${item.title}-${index}`} item={item} />
+          <TorrentResultCard key={`${item.id}-${index}`} item={item} />
         ))}
       </div>
     </ScrollArea>
   );
 }
 
-function TorrentResultCard({ item }: { item: JackettSearchItem }) {
-  const details = (item.details?.jackett ?? {}) as JackettTorrentDetails;
+function TorrentResultCard({ item }: { item: SearchResultItem }) {
+  const meta = item.meta ?? {};
+  const details = (meta.jackett ?? {}) as JackettTorrentDetails;
   const magnetLink = typeof details.magnet === 'string' && details.magnet.length > 0 ? details.magnet : undefined;
   const downloadUrl = typeof details.url === 'string' && details.url.length > 0 ? details.url : undefined;
   const indexerName = getIndexerName(details.indexer);
   const category = formatCategory(details.category);
-  const confidence = Math.round(item.confidence * 100);
+  const confidence =
+    typeof meta.confidence === 'number' ? Math.round(Math.max(0, Math.min(meta.confidence, 1)) * 100) : undefined;
   const sizeLabel = formatSize(details.size);
-  const reasons = item.reasons?.length ? item.reasons : [];
+  const reasons = Array.isArray(meta.reasons) ? meta.reasons : [];
   const seeders = isNumber(details.seeders) ? details.seeders : undefined;
   const leechers = isNumber(details.leechers) ? details.leechers : undefined;
   const tracker = typeof details.tracker === 'string' ? details.tracker : undefined;
-  const providers = Array.isArray(item.providers) ? item.providers.filter((provider) => provider.used) : [];
+  const providers = Array.isArray(meta.providers) ? meta.providers.filter((provider) => provider.used) : [];
+  const needsConfirmation = meta.needs_confirmation === true;
+  const sourceKind = typeof meta.source_kind === 'string' ? meta.source_kind : item.kind;
 
   const { mutateAsync, isPending, error, reset } = useCreateDownload();
   const hasDownloadSource = Boolean(magnetLink || downloadUrl);
@@ -177,18 +181,18 @@ function TorrentResultCard({ item }: { item: JackettSearchItem }) {
   return (
     <div className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="uppercase tracking-wide text-foreground/80">
-              {item.media_type}
+      <div>
+        <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline" className="uppercase tracking-wide text-foreground/80">
+            {sourceKind}
+          </Badge>
+          {typeof confidence === 'number' ? <Badge variant="accent">{confidence}% match</Badge> : null}
+          {needsConfirmation ? (
+            <Badge variant="outline" className="border-orange-400 text-orange-300">
+              Needs confirmation
             </Badge>
-            <Badge variant="accent">{confidence}% match</Badge>
-            {item.needs_confirmation ? (
-              <Badge variant="outline" className="border-orange-400 text-orange-300">
-                Needs confirmation
-              </Badge>
-            ) : null}
+          ) : null}
             {indexerName ? (
               <Badge variant="outline" className="text-foreground/70">
                 {indexerName}

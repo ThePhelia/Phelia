@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { fetchJackettSearch } from '@/app/lib/api';
-import type { JackettSearchItem, MediaKind } from '@/app/lib/types';
+import type { MediaKind, SearchResultItem } from '@/app/lib/types';
 
 interface TorrentSearchItemContext {
   id?: string;
@@ -12,7 +12,7 @@ interface TorrentSearchItemContext {
 interface TorrentSearchState {
   open: boolean;
   isLoading: boolean;
-  results: JackettSearchItem[];
+  results: SearchResultItem[];
   message?: string;
   jackettUiUrl?: string;
   error?: string;

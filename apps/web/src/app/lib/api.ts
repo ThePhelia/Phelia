@@ -8,7 +8,12 @@ import type {
   JackettSearchResponse,
   LibraryItemSummary,
   ListMutationInput,
+  MetadataProviderSlug,
   PaginatedResponse,
+  ProviderSettingMutationVariables,
+  ProviderSettingStatus,
+  ProviderSettingsApiResponse,
+  ProviderSettingUpdateRequest,
   SearchParams,
 } from './types';
 
@@ -208,6 +213,55 @@ export function useCapabilities() {
       }
 
       return capabilities;
+    },
+  });
+}
+
+function normalizeProviderSettings(response: ProviderSettingsApiResponse): ProviderSettingStatus[] {
+  const payload = 'providers' in response ? response.providers : response;
+
+  if (Array.isArray(payload)) {
+    return payload.map((item) => ({
+      provider: item.provider,
+      configured: Boolean(item.configured),
+      preview: item.preview ?? undefined,
+    }));
+  }
+
+  return Object.entries(payload).map(([provider, value]) => {
+    const entry = value as ProviderSettingStatus;
+    return {
+      provider: (entry.provider ?? provider) as MetadataProviderSlug,
+      configured: Boolean(entry.configured),
+      preview: entry.preview ?? undefined,
+    };
+  });
+}
+
+export function useProviderSettings() {
+  return useQuery<ProviderSettingStatus[], Error>({
+    queryKey: ['settings', 'providers'],
+    queryFn: async () => {
+      const response = await http<ProviderSettingsApiResponse>('settings/providers');
+      return normalizeProviderSettings(response);
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateProviderSetting() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ProviderSettingStatus, Error, ProviderSettingMutationVariables>({
+    mutationFn: ({ provider, key }) => {
+      const payload: ProviderSettingUpdateRequest = { key };
+      return http<ProviderSettingStatus>(`settings/providers/${provider}`, {
+        method: 'PUT',
+        json: payload,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'providers'] });
     },
   });
 }

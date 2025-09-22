@@ -74,28 +74,31 @@ export interface JackettTorrentDetails {
   title?: string | null;
 }
 
-export interface JackettSearchItem {
-  media_type: 'music' | 'movie' | 'tv' | 'other';
-  confidence: number;
-  title: string;
+export interface SearchResultMeta {
+  jackett?: JackettTorrentDetails;
+  confidence?: number;
+  needs_confirmation?: boolean;
+  reasons?: string[];
+  providers?: EnrichedProvider[];
+  ids?: Record<string, unknown>;
   parsed?: Record<string, unknown> | null;
-  ids: Record<string, unknown>;
-  details: Record<string, unknown> & { jackett?: JackettTorrentDetails };
-  providers: EnrichedProvider[];
-  reasons: string[];
-  needs_confirmation: boolean;
+  source_title?: string;
+  source_kind?: 'music' | 'movie' | 'tv' | 'other';
+  [key: string]: unknown;
 }
 
-export interface JackettSearchResponseMeta {
+export interface SearchResultItem extends DiscoverItem {
+  meta?: SearchResultMeta;
+}
+
+export interface SearchResponseMeta {
   message?: string;
   jackett_ui_url?: string;
   error?: string;
   [key: string]: unknown;
 }
 
-export interface JackettSearchResponse extends JackettSearchResponseMeta {
-  items: JackettSearchItem[];
-}
+export interface SearchResponse extends PaginatedResponse<SearchResultItem>, SearchResponseMeta {}
 
 export interface ExternalLink {
   label: string;

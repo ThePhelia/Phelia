@@ -5,7 +5,6 @@ import type {
   DiscoverItem,
   DiscoverParams,
   DownloadItem,
-  JackettSearchResponse,
   LibraryItemSummary,
   ListMutationInput,
   MetadataProviderSlug,
@@ -15,6 +14,7 @@ import type {
   ProviderSettingsApiResponse,
   ProviderSettingUpdateRequest,
   SearchParams,
+  SearchResponse,
 } from './types';
 
 type QueryRecordValue = string | number | boolean | null | undefined;
@@ -116,7 +116,7 @@ export function useSearch(params: SearchParams) {
     queryKey: ['search', params],
     queryFn: ({ pageParam = 1, queryKey }) => {
       const [, keyParams] = queryKey as SearchQueryKey;
-      return http<PaginatedResponse<DiscoverItem>>('search', {
+      return http<SearchResponse>('search', {
         query: { ...keyParams, page: pageParam },
       });
     },
@@ -268,7 +268,7 @@ export function useUpdateProviderSetting() {
 
 export function fetchJackettSearch(query: string, options?: { limit?: number }) {
   const limit = options?.limit;
-  return http<JackettSearchResponse>('search', {
+  return http<SearchResponse>('search', {
     query: {
       q: query,
       ...(typeof limit === 'number' ? { limit } : {}),

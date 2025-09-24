@@ -57,6 +57,26 @@ class TMDBClient:
         year: int | None = None,
         language: str = "en-US",
     ) -> dict[str, Any] | None:
+        results = await self._search_many(
+            media_type,
+            title,
+            year=year,
+            language=language,
+            limit=1,
+        )
+        if not results:
+            return None
+        return results[0]
+
+    async def _search_many(
+        self,
+        media_type: Literal["movie", "tv"],
+        title: str,
+        *,
+        year: int | None = None,
+        language: str = "en-US",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "query": title,
             "include_adult": False,
@@ -65,13 +85,48 @@ class TMDBClient:
         }
         if year is not None:
             params["year" if media_type == "movie" else "first_air_date_year"] = year
+
         data = await self._get(f"/search/{media_type}", params)
         if not data:
-            return None
+            return []
         results = data.get("results") or []
-        if not results:
-            return None
-        return results[0]
+        if not isinstance(results, list):
+            return []
+        if limit < 1:
+            return []
+        return results[:limit]
+
+    async def search_movies(
+        self,
+        title: str,
+        *,
+        language: str = "en-US",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return up to ``limit`` movie search results for ``title``."""
+
+        return await self._search_many(
+            "movie",
+            title,
+            language=language,
+            limit=limit,
+        )
+
+    async def search_tv(
+        self,
+        title: str,
+        *,
+        language: str = "en-US",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return up to ``limit`` TV search results for ``title``."""
+
+        return await self._search_many(
+            "tv",
+            title,
+            language=language,
+            limit=limit,
+        )
 
     async def _details(
         self,
@@ -85,6 +140,20 @@ class TMDBClient:
             "append_to_response": ",".join(append_sections),
         }
         return await self._get(f"/{media_type}/{tmdb_id}", params)
+
+    async def movie_details(
+        self, tmdb_id: int, language: str = "en-US"
+    ) -> dict[str, Any] | None:
+        """Return raw TMDb payload for ``tmdb_id``."""
+
+        return await self._details("movie", tmdb_id, language=language)
+
+    async def tv_details(
+        self, tmdb_id: int, language: str = "en-US"
+    ) -> dict[str, Any] | None:
+        """Return raw TMDb payload for ``tmdb_id``."""
+
+        return await self._details("tv", tmdb_id, language=language)
 
     async def movie_lookup(self, title: str, year: int | None = None) -> dict[str, Any] | None:
         """Return canonical movie details for ``title`` from TMDb."""

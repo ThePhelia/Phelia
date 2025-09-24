@@ -35,7 +35,7 @@ def _pick_url(entry: dict) -> str | None:
     return None
 
 class TorznabClient:
-    def _build_url(self, base_url: str, q: str) -> str:
+    def _build_url(self, base_url: str, q: str, categories: list[int] | None = None) -> str:
         cleaned = base_url.rstrip("/")
         fragment = ""
         if "#" in cleaned:
@@ -54,6 +54,10 @@ class TorznabClient:
 
         params.append(("t", "search"))
         params.append(("q", q))
+        if categories:
+            cat_value = ",".join(str(cat) for cat in categories if isinstance(cat, int))
+            if cat_value:
+                params.append(("cat", cat_value))
 
         qs = urllib.parse.urlencode(params)
         url = f"{base}?{qs}"
@@ -61,8 +65,8 @@ class TorznabClient:
             url = f"{url}#{fragment}"
         return url
 
-    def search(self, base_url: str, query: str) -> list[dict]:
-        url = self._build_url(base_url, query)
+    def search(self, base_url: str, query: str, categories: list[int] | None = None) -> list[dict]:
+        url = self._build_url(base_url, query, categories=categories)
         feed = feedparser.parse(url)
         items: list[dict] = []
         host = urllib.parse.urlparse(base_url).netloc

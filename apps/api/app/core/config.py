@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     JACKETT_BASE: str = "http://jackett:9117"
     JACKETT_API_KEY: str | None = None
 
+    # Optional category overrides for Jackett queries.
+    JACKETT_MOVIE_CATS: str | None = None
+    JACKETT_TV_CATS: str | None = None
+    JACKETT_MUSIC_CATS: str | None = None
+
     # Public URL used by the web UI when opening the Jackett dashboard.
     PHELIA_PUBLIC_BASE_URL: str | None = None
 

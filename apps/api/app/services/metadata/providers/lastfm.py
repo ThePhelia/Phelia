@@ -79,6 +79,50 @@ class LastFMClient:
             "extra": album_data,
         }
 
+    async def search_albums(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return Last.fm album search results."""
+
+        api_key = self.api_key
+        if not api_key or not query:
+            logger.debug("lastfm: skipping search query=%s api_key=%s", query, bool(api_key))
+            return []
+
+        params = {
+            "method": "album.search",
+            "album": query,
+            "limit": max(1, min(limit, 50)),
+            "api_key": api_key,
+            "format": "json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(self.base_url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning("lastfm http error search=%s status=%s", query, exc.response.status_code)
+            return []
+        except httpx.RequestError as exc:
+            logger.warning("lastfm request error search=%s error=%s", query, exc)
+            return []
+
+        results_container = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results_container, dict):
+            return []
+        matches = results_container.get("albummatches")
+        if isinstance(matches, dict):
+            items = matches.get("album")
+        else:
+            items = None
+        if not isinstance(items, list):
+            return []
+        return items[:limit]
+
     async def get_top_albums(self, page: int = 1, limit: int = 20) -> dict[str, Any] | None:
         """Return the global Last.fm top albums chart."""
 

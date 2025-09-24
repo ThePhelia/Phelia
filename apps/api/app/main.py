@@ -16,6 +16,7 @@ from app.api.v1.endpoints import capabilities as capabilities_endpoints
 from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
+from app.api.v1.endpoints import index as index_endpoints
 from app.services.search.jackett_bootstrap import ensure_jackett_tracker
 from app.services.bt.qbittorrent import health_check as qb_health_check
 from app.services.settings import load_provider_credentials
@@ -37,7 +38,8 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(downloads.router, prefix="/api/v1")
 app.include_router(trackers.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
-app.include_router(meta_endpoints.router, prefix="/api/v1")
+app.include_router(meta_endpoints.public_router, prefix="/api/v1/meta")
+app.include_router(index_endpoints.router, prefix="/api/v1/index")
 app.include_router(capabilities_endpoints.router, prefix="/api/v1")
 app.include_router(library_endpoints.router, prefix="/api/v1")
 app.include_router(details_endpoints.router, prefix="/api/v1")

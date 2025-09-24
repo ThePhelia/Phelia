@@ -6,8 +6,8 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { useDebounce } from '@/app/hooks/useDebounce';
-import { useSearch } from '@/app/lib/api';
-import type { DiscoverItem } from '@/app/lib/types';
+import { useMetaSearch } from '@/app/lib/api';
+import type { MetaSearchItem } from '@/app/types/meta';
 import { cn } from '@/app/utils/cn';
 
 const RECENT_KEY = 'phelia:recent-searches';
@@ -44,8 +44,13 @@ function GlobalSearch() {
   const debounced = useDebounce(query, 350);
   const [open, setOpen] = useState(false);
 
-  const { data, fetchNextPage, hasNextPage, isFetching } = useSearch({ q: debounced, kind });
-  const results = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
+  const { data, isFetching } = useMetaSearch(debounced);
+  const results = useMemo(() => data?.items ?? [], [data]);
+  const filteredResults = useMemo(() => {
+    if (kind === 'all') return results;
+    if (kind === 'music') return results.filter((item) => item.type === 'album');
+    return results.filter((item) => item.type === kind);
+  }, [results, kind]);
 
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
@@ -62,26 +67,13 @@ function GlobalSearch() {
     setHighlight(0);
   }, [kind, debounced]);
 
-  useEffect(() => {
-    if (!open || !hasNextPage || results.length < 5) return;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          void fetchNextPage();
-        }
-      });
-    });
-    const sentinel = document.getElementById('search-sentinel');
-    if (sentinel) observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [open, hasNextPage, fetchNextPage, results.length]);
-
   const visible = open && (debounced.length > 1 || recent.length > 0);
 
-  const handleSubmit = (item?: DiscoverItem) => {
-    const next = item ?? results[highlight];
+  const handleSubmit = (item?: MetaSearchItem) => {
+    const list = filteredResults;
+    const next = item ?? list[highlight];
     if (!next) return;
-    const dest = `/details/${next.kind === 'album' ? 'music' : next.kind}/${next.id}`;
+    const dest = `/details/${next.type === 'album' ? 'music' : next.type}/${next.id}?provider=${next.provider}`;
     navigate(dest, { state: { backgroundLocation: location } });
     const updated = [query, ...recent.filter((value) => value !== query && value.trim())]
       .filter(Boolean)
@@ -173,10 +165,10 @@ function GlobalSearch() {
                     <p className="text-xs text-muted-foreground">No recent searches yet.</p>
                   )}
                 </div>
-              ) : results.length ? (
+              ) : filteredResults.length ? (
                 <ul className="max-h-80 space-y-1 overflow-y-auto pr-2">
-                  {results.map((item, index) => (
-                    <li key={`${item.kind}-${item.id}`}>
+                  {filteredResults.map((item, index) => (
+                    <li key={`${item.type}-${item.id}`}>
                       <button
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
@@ -200,27 +192,22 @@ function GlobalSearch() {
                         <div className="flex-1">
                           <p className="text-sm font-semibold text-foreground">{item.title}</p>
                           <p className="text-xs text-muted-foreground">
-                            {[item.year, item.genres?.[0]].filter(Boolean).join(' • ')}
+                            {[item.subtitle, item.year].filter(Boolean).join(' • ')}
                           </p>
                         </div>
                         <span className="rounded-full bg-foreground/10 px-2 py-1 text-[10px] uppercase text-muted-foreground">
-                          {item.kind}
+                          {item.type}
                         </span>
                       </button>
                     </li>
                   ))}
-                  {hasNextPage ? (
-                    <li id="search-sentinel" className="py-2 text-center text-xs text-muted-foreground">
-                      {isFetching ? 'Loading…' : 'Load more'}
-                    </li>
-                  ) : null}
                 </ul>
               ) : (
                 <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No results found.
                 </div>
               )}
-              {results.length > 0 ? (
+              {filteredResults.length > 0 ? (
                 <div className="flex justify-end pt-2">
                   <Button size="sm" variant="ghost" onMouseDown={(event) => event.preventDefault()} onClick={() => handleSubmit()}>
                     {isFetching ? 'Searching…' : t('common.viewDetails')}

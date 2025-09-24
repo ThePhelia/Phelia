@@ -1,8 +1,11 @@
+import httpx
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, MockTransport, Response
 
 from app.api.v1.endpoints import discover
+from app.api.v1.endpoints import settings as settings_router
+from app.db.session import get_db
 from app.services.metadata.providers.tmdb import TMDB_IMAGE_BASE
 
 
@@ -161,3 +164,63 @@ async def test_discover_albums_happy_path():
     assert data["items"][0]["year"] == 2005
     assert data["items"][0]["meta"]["source"] == "lastfm"
     assert data["items"][0]["meta"]["musicbrainz"]["release_group_id"] == "rg-1"
+
+
+@pytest.mark.anyio
+async def test_discover_uses_tmdb_after_settings_update(db_session, monkeypatch):
+    called_requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> Response:  # pragma: no cover - simple mock handler
+        called_requests.append(request)
+        payload = {
+            "page": 1,
+            "total_pages": 1,
+            "results": [
+                {
+                    "id": 42,
+                    "title": "Runtime Updated",
+                    "overview": "Fresh from TMDb",
+                    "release_date": "2024-08-01",
+                    "poster_path": "/poster.jpg",
+                    "backdrop_path": "/backdrop.jpg",
+                }
+            ],
+        }
+        return Response(200, json=payload)
+
+    mock_transport = MockTransport(handler)
+    original_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        kwargs.setdefault("transport", mock_transport)
+        return original_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client_factory)
+
+    app = FastAPI()
+    app.include_router(settings_router.router, prefix="/api/v1")
+    app.include_router(discover.router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discover/movie")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["meta"]["source"] == "fallback"
+        assert not called_requests  # no outbound calls without key
+
+        resp = await client.put(
+            "/api/v1/settings/providers/tmdb",
+            json={"apiKey": "runtime-key"},
+        )
+        assert resp.status_code == 200
+
+        resp = await client.get("/api/v1/discover/movie")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"][0]["meta"]["source"] == "tmdb"
+        assert data["items"][0]["title"] == "Runtime Updated"
+        assert called_requests
+        request = called_requests[0]
+        assert request.url.params["api_key"] == "runtime-key"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 
 from .classifier import Classifier
 from .router import MetadataRouter
@@ -22,11 +23,11 @@ def get_classifier() -> Classifier:
 
 @lru_cache
 def get_metadata_router() -> MetadataRouter:
-    tmdb_client = TMDBClient(api_key=settings.TMDB_API_KEY)
-    omdb_client = OMDbClient(api_key=settings.OMDB_API_KEY)
+    tmdb_client = TMDBClient(api_key=runtime_settings.key_getter("tmdb"))
+    omdb_client = OMDbClient(api_key=runtime_settings.key_getter("omdb"))
     mb_client = MusicBrainzClient(user_agent=settings.MB_USER_AGENT)
-    discogs_client = DiscogsClient(token=settings.DISCOGS_TOKEN)
-    lastfm_client = LastFMClient(api_key=settings.LASTFM_API_KEY)
+    discogs_client = DiscogsClient(token=runtime_settings.key_getter("discogs"))
+    lastfm_client = LastFMClient(api_key=runtime_settings.key_getter("lastfm"))
     return MetadataRouter(
         tmdb_client=tmdb_client,
         omdb_client=omdb_client,

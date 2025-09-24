@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -14,14 +14,22 @@ logger = logging.getLogger(__name__)
 class DiscogsClient:
     base_url = "https://api.discogs.com"
 
-    def __init__(self, token: str | None, timeout: float = 8.0) -> None:
-        self.token = token
+    def __init__(
+        self, token: str | Callable[[], str | None] | None, timeout: float = 8.0
+    ) -> None:
+        if callable(token):
+            self._token_getter: Callable[[], str | None] = token
+            self._static_token: str | None = None
+        else:
+            self._static_token = token
+            self._token_getter = lambda: self._static_token
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
         headers = {"User-Agent": "Phelia/0.1 (Discogs metadata)"}
-        if self.token:
-            headers["Authorization"] = f"Discogs token={self.token}"
+        token = self.token
+        if token:
+            headers["Authorization"] = f"Discogs token={token}"
         return headers
 
     async def lookup_release(
@@ -77,6 +85,10 @@ class DiscogsClient:
             "formats": [f for f in format_names if f],
             "extra": best,
         }
+
+    @property
+    def token(self) -> str | None:
+        return self._token_getter()
 
 
 __all__ = ["DiscogsClient"]

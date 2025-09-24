@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Request
 
 from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 from app.schemas.ui import CapabilitiesResponse
 from app.services.bt.qbittorrent import QbClient
 
@@ -35,10 +36,10 @@ async def read_capabilities(request: Request) -> CapabilitiesResponse:
     services = {
         "qbittorrent": qb_ok,
         "jackett": bool(settings.JACKETT_API_KEY),
-        "tmdb": bool(settings.TMDB_API_KEY),
-        "omdb": bool(settings.OMDB_API_KEY),
-        "discogs": bool(settings.DISCOGS_TOKEN),
-        "lastfm": bool(settings.LASTFM_API_KEY),
+        "tmdb": runtime_settings.tmdb_enabled,
+        "omdb": runtime_settings.omdb_enabled,
+        "discogs": runtime_settings.discogs_enabled,
+        "lastfm": runtime_settings.lastfm_enabled,
     }
 
     version = getattr(request.app, "version", None) or "unknown"

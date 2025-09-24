@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Optional
+
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.core.runtime_settings import (
+    PROVIDER_ENV_MAP,
+    normalize_provider,
+    runtime_settings,
+)
 from app.db.models import ProviderCredential
 from app.services.metadata import get_metadata_router
 
-SUPPORTED_PROVIDER_SETTINGS: dict[str, str] = {
-    "tmdb": "TMDB_API_KEY",
-    "omdb": "OMDB_API_KEY",
-    "discogs": "DISCOGS_TOKEN",
-    "lastfm": "LASTFM_API_KEY",
-}
+logger = logging.getLogger(__name__)
 
 
 class UnsupportedProviderError(ValueError):
@@ -25,22 +27,7 @@ class UnsupportedProviderError(ValueError):
 def supported_providers() -> list[str]:
     """Return the list of providers supported by the persistence layer."""
 
-    return list(SUPPORTED_PROVIDER_SETTINGS.keys())
-
-
-def _normalize_provider(provider: str) -> str:
-    return provider.strip().lower()
-
-
-def _apply_to_settings(provider: str, api_key: str | None) -> bool:
-    attr = SUPPORTED_PROVIDER_SETTINGS.get(provider)
-    if not attr:
-        return False
-    current = getattr(settings, attr, None)
-    if current == api_key:
-        return False
-    setattr(settings, attr, api_key)
-    return True
+    return list(PROVIDER_ENV_MAP.keys())
 
 
 def _clear_metadata_cache() -> None:
@@ -49,8 +36,8 @@ def _clear_metadata_cache() -> None:
         cache_clear()
 
 
-def load_provider_credentials(db: Session) -> dict[str, str | None]:
-    """Load persisted credentials into the running settings instance."""
+def load_provider_credentials(db: Session) -> dict[str, str]:
+    """Load persisted credentials into the runtime settings instance."""
 
     try:
         rows = db.execute(select(ProviderCredential)).scalars().all()
@@ -58,56 +45,68 @@ def load_provider_credentials(db: Session) -> dict[str, str | None]:
         db.rollback()
         return {}
 
-    applied: dict[str, str | None] = {}
-    mutated = False
+    applied: dict[str, str] = {}
     for row in rows:
-        provider = _normalize_provider(row.provider)
-        if provider not in SUPPORTED_PROVIDER_SETTINGS:
+        provider = normalize_provider(row.provider_slug)
+        if provider not in PROVIDER_ENV_MAP:
             continue
         applied[provider] = row.api_key
-        mutated |= _apply_to_settings(provider, row.api_key)
 
+    mutated = runtime_settings.update_many(applied)
     if mutated:
         _clear_metadata_cache()
 
     return applied
 
 
-def list_provider_credentials(db: Session) -> dict[str, ProviderCredential]:
-    """Return provider credential rows keyed by provider name."""
+def list_provider_credentials(db: Session) -> dict[str, str]:
+    """Return persisted API keys keyed by provider slug."""
 
     try:
         rows = db.execute(select(ProviderCredential)).scalars().all()
     except (OperationalError, ProgrammingError):
         db.rollback()
         return {}
-    return {_normalize_provider(row.provider): row for row in rows}
+    return {normalize_provider(row.provider_slug): row.api_key for row in rows}
 
 
 def upsert_provider_credential(
-    db: Session, provider: str, api_key: str | None
-) -> ProviderCredential:
-    """Insert or update the credential for ``provider`` and sync settings."""
+    db: Session, provider: str, api_key: Optional[str]
+) -> Optional[str]:
+    """Insert, update or clear the credential for ``provider`` and sync runtime state."""
 
-    normalized = _normalize_provider(provider)
-    if normalized not in SUPPORTED_PROVIDER_SETTINGS:
+    normalized = normalize_provider(provider)
+    if normalized not in PROVIDER_ENV_MAP:
         raise UnsupportedProviderError(provider)
 
-    stmt = select(ProviderCredential).where(ProviderCredential.provider == normalized)
+    stmt = select(ProviderCredential).where(
+        ProviderCredential.provider_slug == normalized
+    )
     existing = db.execute(stmt).scalar_one_or_none()
 
+    if not api_key:
+        if existing is not None:
+            db.delete(existing)
+            db.flush()
+        changed = runtime_settings.set(normalized, None)
+        if changed:
+            _clear_metadata_cache()
+        logger.info("provider %s API key cleared", normalized)
+        return runtime_settings.get(normalized)
+
     if existing is None:
-        existing = ProviderCredential(provider=normalized, api_key=api_key)
-        db.add(existing)
+        db.add(ProviderCredential(provider_slug=normalized, api_key=api_key))
     else:
         existing.api_key = api_key
 
     db.flush()
 
-    _apply_to_settings(normalized, api_key)
-    _clear_metadata_cache()
+    changed = runtime_settings.set(normalized, api_key)
+    if changed:
+        _clear_metadata_cache()
+    logger.info("provider %s API key updated", normalized)
 
-    return existing
+    return runtime_settings.get(normalized)
 
 
 def mask_api_key(api_key: str | None) -> str | None:

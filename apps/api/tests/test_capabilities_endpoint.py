@@ -1,8 +1,11 @@
 import pytest
 from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.endpoints import capabilities as capabilities_router
+from app.core.runtime_settings import runtime_settings
 
 
 class DummyQbClient:
@@ -23,11 +26,11 @@ class DummyQbClient:
 async def test_capabilities_reports_service_status(monkeypatch):
     monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient())
     monkeypatch.setattr(capabilities_router.settings, "JACKETT_API_KEY", "secret")
-    monkeypatch.setattr(capabilities_router.settings, "TMDB_API_KEY", "tmdb")
-    monkeypatch.setattr(capabilities_router.settings, "OMDB_API_KEY", "omdb")
-    monkeypatch.setattr(capabilities_router.settings, "DISCOGS_TOKEN", "discogs")
-    monkeypatch.setattr(capabilities_router.settings, "LASTFM_API_KEY", "lastfm")
     monkeypatch.setattr(capabilities_router.settings, "PHELIA_PUBLIC_BASE_URL", "http://public")
+    runtime_settings.set("tmdb", "tmdb")
+    runtime_settings.set("omdb", "omdb")
+    runtime_settings.set("discogs", "discogs")
+    runtime_settings.set("lastfm", "lastfm")
 
     app = FastAPI()
     app.include_router(capabilities_router.router, prefix="/api/v1")

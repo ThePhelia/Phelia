@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, Tuple
+from typing import Any, Callable, Literal, Tuple
 
 import httpx
 
@@ -18,18 +18,26 @@ class TMDBClient:
 
     base_url = "https://api.themoviedb.org/3"
 
-    def __init__(self, api_key: str | None, timeout: float = 8.0) -> None:
-        self.api_key = api_key
+    def __init__(
+        self, api_key: str | Callable[[], str | None] | None, timeout: float = 8.0
+    ) -> None:
+        if callable(api_key):
+            self._api_key_getter: Callable[[], str | None] = api_key
+            self._static_api_key: str | None = None
+        else:
+            self._static_api_key = api_key
+            self._api_key_getter = lambda: self._static_api_key
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
         return {"Accept": "application/json"}
 
     async def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any] | None:
-        if not self.api_key:
+        api_key = self.api_key
+        if not api_key:
             logger.debug("tmdb: missing API key, skipping request to %s", path)
             return None
-        query = {"api_key": self.api_key, **params}
+        query = {"api_key": api_key, **params}
         url = f"{self.base_url}{path}"
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -162,6 +170,10 @@ class TMDBClient:
             page = 1
         path, params = self._discovery_request(media_type, sort, page, language)
         return await self._get(path, params)
+
+    @property
+    def api_key(self) -> str | None:
+        return self._api_key_getter()
 
     def _discovery_request(
         self,

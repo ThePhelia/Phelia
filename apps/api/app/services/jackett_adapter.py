@@ -298,3 +298,60 @@ class JackettAdapter:
             needs_confirmation=True,
         )
 
+    def _normalize_basic_result(self, item: dict[str, Any]) -> dict[str, Any]:
+        def _as_int(value: Any) -> int | None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        def _as_str(value: Any) -> str | None:
+            if value is None:
+                return None
+            if isinstance(value, str):
+                trimmed = value.strip()
+                return trimmed or None
+            return str(value)
+
+        title = _as_str(item.get("title")) or ""
+        size_raw = item.get("size")
+        size = None
+        if size_raw is not None:
+            size = str(size_raw)
+        tracker_raw = item.get("tracker") or item.get("indexer")
+        if isinstance(tracker_raw, dict):
+            tracker = _as_str(tracker_raw.get("name") or tracker_raw.get("id"))
+        else:
+            tracker = _as_str(tracker_raw)
+        link = _as_str(item.get("url"))
+        return {
+            "title": title,
+            "size": size,
+            "seeders": _as_int(item.get("seeders")),
+            "leechers": _as_int(item.get("leechers")),
+            "tracker": tracker,
+            "magnet": _as_str(item.get("magnet")),
+            "link": link,
+        }
+
+    async def search(self, query: str, categories: list[int] | None = None) -> list[dict[str, Any]]:
+        """Run a lightweight Jackett query returning normalised rows."""
+
+        torznab_url = f"{self.base}/api/v2.0/indexers/all/results/torznab/"
+        try:
+            raw_results = await asyncio.to_thread(
+                self._torznab.search,
+                torznab_url,
+                query,
+                categories,
+            )
+        except Exception as exc:
+            logger.warning("jackett basic search failed query=%s error=%s", query, exc)
+            raise
+
+        normalised: list[dict[str, Any]] = []
+        for item in raw_results:
+            if isinstance(item, dict):
+                normalised.append(self._normalize_basic_result(item))
+        return normalised
+

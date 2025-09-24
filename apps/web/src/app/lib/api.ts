@@ -16,6 +16,12 @@ import type {
   SearchParams,
   SearchResponse,
 } from './types';
+import type {
+  JackettSearchResponse,
+  MetaDetail,
+  MetaSearchResponse,
+  StartIndexingPayload as MetaStartIndexingPayload,
+} from '@/app/types/meta';
 
 type QueryRecordValue = string | number | boolean | null | undefined;
 
@@ -124,6 +130,38 @@ export function useSearch(params: SearchParams) {
     getNextPageParam: (lastPage) => getNextPageParam(lastPage),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+export function metaSearch(q: string, limit = 20): Promise<MetaSearchResponse> {
+  return http<MetaSearchResponse>('meta/search', { query: { q, limit } });
+}
+
+export function metaDetail(params: { type: 'movie' | 'tv' | 'album'; id: string; provider: string }) {
+  return http<MetaDetail>('meta/detail', { query: params });
+}
+
+export function startIndexing(payload: MetaStartIndexingPayload) {
+  return http<JackettSearchResponse>('index/start', { json: payload });
+}
+
+export function useMetaSearch(query: string, limit = 20) {
+  const enabled = query.trim().length > 1;
+
+  return useQuery<MetaSearchResponse, Error>({
+    queryKey: ['meta-search', query, limit],
+    queryFn: () => metaSearch(query, limit),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useMetaDetail(params: { type: 'movie' | 'tv' | 'album'; id: string; provider: string }) {
+  return useQuery<MetaDetail, Error>({
+    queryKey: ['meta-detail', params],
+    queryFn: () => metaDetail(params),
+    enabled: Boolean(params.id && params.provider && params.type),
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -32,6 +32,48 @@ class DiscogsClient:
             headers["Authorization"] = f"Discogs token={token}"
         return headers
 
+    async def search_albums(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return Discogs search hits for ``query``."""
+
+        token = self.token
+        if not query or not token:
+            logger.debug("discogs: skipping search query=%s token_present=%s", query, bool(token))
+            return []
+
+        per_page = max(1, min(limit, 25))
+        params = {
+            "q": query,
+            "type": "master",
+            "per_page": per_page,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(
+                    f"{self.base_url}/database/search",
+                    params=params,
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning("discogs http error search=%s status=%s", query, exc.response.status_code)
+            return []
+        except httpx.RequestError as exc:
+            logger.warning("discogs request error search=%s error=%s", query, exc)
+            return []
+
+        if not isinstance(data, dict):
+            return []
+        results = data.get("results") or []
+        if not isinstance(results, list):
+            return []
+        return results[:limit]
+
     async def lookup_release(
         self,
         artist: str | None,
@@ -85,6 +127,22 @@ class DiscogsClient:
             "formats": [f for f in format_names if f],
             "extra": best,
         }
+
+    async def fetch_resource(self, resource_url: str) -> dict[str, Any] | None:
+        """Fetch a Discogs resource by URL."""
+
+        if not resource_url:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(resource_url, headers=self._headers())
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning("discogs http error resource=%s status=%s", resource_url, exc.response.status_code)
+        except httpx.RequestError as exc:
+            logger.warning("discogs request error resource=%s error=%s", resource_url, exc)
+        return None
 
     @property
     def token(self) -> str | None:

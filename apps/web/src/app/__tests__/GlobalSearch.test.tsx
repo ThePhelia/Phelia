@@ -1,29 +1,30 @@
 import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import GlobalSearch from "@/app/components/GlobalSearch";
-import type { DiscoverItem, SearchParams } from "@/app/lib/types";
+import type { MetaSearchItem } from "@/app/types/meta";
 import { renderWithProviders } from "@/app/test-utils";
 
 const navigateMock = vi.fn();
-const fetchNextPage = vi.fn();
-const useSearchMock = vi.fn();
+const useMetaSearchMock = vi.fn();
 
-const results: DiscoverItem[] = [
+const results: MetaSearchItem[] = [
   {
     id: "m1",
-    kind: "movie",
+    type: "movie",
+    provider: "tmdb",
     title: "The Matrix",
     year: 1999,
-    genres: ["Sci-Fi"],
     poster: "https://example.com/matrix.jpg",
+    subtitle: "1999",
   },
   {
     id: "a2",
-    kind: "album",
+    type: "album",
+    provider: "discogs",
     title: "Discovery",
     year: 2001,
-    genres: ["Electronic"],
     poster: "https://example.com/discovery.jpg",
+    subtitle: "Daft Punk",
   },
 ];
 
@@ -37,22 +38,19 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("@/app/lib/api", () => ({
-  useSearch: (params: SearchParams) => useSearchMock(params),
+  useMetaSearch: (query: string) => useMetaSearchMock(query),
 }));
 
 describe("GlobalSearch", () => {
   beforeEach(() => {
     localStorage.clear();
     navigateMock.mockReset();
-    fetchNextPage.mockReset();
-    useSearchMock.mockImplementation(({ q }) => {
+    useMetaSearchMock.mockImplementation((q: string) => {
       if (!q || q.length <= 1) {
-        return { data: undefined, fetchNextPage, hasNextPage: false, isFetching: false };
+        return { data: undefined, isFetching: false };
       }
       return {
-        data: { pages: [{ items: results }] },
-        fetchNextPage,
-        hasNextPage: false,
+        data: { items: results },
         isFetching: false,
       };
     });
@@ -80,7 +78,7 @@ describe("GlobalSearch", () => {
 
     await user.keyboard("{ArrowDown}{Enter}");
 
-    expect(navigateMock).toHaveBeenCalledWith("/details/music/a2", {
+    expect(navigateMock).toHaveBeenCalledWith("/details/music/a2?provider=discogs", {
       state: { backgroundLocation: { pathname: "/", key: "test" } },
     });
 
@@ -90,12 +88,7 @@ describe("GlobalSearch", () => {
 
   it("shows recent searches when available", async () => {
     localStorage.setItem("phelia:recent-searches", JSON.stringify(["Alien"]));
-    useSearchMock.mockImplementation(({ q }) => ({
-      data: undefined,
-      fetchNextPage,
-      hasNextPage: false,
-      isFetching: false,
-    }));
+    useMetaSearchMock.mockImplementation(() => ({ data: undefined, isFetching: false }));
 
     const user = userEvent.setup();
     renderWithProviders(<GlobalSearch />);

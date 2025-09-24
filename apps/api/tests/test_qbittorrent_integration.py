@@ -17,6 +17,8 @@ DATA_DIR = Path(__file__).parent / "data"
 @pytest.fixture(scope="session")
 def qbittorrent_container(tmp_path_factory):
     """Start a qBittorrent container for tests."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker not available")
     downloads = tmp_path_factory.mktemp("qb-dl")
     cmd = [
         "docker","run","-d",

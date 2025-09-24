@@ -104,8 +104,8 @@ describe("MediaCardBase", () => {
     const user = userEvent.setup();
     renderWithProviders(<MediaCardBase item={item} />);
 
-    const downloadButton = screen.getByRole("button", { name: /torrent search/i });
-    await user.click(downloadButton);
+    const downloadButtons = screen.getAllByLabelText(/open torrent search/i);
+    await user.click(downloadButtons[0]);
 
     expect(fetchForItemMock).toHaveBeenCalledWith({
       id: item.id,

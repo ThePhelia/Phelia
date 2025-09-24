@@ -1,10 +1,13 @@
 import pytest
 from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.endpoints import capabilities as capabilities_router
+from app.api.v1.endpoints import meta as meta_router
 from app.api.v1.endpoints import settings as settings_router
-from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 from app.db.models import ProviderCredential
 from app.db.session import get_db
 from app.services import settings as settings_service
@@ -24,13 +27,10 @@ class DummyQbClient:
         return []
 
 
-def test_load_provider_credentials_populates_settings(db_session, monkeypatch):
-    db_session.add(ProviderCredential(provider="tmdb", api_key="tmdb-key"))
-    db_session.add(ProviderCredential(provider="omdb", api_key="omdb-key"))
+def test_load_provider_credentials_populates_runtime_settings(db_session, monkeypatch):
+    db_session.add(ProviderCredential(provider_slug="tmdb", api_key="tmdb-key"))
+    db_session.add(ProviderCredential(provider_slug="omdb", api_key="omdb-key"))
     db_session.commit()
-
-    monkeypatch.setattr(settings, "TMDB_API_KEY", None)
-    monkeypatch.setattr(settings, "OMDB_API_KEY", None)
 
     cleared: list[bool] = []
 
@@ -41,8 +41,8 @@ def test_load_provider_credentials_populates_settings(db_session, monkeypatch):
 
     applied = settings_service.load_provider_credentials(db_session)
 
-    assert settings.TMDB_API_KEY == "tmdb-key"
-    assert settings.OMDB_API_KEY == "omdb-key"
+    assert runtime_settings.get("tmdb") == "tmdb-key"
+    assert runtime_settings.get("omdb") == "omdb-key"
     assert applied == {"tmdb": "tmdb-key", "omdb": "omdb-key"}
     assert cleared  # cache clear triggered
 
@@ -50,12 +50,14 @@ def test_load_provider_credentials_populates_settings(db_session, monkeypatch):
 @pytest.mark.anyio
 async def test_settings_router_updates_credentials(db_session, monkeypatch):
     monkeypatch.setattr(settings_service.get_metadata_router, "cache_clear", lambda: None)
-    monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient())
-    monkeypatch.setattr(settings, "TMDB_API_KEY", None)
+    monkeypatch.setattr(
+        capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient()
+    )
 
     app = FastAPI()
     app.include_router(settings_router.router, prefix="/api/v1")
     app.include_router(capabilities_router.router, prefix="/api/v1")
+    app.include_router(meta_router.router, prefix="/api/v1")
     app.dependency_overrides[get_db] = lambda: db_session
 
     transport = ASGITransport(app=app)
@@ -64,6 +66,15 @@ async def test_settings_router_updates_credentials(db_session, monkeypatch):
         assert resp.status_code == 200
         providers = {row["provider"]: row for row in resp.json()["providers"]}
         assert providers["tmdb"]["configured"] is False
+        assert runtime_settings.get("tmdb") is None
+
+        resp = await client.get("/api/v1/meta/providers/status")
+        assert resp.status_code == 200
+        assert resp.json()["tmdb"] is False
+
+        resp = await client.get("/api/v1/capabilities")
+        assert resp.status_code == 200
+        assert resp.json()["services"]["tmdb"] is False
 
         resp = await client.put(
             "/api/v1/settings/providers/tmdb",
@@ -74,16 +85,38 @@ async def test_settings_router_updates_credentials(db_session, monkeypatch):
         assert body["provider"] == "tmdb"
         assert body["configured"] is True
         assert body["masked_api_key"].endswith("cret")
+        assert runtime_settings.get("tmdb") == "tmdb-secret"
+
+        resp = await client.get("/api/v1/meta/providers/status")
+        assert resp.status_code == 200
+        assert resp.json()["tmdb"] is True
 
         resp = await client.get("/api/v1/capabilities")
         assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["services"]["tmdb"] is True
+        assert resp.json()["services"]["tmdb"] is True
 
         resp = await client.get("/api/v1/settings/providers")
         providers = {row["provider"]: row for row in resp.json()["providers"]}
         assert providers["tmdb"]["configured"] is True
         assert providers["tmdb"]["masked_api_key"].endswith("cret")
+
+        resp = await client.put(
+            "/api/v1/settings/providers/tmdb",
+            json={"apiKey": ""},
+        )
+        assert resp.status_code == 200
+        cleared = resp.json()
+        assert cleared["configured"] is False
+        assert cleared["masked_api_key"] is None
+        assert runtime_settings.get("tmdb") is None
+
+        resp = await client.get("/api/v1/meta/providers/status")
+        assert resp.status_code == 200
+        assert resp.json()["tmdb"] is False
+
+        resp = await client.get("/api/v1/capabilities")
+        assert resp.status_code == 200
+        assert resp.json()["services"]["tmdb"] is False
 
 
 @pytest.mark.anyio

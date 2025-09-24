@@ -16,6 +16,7 @@ os.environ.setdefault("ANYIO_BACKEND", "asyncio")
 # Add apps/api to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from app.core.runtime_settings import runtime_settings
 from app.db.session import SessionLocal, Base, engine
 
 @pytest.fixture(autouse=True)
@@ -25,6 +26,13 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_runtime_settings_state():
+    runtime_settings.reset_to_env()
+    yield
+    runtime_settings.reset_to_env()
 
 @pytest.fixture
 def db_session():

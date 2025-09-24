@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.runtime_settings import runtime_settings
 from app.db.session import get_db
 from app.schemas.settings import (
     ProviderCredentialPayload,
@@ -20,10 +21,11 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("/providers", response_model=ProviderCredentialsResponse)
 def list_providers(db: Session = Depends(get_db)) -> ProviderCredentialsResponse:
     stored = settings_service.list_provider_credentials(db)
+    snapshot = runtime_settings.snapshot()
     statuses: list[ProviderCredentialStatus] = []
     for provider in settings_service.supported_providers():
-        record = stored.get(provider)
-        api_key = record.api_key if record else None
+        persisted_key = stored.get(provider)
+        api_key = persisted_key if persisted_key is not None else snapshot.get(provider)
         statuses.append(
             ProviderCredentialStatus(
                 provider=provider,
@@ -44,12 +46,12 @@ def upsert_provider(
     normalized_key = raw_key.strip() if isinstance(raw_key, str) else None
     api_key = normalized_key or None
     try:
-        record = settings_service.upsert_provider_credential(db, provider, api_key)
+        stored_key = settings_service.upsert_provider_credential(db, provider, api_key)
     except UnsupportedProviderError:
         raise HTTPException(status_code=404, detail={"error": "unknown_provider"})
 
     return ProviderCredentialStatus(
-        provider=record.provider,
-        configured=bool(record.api_key),
-        masked_api_key=settings_service.mask_api_key(record.api_key),
+        provider=provider.strip().lower(),
+        configured=bool(stored_key),
+        masked_api_key=settings_service.mask_api_key(stored_key),
     )

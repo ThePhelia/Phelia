@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 from app.schemas.media import Classification
 from app.services.metadata import get_classifier, get_metadata_router
 
@@ -40,10 +41,10 @@ async def lookup(body: LookupRequest) -> dict[str, Any]:
 @router.get("/providers/status")
 def providers_status() -> dict[str, Any]:
     return {
-        "tmdb": bool(settings.TMDB_API_KEY),
-        "omdb": bool(settings.OMDB_API_KEY),
-        "discogs": bool(settings.DISCOGS_TOKEN),
-        "lastfm": bool(settings.LASTFM_API_KEY),
+        "tmdb": runtime_settings.tmdb_enabled,
+        "omdb": runtime_settings.omdb_enabled,
+        "discogs": runtime_settings.discogs_enabled,
+        "lastfm": runtime_settings.lastfm_enabled,
         "musicbrainz": bool(settings.MB_USER_AGENT),
     }
 

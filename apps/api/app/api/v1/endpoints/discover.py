@@ -9,6 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, Query
 
 from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 from app.schemas.discover import DiscoverItem, PaginatedResponse
 from app.services.metadata.providers.lastfm import LastFMClient
 from app.services.metadata.providers.musicbrainz import MusicBrainzClient
@@ -24,7 +25,7 @@ SortOption = Literal["trending", "popular", "new", "az"]
 
 @lru_cache
 def _tmdb_client() -> TMDBClient:
-    return TMDBClient(api_key=settings.TMDB_API_KEY)
+    return TMDBClient(api_key=runtime_settings.key_getter("tmdb"))
 
 
 @lru_cache
@@ -34,7 +35,7 @@ def _musicbrainz_client() -> MusicBrainzClient:
 
 @lru_cache
 def _lastfm_client() -> LastFMClient:
-    return LastFMClient(api_key=settings.LASTFM_API_KEY)
+    return LastFMClient(api_key=runtime_settings.key_getter("lastfm"))
 
 
 def get_tmdb_client() -> TMDBClient:

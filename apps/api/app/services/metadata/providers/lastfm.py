@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -14,17 +14,25 @@ logger = logging.getLogger(__name__)
 class LastFMClient:
     base_url = "https://ws.audioscrobbler.com/2.0/"
 
-    def __init__(self, api_key: str | None, timeout: float = 6.0) -> None:
-        self.api_key = api_key
+    def __init__(
+        self, api_key: str | Callable[[], str | None] | None, timeout: float = 6.0
+    ) -> None:
+        if callable(api_key):
+            self._api_key_getter: Callable[[], str | None] = api_key
+            self._static_api_key: str | None = None
+        else:
+            self._static_api_key = api_key
+            self._api_key_getter = lambda: self._static_api_key
         self.timeout = timeout
 
     async def get_album_info(self, artist: str | None, album: str) -> dict[str, Any] | None:
-        if not self.api_key:
+        api_key = self.api_key
+        if not api_key:
             logger.debug("lastfm: missing API key, skipping lookup")
             return None
         params = {
             "method": "album.getinfo",
-            "api_key": self.api_key,
+            "api_key": api_key,
             "format": "json",
             "album": album,
         }
@@ -74,14 +82,15 @@ class LastFMClient:
     async def get_top_albums(self, page: int = 1, limit: int = 20) -> dict[str, Any] | None:
         """Return the global Last.fm top albums chart."""
 
-        if not self.api_key:
+        api_key = self.api_key
+        if not api_key:
             logger.debug("lastfm: missing API key, skipping chart lookup")
             return None
         if page < 1:
             page = 1
         params = {
             "method": "chart.gettopalbums",
-            "api_key": self.api_key,
+            "api_key": api_key,
             "format": "json",
             "page": page,
             "limit": limit,
@@ -122,6 +131,10 @@ class LastFMClient:
             "total_pages": total_pages,
             "total_items": total_items,
         }
+
+    @property
+    def api_key(self) -> str | None:
+        return self._api_key_getter()
 
 
 __all__ = ["LastFMClient"]

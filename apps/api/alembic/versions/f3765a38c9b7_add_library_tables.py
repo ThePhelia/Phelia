@@ -1,7 +1,7 @@
 """add library tables
 
 Revision ID: f3765a38c9b7
-Revises: f35b2f12e9dc
+Revises: 3a0bff0782bd
 Create Date: 2025-01-16 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision = "f3765a38c9b7"
-down_revision = "f35b2f12e9dc"
+down_revision = "3a0bff0782bd"
 branch_labels = None
 depends_on = None
 

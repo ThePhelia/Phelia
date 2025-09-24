@@ -234,11 +234,22 @@ class MetadataRouter:
             card.parsed = card.parsed or {}
             card.parsed.setdefault("year", year)
 
+        tmdb_lookup = None
+        if self.tmdb:
+            lookup_attr = "movie_lookup" if media_type == "movie" else "tv_lookup"
+            tmdb_lookup = getattr(self.tmdb, lookup_attr, None)
+
         tmdb_data: Optional[dict[str, Any]] = None
-        if self.tmdb and hasattr(self.tmdb, "movie_lookup") and media_type == "movie":
-            tmdb_data = await self.tmdb.movie_lookup(title, year)
-        elif self.tmdb and hasattr(self.tmdb, "tv_lookup") and media_type == "tv":
-            tmdb_data = await self.tmdb.tv_lookup(title, year)
+        tmdb_error: Optional[str] = None
+        if not self.tmdb or not tmdb_lookup:
+            tmdb_error = "not_configured"
+        elif not getattr(self.tmdb, "api_key", None):
+            tmdb_error = "not_configured"
+        else:
+            tmdb_data = await tmdb_lookup(title, year)
+            if not tmdb_data:
+                tmdb_error = "no_result"
+
         if tmdb_data:
             providers["TMDb"].used = True
             card.ids["tmdb_id"] = tmdb_data.get("tmdb_id")
@@ -254,17 +265,22 @@ class MetadataRouter:
             if tmdb_data.get("year"):
                 card.parsed.setdefault("year", tmdb_data["year"])
         else:
-            providers["TMDb"].extra = {"error": "no_result"}
+            providers["TMDb"].extra = {"error": tmdb_error or "no_result"}
             if classification.type in {"movie", "tv"}:
                 card.reasons.append("tmdb_missing")
 
-        if self.omdb and card.ids.get("imdb_id") and hasattr(self.omdb, "fetch_by_imdb"):
-            omdb_data = await self.omdb.fetch_by_imdb(card.ids["imdb_id"])
-            if omdb_data:
-                providers["OMDb"].used = True
-                card.details.setdefault("omdb", {}).update(omdb_data)
+        omdb_lookup = getattr(self.omdb, "fetch_by_imdb", None) if self.omdb else None
+        if omdb_lookup:
+            imdb_id = card.ids.get("imdb_id")
+            if imdb_id:
+                omdb_data = await omdb_lookup(imdb_id)
+                if omdb_data:
+                    providers["OMDb"].used = True
+                    card.details.setdefault("omdb", {}).update(omdb_data)
+                else:
+                    providers["OMDb"].extra = {"error": "no_result"}
             else:
-                providers["OMDb"].extra = {"error": "no_result"}
+                providers["OMDb"].extra = {"error": "no_imdb_id"}
         else:
             providers["OMDb"].extra = {"error": "not_configured"}
 

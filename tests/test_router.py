@@ -1,4 +1,14 @@
 import asyncio
+import os
+
+os.environ.setdefault("APP_SECRET", "test")
+os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+os.environ.setdefault("QB_URL", "http://localhost")
+os.environ.setdefault("QB_USER", "user")
+os.environ.setdefault("QB_PASS", "pass")
 
 import pytest
 
@@ -7,6 +17,8 @@ from app.services.metadata.router import MetadataRouter
 
 
 class DummyTMDB:
+    api_key = "key"
+
     async def movie_lookup(self, title: str, year: int | None = None):
         return {
             "tmdb_id": 101,
@@ -18,6 +30,20 @@ class DummyTMDB:
             "imdb_id": "tt1856101",
             "extra": {"source": "tmdb"},
         }
+
+
+class DummyTMDBNoImdb(DummyTMDB):
+    async def movie_lookup(self, title: str, year: int | None = None):
+        data = await super().movie_lookup(title, year)
+        data.pop("imdb_id", None)
+        return data
+
+
+class DummyTMDBNoKey:
+    api_key = None
+
+    async def movie_lookup(self, title: str, year: int | None = None):
+        raise AssertionError("TMDb lookup should not be called when not configured")
 
 
 class DummyOMDb:
@@ -100,3 +126,35 @@ def test_music_pipeline_collects_multiple_sources():
     assert provider_status["MusicBrainz"] is True
     assert provider_status["Discogs"] is True
     assert provider_status["Last.fm"] is True
+
+
+def test_omdb_reports_missing_imdb_id_when_available():
+    router = MetadataRouter(
+        tmdb_client=DummyTMDBNoImdb(),
+        omdb_client=DummyOMDb(),
+        musicbrainz_client=None,
+        discogs_client=None,
+        lastfm_client=None,
+    )
+    classification = Classification(type="movie", confidence=0.8, reasons=["category:movies"])
+    card = asyncio.run(router.enrich(classification, "Blade Runner 2049 2160p"))
+
+    provider_errors = {p.name: (p.extra or {}).get("error") for p in card.providers}
+    assert provider_errors.get("OMDb") == "no_imdb_id"
+    assert provider_errors.get("OMDb") != "not_configured"
+
+
+def test_tmdb_without_credentials_reports_not_configured():
+    router = MetadataRouter(
+        tmdb_client=DummyTMDBNoKey(),
+        omdb_client=None,
+        musicbrainz_client=None,
+        discogs_client=None,
+        lastfm_client=None,
+    )
+    classification = Classification(type="movie", confidence=0.8, reasons=["category:movies"])
+    card = asyncio.run(router.enrich(classification, "Some Movie"))
+
+    providers = {p.name: p for p in card.providers}
+    assert providers["TMDb"].used is False
+    assert providers["TMDb"].extra == {"error": "not_configured"}

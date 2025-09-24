@@ -18,8 +18,39 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
-    if "trackers" not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if "trackers" not in table_names:
         return
+
+    tracker_columns = {column["name"] for column in inspector.get_columns("trackers")}
+    if "provider_slug" in tracker_columns:
+        constraints = inspector.get_unique_constraints("trackers")
+        has_provider_slug_constraint = any(
+            "provider_slug" in constraint.get("column_names", [])
+            for constraint in constraints
+        )
+        if not has_provider_slug_constraint:
+            with op.batch_alter_table("trackers") as batch_op:
+                batch_op.create_unique_constraint(
+                    "uq_trackers_provider_slug", ["provider_slug"]
+                )
+
+        tracker_indexes = inspector.get_indexes("trackers")
+        has_provider_slug_index = any(
+            index.get("name") == "ix_trackers_provider_slug"
+            or "provider_slug" in index.get("column_names", [])
+            for index in tracker_indexes
+        )
+        if not has_provider_slug_index:
+            op.create_index(
+                "ix_trackers_provider_slug", "trackers", ["provider_slug"]
+            )
+
+        return
+
+    if "trackers_new" in table_names:
+        op.drop_table("trackers_new")
+        inspector = sa.inspect(bind)
 
     op.create_table(
         "trackers_new",

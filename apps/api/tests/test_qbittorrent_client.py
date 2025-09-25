@@ -87,6 +87,18 @@ async def test_delete_torrent_posts_hash_and_flag():
 
 
 @pytest.mark.anyio
+async def test_delete_torrent_allows_blank_response():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="")
+
+    transport = httpx.MockTransport(handler)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        await qb.delete_torrent("abc", False)
+
+
+@pytest.mark.anyio
 async def test_post_requests_include_referer(monkeypatch):
     recorded = {}
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -133,3 +145,15 @@ async def test_add_torrent_file_includes_referer(monkeypatch):
         await qb.add_torrent_file(b"data")
 
     assert recorded["headers"]["referer"] == "http://qb/"
+
+
+@pytest.mark.anyio
+async def test_add_magnet_allows_blank_response():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="")
+
+    transport = httpx.MockTransport(handler)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        await qb.add_magnet("magnet:?xt=urn:btih:abc")

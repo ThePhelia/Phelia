@@ -22,13 +22,19 @@ class QbClient:
                 follow_redirects=True,
             )
         return self._client
+    def _is_success(self, response: httpx.Response) -> bool:
+        """Return ``True`` if the response body indicates success."""
+
+        body = response.text.strip().lower()
+        return body in {"", "ok", "ok."}
+
     async def login(self) -> None:
         r = await self._c().post(
             f"{self.base_url}/api/v2/auth/login", data={"username": self.username, "password": self.password},
             headers=self._headers,
         )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
+        if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
 
     async def add_magnet(self, magnet: str, save_path: Optional[str] = None, category: Optional[str] = None) -> Dict:
@@ -42,7 +48,7 @@ class QbClient:
             headers=self._headers,
         )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
+        if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
@@ -85,7 +91,7 @@ class QbClient:
             headers=self._headers,
         )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
+        if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
@@ -95,7 +101,7 @@ class QbClient:
             headers=self._headers,
         )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
+        if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
@@ -105,7 +111,7 @@ class QbClient:
             headers=self._headers,
         )
         r.raise_for_status()
-        if r.text.strip().lower() not in {"ok.", "ok"}:
+        if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 

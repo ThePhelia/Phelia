@@ -157,14 +157,16 @@ export interface LibraryItemSummary {
 
 
 export interface DownloadItem {
-  id: string;
-  name: string;
-  provider?: string;
-  progress?: number;
-  status?: string;
-  eta?: string;
-  speed?: string;
-  size?: string;
+  id: number;
+  name?: string | null;
+  magnet?: string | null;
+  hash?: string | null;
+  progress?: number | null;
+  status?: string | null;
+  eta?: number | null;
+  dlspeed?: number | null;
+  upspeed?: number | null;
+  save_path?: string | null;
 }
 export interface CapabilitiesResponse {
   services: Record<string, boolean>;

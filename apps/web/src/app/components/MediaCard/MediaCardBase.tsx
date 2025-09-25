@@ -30,6 +30,8 @@ const MediaCardBase = forwardRef<HTMLDivElement, MediaCardBaseProps>(({ item, ta
       title: item.title,
       kind: item.kind,
       year: item.year,
+      artist: item.kind === 'album' ? item.subtitle : undefined,
+      subtitle: item.subtitle,
     });
   };
 

@@ -7,6 +7,8 @@ interface TorrentSearchItemContext {
   title: string;
   kind?: MediaKind;
   year?: number;
+  artist?: string;
+  subtitle?: string;
 }
 
 interface TorrentSearchState {
@@ -25,10 +27,19 @@ interface TorrentSearchState {
 }
 
 function buildQuery(item: TorrentSearchItemContext): string {
-  const parts = [item.title?.trim() ?? ''];
+  const title = item.title?.trim() ?? '';
+  const artist = (item.artist ?? item.subtitle ?? '').trim();
+  const isAlbum = item.kind === 'album';
+
+  const base = isAlbum && artist
+    ? `${artist} - ${title}`.trim()
+    : title;
+
+  const parts = [base];
   if (item.year) {
     parts.push(String(item.year));
   }
+
   return parts
     .map((part) => part.trim())
     .filter((part) => part.length > 0)

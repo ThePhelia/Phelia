@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import DetailContent from '@/app/components/Detail/DetailContent';
 import { useDetails, useMetaDetail, startIndexing } from '@/app/lib/api';
-import type { MediaKind } from '@/app/lib/types';
+import type { DetailResponse, MediaKind } from '@/app/lib/types';
 import type { MetaDetail as MetaDetailType } from '@/app/types/meta';
 import { useTorrentSearch } from '@/app/stores/torrent-search';
 
@@ -50,14 +50,42 @@ function ErrorState({ message = 'Failed to load details.' }: { message?: string 
 
 function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogProps) {
   const isMetaFlow = Boolean(provider);
+  const { data, isLoading, isError } = useDetails(kind, id);
+
+  const fallbackMetaParams = useMemo(() => {
+    if (isMetaFlow || !data) return undefined;
+
+    const parsed = parseScopedIdentifier(data.title ?? data.id);
+    if (!parsed) return undefined;
+
+    const missingOverview = !data.overview || data.overview.trim().length === 0;
+    const placeholderTitle = isPlaceholderTitle(data.title, data.id);
+
+    if (!missingOverview && !placeholderTitle) {
+      return undefined;
+    }
+
+    return parsed;
+  }, [data, isMetaFlow]);
+
+  const metaDetailParams = isMetaFlow
+    ? { type: kind, id, provider: provider as string }
+    : fallbackMetaParams
+      ? { type: fallbackMetaParams.type, id: fallbackMetaParams.id, provider: fallbackMetaParams.provider }
+      : { type: kind, id: '', provider: '' };
+
   const {
     data: metaDetail,
     isLoading: isMetaLoading,
     isError: isMetaError,
-  } = useMetaDetail(
-    isMetaFlow ? { type: kind, id, provider: provider as string } : { type: 'movie', id: '', provider: '' }
-  );
-  const { data, isLoading, isError } = useDetails(kind, id);
+  } = useMetaDetail(metaDetailParams);
+
+  const fallbackDetail = useMemo(() => {
+    if (isMetaFlow || !fallbackMetaParams || !metaDetail) return undefined;
+    return metaDetailToDetailResponse(metaDetail, id);
+  }, [fallbackMetaParams, id, isMetaFlow, metaDetail]);
+
+  const mergedDetail = useMemo(() => mergeDetailData(data, fallbackDetail), [data, fallbackDetail]);
 
   const [season, setSeason] = useState<number | ''>('');
   const [episode, setEpisode] = useState<number | ''>('');
@@ -67,7 +95,7 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
   const fetchTorrentSearch = useTorrentSearch((state) => state.fetchForQuery);
 
   useEffect(() => {
-    if (!metaDetail) return;
+    if (!isMetaFlow || !metaDetail) return;
     const canonicalTv = metaDetail.canonical.tv;
     setSeason(
       canonicalTv && typeof canonicalTv.season === 'number' && canonicalTv.season > 0 ? canonicalTv.season : ''
@@ -77,10 +105,10 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
     );
     setHasSearched(false);
     setLastQuery('');
-  }, [metaDetail]);
+  }, [isMetaFlow, metaDetail]);
 
   const handleFindTorrents = async () => {
-    if (!metaDetail) return;
+    if (!isMetaFlow || !metaDetail) return;
     const seasonNumber = season === '' ? null : Number(season);
     const episodeNumber = episode === '' ? null : Number(episode);
     const payload = {
@@ -107,6 +135,8 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
         title: metaDetail.title,
         kind: metaDetail.type,
         year: typeof metaDetail.year === 'number' ? metaDetail.year : undefined,
+        artist: metaDetail.album?.artist,
+        subtitle: metaDetail.album?.artist,
       });
       if (response.results.length === 0) {
         toast('No torrents found. Try adjusting the season, episode or query.');
@@ -138,9 +168,15 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
       );
     }
 
-    if (isLoading) return <LoadingState />;
-    if (isError || !data) return <ErrorState />;
-    return <DetailContent detail={data} />;
+    const waitingForFallback = Boolean(fallbackMetaParams) && !fallbackDetail && isMetaLoading;
+    if (isLoading || waitingForFallback) return <LoadingState />;
+
+    const encounteredError =
+      isError || (Boolean(fallbackMetaParams) && isMetaError);
+
+    if (encounteredError || !mergedDetail) return <ErrorState />;
+
+    return <DetailContent detail={mergedDetail} />;
   }, [
     isMetaFlow,
     isMetaLoading,
@@ -152,9 +188,12 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
     isIndexing,
     hasSearched,
     lastQuery,
+    fallbackMetaParams,
+    fallbackDetail,
     isLoading,
+    isMetaLoading,
     isError,
-    data,
+    mergedDetail,
   ]);
 
   return (
@@ -338,6 +377,125 @@ function MetaDetailContent({
       ) : null}
     </div>
   );
+}
+
+interface ScopedIdentifier {
+  provider: string;
+  type: MediaKind;
+  id: string;
+}
+
+function parseScopedIdentifier(value?: string): ScopedIdentifier | undefined {
+  if (!value) return undefined;
+
+  const parts = value.split(':');
+  if (parts.length < 3) return undefined;
+
+  const [provider, rawType, ...rest] = parts;
+  const identifier = rest.join(':');
+
+  if (!provider || !rawType || !identifier) return undefined;
+
+  const normalizedType = rawType.toLowerCase() === 'music' ? 'album' : rawType.toLowerCase();
+
+  if (normalizedType !== 'movie' && normalizedType !== 'tv' && normalizedType !== 'album') {
+    return undefined;
+  }
+
+  return { provider, type: normalizedType as MediaKind, id: identifier };
+}
+
+function isPlaceholderTitle(title?: string, id?: string): boolean {
+  if (!title) return true;
+  if (id && title === id) return true;
+
+  const parts = title.split(':');
+  return parts.length >= 3 && parts[0].length <= 10 && parts[1].length <= 10;
+}
+
+function mergeDetailData(primary?: DetailResponse, fallback?: DetailResponse): DetailResponse | undefined {
+  if (!primary && !fallback) return undefined;
+  if (!fallback) return primary;
+  if (!primary) return fallback;
+
+  const merged: DetailResponse = {
+    ...fallback,
+    ...primary,
+    id: primary.id ?? fallback.id,
+    kind: primary.kind ?? fallback.kind,
+    title: isPlaceholderTitle(primary.title, primary.id) ? fallback.title : primary.title,
+    year: primary.year ?? fallback.year,
+    tagline: primary.tagline || fallback.tagline,
+    overview: primary.overview || fallback.overview,
+    poster: primary.poster || fallback.poster,
+    backdrop: primary.backdrop || fallback.backdrop,
+    rating: primary.rating ?? fallback.rating,
+    genres:
+      primary.genres && primary.genres.length > 0
+        ? primary.genres
+        : fallback.genres,
+    cast: primary.cast && primary.cast.length > 0 ? primary.cast : fallback.cast,
+    crew: primary.crew && primary.crew.length > 0 ? primary.crew : fallback.crew,
+    tracks:
+      primary.tracks && primary.tracks.length > 0 ? primary.tracks : fallback.tracks,
+    seasons:
+      primary.seasons && primary.seasons.length > 0 ? primary.seasons : fallback.seasons,
+    similar:
+      primary.similar && primary.similar.length > 0 ? primary.similar : fallback.similar,
+    recommended:
+      primary.recommended && primary.recommended.length > 0
+        ? primary.recommended
+        : fallback.recommended,
+    links: primary.links ?? fallback.links,
+    availability: primary.availability ?? fallback.availability,
+  };
+
+  if (!merged.genres) {
+    merged.genres = [];
+  }
+
+  return merged;
+}
+
+function metaDetailToDetailResponse(metaDetail: MetaDetailType, fallbackId: string): DetailResponse {
+  const kind: MediaKind = metaDetail.type === 'album' ? 'album' : metaDetail.type;
+  const genres = [...(metaDetail.genres ?? [])];
+  if (metaDetail.album?.styles?.length) {
+    for (const style of metaDetail.album.styles) {
+      if (!genres.includes(style)) {
+        genres.push(style);
+      }
+    }
+  }
+
+  const tracks = metaDetail.album?.tracklist?.map((track, index) => ({
+    index: index + 1,
+    title: track.title,
+  }));
+
+  return {
+    id: fallbackId,
+    kind,
+    title: metaDetail.title,
+    year: typeof metaDetail.year === 'number' ? metaDetail.year : undefined,
+    tagline: metaDetail.album?.artist ?? undefined,
+    overview: metaDetail.synopsis ?? undefined,
+    poster: metaDetail.poster ?? undefined,
+    backdrop: metaDetail.backdrop ?? undefined,
+    rating: typeof metaDetail.rating === 'number' ? metaDetail.rating : undefined,
+    genres,
+    cast: metaDetail.cast.map((member) => ({
+      name: member.name,
+      role: member.character ?? undefined,
+    })),
+    crew: [],
+    tracks: tracks && tracks.length > 0 ? tracks : undefined,
+    seasons: undefined,
+    similar: [],
+    recommended: [],
+    links: undefined,
+    availability: undefined,
+  };
 }
 
 export default DetailDialog;

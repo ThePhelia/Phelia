@@ -112,6 +112,8 @@ describe("MediaCardBase", () => {
       title: item.title,
       kind: item.kind,
       year: item.year,
+      artist: undefined,
+      subtitle: item.subtitle,
     });
     expect(toastMock).not.toHaveBeenCalled();
   });

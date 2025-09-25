@@ -69,6 +69,8 @@ function DetailHeader({ detail }: DetailHeaderProps) {
                   title: detail.title,
                   kind: detail.kind,
                   year: detail.year,
+                  artist: detail.kind === 'album' ? detail.tagline : undefined,
+                  subtitle: detail.tagline,
                 })
               }
             >

@@ -1,4 +1,5 @@
 import { AlertTriangle, DownloadCloud, ExternalLink, Info, Loader2, Magnet, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
@@ -177,6 +178,7 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
     reset();
     try {
       await mutateAsync(payload);
+      toast.success(`Added "${item.title}" to the download queue.`);
     } catch {
       // Error is surfaced via mutation state for the user.
     }

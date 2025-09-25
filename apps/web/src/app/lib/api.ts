@@ -193,7 +193,7 @@ export function useDownloads(enabled = true) {
     queryKey: ['downloads'],
     queryFn: () => http<DownloadItem[]>('downloads'),
     enabled,
-    refetchInterval: enabled ? 5_000 : false,
+    refetchInterval: enabled ? 500 : false,
   });
 }
 

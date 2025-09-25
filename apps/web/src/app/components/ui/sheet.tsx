@@ -53,6 +53,22 @@ function SheetContent({ children, className, side }: SheetContentProps) {
     return undefined;
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        ctx.onOpenChange(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [ctx.onOpenChange, isOpen]);
+
   if (!isOpen) return null;
 
   const container = document.getElementById('dialog-root') ?? document.body;

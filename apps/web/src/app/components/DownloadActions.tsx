@@ -41,6 +41,11 @@ function DownloadActions({ item, size = 'icon', className }: DownloadActionsProp
       return;
     }
 
+    const confirmed = window.confirm('Remove this download from the client?');
+    if (!confirmed) {
+      return;
+    }
+
     void deleteMutation
       .mutateAsync({ id: item.id })
       .catch((error) => {

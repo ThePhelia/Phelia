@@ -47,13 +47,35 @@ function DialogContent({ className, children }: DialogContentProps) {
     return undefined;
   }, [ctx.open]);
 
+  useEffect(() => {
+    if (!ctx.open) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        ctx.onOpenChange(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [ctx.onOpenChange, ctx.open]);
+
   if (!ctx.open) return null;
 
   const container = document.getElementById('dialog-root') ?? document.body;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur">
-      <div className={cn('max-h-[95vh] w-full max-w-6xl overflow-hidden rounded-3xl bg-background shadow-2xl', className)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 bg-black/70 backdrop-blur"
+        onClick={() => ctx.onOpenChange(false)}
+      />
+      <div className={cn('relative z-10 max-h-[95vh] w-full max-w-6xl overflow-hidden rounded-3xl bg-background shadow-2xl', className)}>
         {children}
       </div>
     </div>,

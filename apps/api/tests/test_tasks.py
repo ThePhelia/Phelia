@@ -294,6 +294,33 @@ def test_poll_status_handles_http_error(monkeypatch, caplog):
     )
 
 
+def test_poll_status_prunes_missing_download(monkeypatch):
+    class FakeQB:
+        def login(self):
+            pass
+
+        def list_torrents(self):
+            return [
+                {"hash": "AAA111", "name": "other", "save_path": "/other"},
+            ]
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="m", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        download_id = dl.id
+
+    assert tasks.poll_status() == 1
+
+    with SessionLocal() as db:
+        assert db.get(models.Download, download_id) is None
+
+
 def test_pick_candidate_prefers_hash():
     stats = [
         {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},

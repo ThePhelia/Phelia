@@ -221,6 +221,54 @@ export function useCreateDownload() {
   });
 }
 
+export function usePauseDownload() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, number>({
+    mutationFn: (id) =>
+      http<void>(`downloads/${id}/pause`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+  });
+}
+
+export function useResumeDownload() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, number>({
+    mutationFn: (id) =>
+      http<void>(`downloads/${id}/resume`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+  });
+}
+
+interface DeleteDownloadInput {
+  id: number;
+  withFiles?: boolean;
+}
+
+export function useDeleteDownload() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, DeleteDownloadInput>({
+    mutationFn: ({ id, withFiles }) =>
+      http<void>(`downloads/${id}`, {
+        method: 'DELETE',
+        query: { withFiles },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+  });
+}
+
 export function useLibrary() {
   return useQuery<LibraryItemSummary, Error>({
     queryKey: ['library'],

@@ -217,9 +217,11 @@ def poll_status() -> int:
             return 0
 
         changed: List[Download] = []
+        removed: List[Download] = []
         for d in active:
             t = _pick_candidate(stats, d)
             if not t:
+                removed.append(d)
                 continue
             t_hash = t.get("hash")
             if t_hash:
@@ -233,11 +235,16 @@ def poll_status() -> int:
                 d.name = t.get("name")
             changed.append(d)
 
-        if changed:
+        if removed:
+            for d in removed:
+                logger.info("Pruning missing download %s", d.id)
+                db.delete(d)
+
+        if changed or removed:
             db.commit()
             for d in changed:
                 broadcast_download(d)
-        return len(changed)
+        return len(changed) + len(removed)
     finally:
         db.close()
 

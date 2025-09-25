@@ -240,7 +240,7 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
           {downloadUrl ? (
             <Button asChild size="sm" variant="ghost">
               <a href={downloadUrl} target="_blank" rel="noreferrer">
-                <MagnetIcon className="mr-2 h-4 w-4" /> magnetLink (advanced)
+                <Magnet className="mr-2 h-4 w-4" /> magnetLink (advanced)
               </a>
             </Button>
           ) : null}

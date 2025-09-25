@@ -1,4 +1,4 @@
-import { AlertTriangle, DownloadCloud, Pause } from 'lucide-react';
+import { AlertTriangle, DownloadCloud, Pause as PauseIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import {
   Sheet,
@@ -13,10 +13,16 @@ import { Badge } from '@/app/components/ui/badge';
 import { useDownloads } from '@/app/lib/api';
 import type { DownloadItem } from '@/app/lib/types';
 import { useUiState } from '@/app/stores/ui';
+import DownloadActions from '@/app/components/DownloadActions';
+import {
+  formatDownloadEta,
+  formatDownloadProgress,
+  formatDownloadSpeed,
+  formatDownloadStatus,
+} from '@/app/lib/downloads';
 
 function formatProgress(item: DownloadItem) {
-  const percent = Math.round((item.progress ?? 0) * 100);
-  return `${percent}%`;
+  return formatDownloadProgress(item);
 }
 
 function DownloadsDrawer() {
@@ -65,7 +71,7 @@ function DownloadsDrawer() {
 function EmptyDownloads() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
-      <Pause className="h-8 w-8 text-muted-foreground" />
+      <PauseIcon className="h-8 w-8 text-muted-foreground" />
       <p>No active downloads right now.</p>
     </div>
   );
@@ -80,20 +86,22 @@ function DownloadsList({ items }: { items: DownloadItem[] }) {
           return (
             <div key={item.id} className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">{item.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold text-foreground">{item.name ?? 'Unknown download'}</h3>
                   <p className="text-xs text-muted-foreground">
-                    {item.provider ? `${item.provider} • ` : ''}
-                    {item.size ?? ''}
+                    {item.save_path ? item.save_path : '—'}
                   </p>
                 </div>
-                <Badge variant="outline">{item.status ?? 'queued'}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{formatDownloadStatus(item.status)}</Badge>
+                  <DownloadActions item={item} />
+                </div>
               </div>
               <Progress value={percent} />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{formatProgress(item)}</span>
-                <span>{item.speed ? `${item.speed}/s` : null}</span>
-                <span>{item.eta ? `ETA ${item.eta}` : null}</span>
+                <span>{formatDownloadSpeed(item.dlspeed)}</span>
+                <span>{formatDownloadEta(item.eta)}</span>
               </div>
             </div>
           );

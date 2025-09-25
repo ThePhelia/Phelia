@@ -1,8 +1,16 @@
-import { useDownloads } from '@/app/lib/api';
-import { useUiState } from '@/app/stores/ui';
 import { useEffect } from 'react';
+
 import { Skeleton } from '@/app/components/ui/skeleton';
+import DownloadActions from '@/app/components/DownloadActions';
+import { useDownloads } from '@/app/lib/api';
+import {
+  formatDownloadEta,
+  formatDownloadProgress,
+  formatDownloadSpeed,
+  formatDownloadStatus,
+} from '@/app/lib/downloads';
 import type { DownloadItem } from '@/app/lib/types';
+import { useUiState } from '@/app/stores/ui';
 
 function DownloadsPage() {
   const { data, isLoading, isError, refetch } = useDownloads(true);
@@ -42,10 +50,12 @@ function DownloadsPage() {
           <thead className="bg-background/70 text-muted-foreground">
             <tr>
               <th className="px-6 py-3 text-left font-semibold">Title</th>
-              <th className="px-6 py-3 text-left font-semibold">Provider</th>
+              <th className="px-6 py-3 text-left font-semibold">Location</th>
               <th className="px-6 py-3 text-left font-semibold">Progress</th>
               <th className="px-6 py-3 text-left font-semibold">Speed</th>
+              <th className="px-6 py-3 text-left font-semibold">ETA</th>
               <th className="px-6 py-3 text-left font-semibold">Status</th>
+              <th className="px-6 py-3 text-left font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/40">
@@ -60,14 +70,17 @@ function DownloadsPage() {
 }
 
 function DownloadRow({ item }: { item: DownloadItem }) {
-  const percent = Math.round((item.progress ?? 0) * 100);
   return (
     <tr className="bg-background/40">
-      <td className="px-6 py-3 font-medium text-foreground">{item.name}</td>
-      <td className="px-6 py-3 text-muted-foreground">{item.provider ?? '—'}</td>
-      <td className="px-6 py-3 text-muted-foreground">{percent}%</td>
-      <td className="px-6 py-3 text-muted-foreground">{item.speed ?? '—'}</td>
-      <td className="px-6 py-3 text-muted-foreground">{item.status ?? 'queued'}</td>
+      <td className="px-6 py-3 font-medium text-foreground">{item.name ?? 'Unknown download'}</td>
+      <td className="px-6 py-3 text-muted-foreground">{item.save_path ?? '—'}</td>
+      <td className="px-6 py-3 text-muted-foreground">{formatDownloadProgress(item)}</td>
+      <td className="px-6 py-3 text-muted-foreground">{formatDownloadSpeed(item.dlspeed)}</td>
+      <td className="px-6 py-3 text-muted-foreground">{formatDownloadEta(item.eta)}</td>
+      <td className="px-6 py-3 text-muted-foreground">{formatDownloadStatus(item.status)}</td>
+      <td className="px-4 py-3 text-muted-foreground">
+        <DownloadActions item={item} className="justify-end" />
+      </td>
     </tr>
   );
 }

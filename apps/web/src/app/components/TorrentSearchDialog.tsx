@@ -1,5 +1,5 @@
-import { AlertTriangle, DownloadCloud, ExternalLink, Info, Loader2, Magnet } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { AlertTriangle, DownloadCloud, ExternalLink, Info, Loader2, Magnet, X } from 'lucide-react';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
@@ -28,11 +28,15 @@ function TorrentSearchDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-5xl">
-        <DialogHeader>
+        <DialogHeader className="relative">
           <DialogTitle className="flex items-center gap-2 text-2xl font-semibold">
             <DownloadCloud className="h-6 w-6 text-[color:var(--accent)]" /> Torrent results
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">{description}</DialogDescription>
+          <DialogClose className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition hover:text-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
         </DialogHeader>
         <div className="space-y-4 px-8 pb-8">
           {query ? (
@@ -231,19 +235,12 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
             ) : (
               <DownloadCloud className="mr-2 h-4 w-4" />
             )}
-            {isPending ? 'Adding…' : 'Add download'}
+            {isPending ? 'Adding…' : 'Download'}
           </Button>
-          {magnetLink ? (
-            <Button asChild size="sm" variant="ghost">
-              <a href={magnetLink} target="_blank" rel="noreferrer">
-                <Magnet className="mr-2 h-4 w-4" /> Magnet link (advanced)
-              </a>
-            </Button>
-          ) : null}
           {downloadUrl ? (
             <Button asChild size="sm" variant="ghost">
               <a href={downloadUrl} target="_blank" rel="noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" /> Open source
+                <MagnetIcon className="mr-2 h-4 w-4" /> magnetLink (advanced)
               </a>
             </Button>
           ) : null}

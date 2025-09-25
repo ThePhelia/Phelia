@@ -61,10 +61,10 @@ function DialogContent({ className, children }: DialogContentProps) {
   );
 }
 
-function DialogClose({ children }: { children: ReactNode }) {
+function DialogClose({ children, className }: { children: ReactNode; className?: string }) {
   const ctx = useDialogContext();
   return (
-    <button type="button" onClick={() => ctx.onOpenChange(false)}>
+    <button type="button" onClick={() => ctx.onOpenChange(false)} className={className}>
       {children}
     </button>
   );

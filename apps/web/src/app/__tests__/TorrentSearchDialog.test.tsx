@@ -80,7 +80,7 @@ describe("TorrentSearchDialog", () => {
     const user = userEvent.setup();
     renderWithProviders(<TorrentSearchDialog />);
 
-    await user.click(screen.getByRole("button", { name: /add download/i }));
+    await user.click(screen.getByRole("button", { name: /^download$/i }));
 
     await waitFor(() => {
       expect(resetMock).toHaveBeenCalled();

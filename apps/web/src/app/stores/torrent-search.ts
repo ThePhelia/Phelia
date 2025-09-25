@@ -20,6 +20,7 @@ interface TorrentSearchState {
   activeItem?: TorrentSearchItemContext;
   query?: string;
   fetchForItem: (item: TorrentSearchItemContext) => Promise<void>;
+  fetchForQuery: (query: string, context?: TorrentSearchItemContext) => Promise<void>;
   setOpen: (open: boolean) => void;
 }
 
@@ -34,19 +35,11 @@ function buildQuery(item: TorrentSearchItemContext): string {
     .join(' ');
 }
 
-export const useTorrentSearch = create<TorrentSearchState>((set) => ({
-  open: false,
-  isLoading: false,
-  results: [],
-  message: undefined,
-  jackettUiUrl: undefined,
-  error: undefined,
-  metaError: undefined,
-  activeItem: undefined,
-  query: undefined,
-  async fetchForItem(item) {
-    const query = buildQuery(item);
-    if (!query) {
+export const useTorrentSearch = create<TorrentSearchState>((set) => {
+  const executeSearch = async (query: string, context?: TorrentSearchItemContext) => {
+    const trimmed = query.trim();
+
+    if (!trimmed) {
       set({
         open: true,
         isLoading: false,
@@ -55,7 +48,7 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => ({
         metaError: undefined,
         message: undefined,
         jackettUiUrl: undefined,
-        activeItem: item,
+        activeItem: context,
         query: undefined,
       });
       return;
@@ -69,12 +62,12 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => ({
       metaError: undefined,
       message: undefined,
       jackettUiUrl: undefined,
-      activeItem: item,
-      query,
+      activeItem: context,
+      query: trimmed,
     });
 
     try {
-      const response = await fetchJackettSearch(query);
+      const response = await fetchJackettSearch(trimmed);
       set({
         isLoading: false,
         results: response.items ?? [],
@@ -91,11 +84,30 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => ({
         error: message,
       });
     }
-  },
-  setOpen(open) {
-    set((state) => ({
-      open,
-      isLoading: open ? state.isLoading : false,
-    }));
-  },
-}));
+  };
+
+  return {
+    open: false,
+    isLoading: false,
+    results: [],
+    message: undefined,
+    jackettUiUrl: undefined,
+    error: undefined,
+    metaError: undefined,
+    activeItem: undefined,
+    query: undefined,
+    async fetchForItem(item) {
+      const query = buildQuery(item);
+      await executeSearch(query, item);
+    },
+    async fetchForQuery(query, context) {
+      await executeSearch(query, context);
+    },
+    setOpen(open) {
+      set((state) => ({
+        open,
+        isLoading: open ? state.isLoading : false,
+      }));
+    },
+  };
+});

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Clock3, Star, Search } from 'lucide-react';
+import { Loader2, Clock3, Star, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import DetailContent from '@/app/components/Detail/DetailContent';
-import TorrentResults from '@/app/components/Detail/TorrentResults';
 import { useDetails, useMetaDetail, startIndexing } from '@/app/lib/api';
 import type { MediaKind } from '@/app/lib/types';
-import type { JackettSearchItem, MetaDetail as MetaDetailType } from '@/app/types/meta';
+import type { MetaDetail as MetaDetailType } from '@/app/types/meta';
+import { useTorrentSearch } from '@/app/stores/torrent-search';
 
 
 interface DetailDialogProps {
@@ -61,10 +61,10 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
 
   const [season, setSeason] = useState<number | ''>('');
   const [episode, setEpisode] = useState<number | ''>('');
-  const [torrentResults, setTorrentResults] = useState<JackettSearchItem[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [lastQuery, setLastQuery] = useState('');
+  const fetchTorrentSearch = useTorrentSearch((state) => state.fetchForQuery);
 
   useEffect(() => {
     if (!metaDetail) return;
@@ -75,7 +75,6 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
     setEpisode(
       canonicalTv && typeof canonicalTv.episode === 'number' && canonicalTv.episode > 0 ? canonicalTv.episode : ''
     );
-    setTorrentResults([]);
     setHasSearched(false);
     setLastQuery('');
   }, [metaDetail]);
@@ -96,12 +95,19 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
       album: metaDetail.canonical.album ?? undefined,
     };
 
+    setHasSearched(false);
+    setLastQuery('');
     setIsIndexing(true);
-    setHasSearched(true);
     try {
       const response = await startIndexing(payload);
-      setTorrentResults(response.results);
       setLastQuery(response.query);
+      setHasSearched(true);
+      void fetchTorrentSearch(response.query, {
+        id,
+        title: metaDetail.title,
+        kind: metaDetail.type,
+        year: typeof metaDetail.year === 'number' ? metaDetail.year : undefined,
+      });
       if (response.results.length === 0) {
         toast('No torrents found. Try adjusting the season, episode or query.');
       }
@@ -126,7 +132,6 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
           setEpisode={setEpisode}
           onFindTorrents={handleFindTorrents}
           isIndexing={isIndexing}
-          results={torrentResults}
           hasSearched={hasSearched}
           lastQuery={lastQuery}
         />
@@ -145,7 +150,6 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
     episode,
     handleFindTorrents,
     isIndexing,
-    torrentResults,
     hasSearched,
     lastQuery,
     isLoading,
@@ -155,7 +159,11 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="relative sm:max-w-3xl">
+        <DialogClose className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition hover:text-foreground">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
         {content}
         <DialogFooter className="mt-6">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
@@ -175,7 +183,6 @@ interface MetaDetailContentProps {
   setEpisode: (value: number | '') => void;
   onFindTorrents: () => void;
   isIndexing: boolean;
-  results: JackettSearchItem[];
   hasSearched: boolean;
   lastQuery: string;
 }
@@ -188,7 +195,6 @@ function MetaDetailContent({
   setEpisode,
   onFindTorrents,
   isIndexing,
-  results,
   hasSearched,
   lastQuery,
 }: MetaDetailContentProps) {
@@ -322,11 +328,12 @@ function MetaDetailContent({
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-8 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-[color:var(--accent)]" /> Searching Jackett…
         </div>
-      ) : results.length ? (
-        <TorrentResults results={results} />
       ) : hasSearched ? (
-        <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 p-6 text-center text-sm text-muted-foreground">
-          No torrents were returned for this query.
+        <div className="space-y-2 rounded-2xl border border-border/60 bg-background/60 p-6 text-sm text-muted-foreground">
+          <p>Torrent results have been opened in the Torrent results window.</p>
+          <p className="text-xs text-muted-foreground/80">
+            Use the Download window to send a torrent to your client or copy its source.
+          </p>
         </div>
       ) : null}
     </div>

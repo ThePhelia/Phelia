@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.runtime_settings import (
@@ -36,6 +36,20 @@ def _clear_metadata_cache() -> None:
         cache_clear()
 
 
+def _ensure_provider_table(db: Session) -> bool:
+    """Ensure the provider credential table exists, returning ``True`` on success."""
+
+    bind = db.get_bind()
+    if bind is None:
+        return False
+    try:
+        ProviderCredential.__table__.create(bind=bind, checkfirst=True)
+    except SQLAlchemyError:  # pragma: no cover - defensive, logged for observability
+        logger.exception("failed to ensure provider credential table exists")
+        return False
+    return True
+
+
 def load_provider_credentials(db: Session) -> dict[str, str]:
     """Load persisted credentials into the runtime settings instance."""
 
@@ -43,6 +57,7 @@ def load_provider_credentials(db: Session) -> dict[str, str]:
         rows = db.execute(select(ProviderCredential)).scalars().all()
     except (OperationalError, ProgrammingError):
         db.rollback()
+        _ensure_provider_table(db)
         return {}
 
     applied: dict[str, str] = {}
@@ -66,6 +81,7 @@ def list_provider_credentials(db: Session) -> dict[str, str]:
         rows = db.execute(select(ProviderCredential)).scalars().all()
     except (OperationalError, ProgrammingError):
         db.rollback()
+        _ensure_provider_table(db)
         return {}
     return {normalize_provider(row.provider_slug): row.api_key for row in rows}
 
@@ -82,7 +98,13 @@ def upsert_provider_credential(
     stmt = select(ProviderCredential).where(
         ProviderCredential.provider_slug == normalized
     )
-    existing = db.execute(stmt).scalar_one_or_none()
+    try:
+        existing = db.execute(stmt).scalar_one_or_none()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        if not _ensure_provider_table(db):
+            raise
+        existing = db.execute(stmt).scalar_one_or_none()
 
     if not api_key:
         if existing is not None:

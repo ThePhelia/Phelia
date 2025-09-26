@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Bookmark, Compass, Download, Film, Home, Music2, Settings, Tv } from 'lucide-react';
+import { Bookmark, Download, Film, Home, Music2, Settings, Tv } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { useUiState } from '@/app/stores/ui';
@@ -8,7 +8,6 @@ import { cn } from '@/app/utils/cn';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home },
-  { to: '/browse', label: 'Browse', icon: Compass },
   { to: '/movies', label: 'Movies', icon: Film },
   { to: '/tv', label: 'TV Shows', icon: Tv },
   { to: '/music', label: 'Music', icon: Music2 },
@@ -77,8 +76,10 @@ function Sidebar() {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <div className="flex items-center justify-between pt-6">
-          {!collapsed ? <span className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Browse</span> : null}
+          <div className="flex items-center justify-between pt-6">
+            {!collapsed ? (
+              <span className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Navigation</span>
+            ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

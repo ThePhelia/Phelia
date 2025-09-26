@@ -165,7 +165,13 @@ class MetadataRouter:
                     card.parsed["year"] = int(release_group["first_release_date"][:4])
                 except Exception:
                     pass
-            card.details.setdefault("musicbrainz", release_group)
+            musicbrainz_details = card.details.setdefault("musicbrainz", {})
+            for key, value in mb_data.items():
+                existing_value = musicbrainz_details.get(key)
+                if isinstance(existing_value, dict) and isinstance(value, dict):
+                    existing_value.update(value)
+                else:
+                    musicbrainz_details[key] = value
 
         discogs_data = results.get("Discogs")
         if discogs_data:

@@ -154,6 +154,71 @@ async def test_details_returns_when_tmdb_missing(monkeypatch, db_session):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "musicbrainz_details, expected_artist_id, expected_release_group_id",
+    [
+        (
+            {
+                "artist": {"id": "artist-123", "name": "Example Artist"},
+                "release_group": {"id": "rg-456"},
+            },
+            "artist-123",
+            "rg-456",
+        ),
+        (
+            {"id": "legacy-rg-789", "title": "Legacy Album"},
+            None,
+            "legacy-rg-789",
+        ),
+    ],
+)
+async def test_details_includes_musicbrainz_ids(
+    monkeypatch,
+    db_session,
+    musicbrainz_details,
+    expected_artist_id,
+    expected_release_group_id,
+):
+    app = FastAPI()
+    app.include_router(details_router.router, prefix="/api/v1")
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    mutation = ListMutationInput(
+        action="add",
+        list="watchlist",
+        item=ListMutationItem(
+            kind="album", id="test-album", title="Test Album", year=2020
+        ),
+    )
+    library_service.apply_mutation(db_session, mutation)
+
+    card = EnrichedCard(
+        media_type="music",
+        confidence=0.9,
+        title="Test Album",
+        parsed={"artist": "Example Artist", "album": "Test Album"},
+        ids={},
+        details={"musicbrainz": musicbrainz_details},
+        providers=[],
+        reasons=[],
+        needs_confirmation=False,
+    )
+
+    monkeypatch.setattr(details_router, "get_metadata_router", lambda: DummyRouter(card))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/details/album/test-album")
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    musicbrainz_payload = payload.get("musicbrainz")
+    assert musicbrainz_payload is not None
+    assert musicbrainz_payload.get("artist_id") == expected_artist_id
+    assert musicbrainz_payload.get("release_group_id") == expected_release_group_id
+
+
+@pytest.mark.anyio
 async def test_details_handles_metadata_failure(monkeypatch, db_session):
     app = FastAPI()
     app.include_router(details_router.router, prefix="/api/v1")

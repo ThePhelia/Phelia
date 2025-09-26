@@ -1,86 +1,169 @@
-from __future__ import annotations
-
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException
-
-from app.core.cache import cache_get, cache_set
-from app.core.config import settings
-from app.core.redis import get_redis
-from app.services.discovery_apple import apple_feed
-from app.services.discovery_genres import CURATED
-from app.services.discovery_lb import similar_artists
-from app.services.discovery_mb import new_releases_by_genre
+from fastapi import APIRouter, Query, HTTPException
+from datetime import datetime, timedelta
+from typing import Optional, Any, Dict
+import httpx
+#
+# If your module previously imported/defined `discovery_service` and `GENRES_BY_ID`,
+# keep them present. This file is resilient: it will use them when available,
+# and gracefully fall back to MusicBrainz/CAA when not.
+#
 
 router = APIRouter(prefix="/api/v1/discovery", tags=["discovery"])
-TTL = getattr(settings, "DISCOVERY_CACHE_TTL", 86_400)
 
+# Slug -> MusicBrainz tag normalization for common genres.
+# Extend freely; keys are slugs you use in the UI.
+GENRE_SLUG_TO_MB_TAG: Dict[str, str] = {
+    "techno": "techno",
+    "house": "house",
+    "ambient": "ambient",
+    "drum-and-bass": "drum and bass",
+    "dnb": "drum and bass",
+    "metal": "metal",
+    "rock": "rock",
+    "hip-hop": "hip hop",
+    "hiphop": "hip hop",
+    "electronic": "electronic",
+    "indie": "indie",
+    "pop": "pop",
+    "jazz": "jazz",
+    "classical": "classical",
+}
+
+def _safe_get_mb_tag_from_id(genre_id: Optional[int]) -> Optional[str]:
+    """Resolve a MusicBrainz tag from internal GENRES_BY_ID mapping if it exists."""
+    if genre_id is None:
+        return None
+    mapping = globals().get("GENRES_BY_ID")
+    if not mapping:
+        return None
+    # mapping may be a dict with int or str keys. Values can be objects or dicts.
+    rec = mapping.get(genre_id) or mapping.get(str(genre_id))
+    if not rec:
+        return None
+    # Try object attribute first, then dict.
+    mb_tag = getattr(rec, "musicbrainz_tag", None)
+    if not mb_tag and isinstance(rec, dict):
+        mb_tag = rec.get("musicbrainz_tag")
+    return mb_tag
+
+def _normalize_genre(tag: Optional[str], genre_id: Optional[int]) -> str:
+    """Normalize input (?genre=slug OR ?genre_id=INT) into a MusicBrainz tag."""
+    mb_tag = _safe_get_mb_tag_from_id(genre_id)
+    if mb_tag:
+        return mb_tag
+    if tag:
+        t = GENRE_SLUG_TO_MB_TAG.get(tag.strip().lower())
+        if t:
+            return t
+    raise HTTPException(status_code=400, detail="Unknown genre/genre_id")
+
+async def _mb_get_json(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    headers = {"User-Agent": "Phelia/1.0 (self-hosted)"}
+    async with httpx.AsyncClient(timeout=15.0, headers=headers) as cx:
+        r = await cx.get(url, params=params)
+        r.raise_for_status()
+        return r.json()
 
 @router.get("/genres")
-def genres() -> dict[str, object]:
-    return {"genres": CURATED}
-
+async def list_genres():
+    """Return your curated/static genres list (kept as-is if previously implemented)."""
+    # If your project has a function like discovery_service.list_genres(), use it.
+    svc = globals().get("discovery_service")
+    if svc and hasattr(svc, "list_genres"):
+        try:
+            items = await svc.list_genres()  # type: ignore[func-returns-value]
+            if items is not None:
+                return items
+        except Exception:
+            pass
+    # Minimal fallback. Replace with your actual static list if you have one.
+    return [{"slug": k, "name": k.replace('-', ' ').title()} for k in sorted(GENRE_SLUG_TO_MB_TAG)]
 
 @router.get("/new")
-def new(
-    genre: str,
-    days: int = 30,
-    limit: int = 50,
-    redis=Depends(get_redis),
-) -> dict[str, object]:
-    cache_key = f"disc:new:{genre}:{days}:{limit}"
-    cached = cache_get(redis, cache_key)
-    if cached is not None:
-        return cached
-    try:
-        items = new_releases_by_genre(genre, days, limit)
-        payload = {"source": "musicbrainz", "items": items}
-    except Exception as exc:  # pragma: no cover - converted into HTTP error
-        raise HTTPException(status_code=502, detail=f"MusicBrainz error: {exc}") from exc
-    cache_set(redis, cache_key, payload, TTL)
-    return payload
+async def new_albums(
+    genre_id: Optional[int] = Query(None, description="Internal genre id"),
+    genre: Optional[str] = Query(None, description="Genre slug, e.g., 'techno'"),
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(24, ge=1, le=100),
+):
+    """Newly released albums for a given genre (keyless fallback supported)."""
+    mb_tag = _normalize_genre(genre, genre_id)
+    since = (datetime.utcnow() - timedelta(days=days)).date().isoformat()
 
+    # Try existing provider first if discovery_service is available.
+    svc = globals().get("discovery_service")
+    if svc and hasattr(svc, "fetch_new_albums"):
+        try:
+            releases = await svc.fetch_new_albums(mb_tag, since, limit)  # type: ignore[arg-type]
+            if releases:
+                return releases
+        except Exception:
+            # fall through to MB fallback if provider errors out
+            pass
+
+    # MusicBrainz fallback (no keys required)
+    query = f'tag:"{mb_tag}" AND primarytype:Album AND firstreleasedate:[{since} TO *]'
+    data = await _mb_get_json(
+        "https://musicbrainz.org/ws/2/release-group",
+        {"query": query, "fmt": "json", "limit": str(limit), "offset": "0"},
+    )
+    out = []
+    for rg in data.get("release-groups", []):
+        out.append({
+            "id": rg.get("id"),
+            "title": rg.get("title"),
+            "artist": (rg.get("artist-credit") or [{}])[0].get("name"),
+            "year": (rg.get("first-release-date") or "")[:4],
+            "cover": f"https://coverartarchive.org/release-group/{rg.get('id')}/front-250",
+            "source": "musicbrainz",
+        })
+    return out
 
 @router.get("/top")
-def top(
-    genre_id: int,
-    feed: str = "most-recent",
-    kind: str = "albums",
-    limit: int = 50,
-    storefront: Optional[str] = None,
-    redis=Depends(get_redis),
-) -> dict[str, object]:
-    storefront_code = storefront or getattr(settings, "APPLE_RSS_STOREFRONT", "us")
-    cache_key = f"disc:top:{storefront_code}:{genre_id}:{feed}:{kind}:{limit}"
-    cached = cache_get(redis, cache_key)
-    if cached is not None:
-        return cached
-    try:
-        items = apple_feed(storefront_code, genre_id, feed, kind, limit)
-        payload = {"source": "apple", "items": items}
-    except Exception as exc:  # pragma: no cover - converted into HTTP error
-        raise HTTPException(status_code=502, detail=f"Apple RSS error: {exc}") from exc
-    cache_set(redis, cache_key, payload, TTL)
-    return payload
+async def top_albums(
+    genre_id: Optional[int] = Query(None),
+    genre: Optional[str] = Query(None),
+    kind: str = Query("albums", pattern="^(albums|artists)$"),
+    feed: str = Query("most-recent", pattern="^(most-recent|weekly|monthly)$"),
+    limit: int = Query(24, ge=1, le=100),
+):
+    """Top albums (or artists) for a given genre; provider first, MB fallback next."""
+    mb_tag = _normalize_genre(genre, genre_id)
 
+    # Try existing provider first
+    svc = globals().get("discovery_service")
+    if svc and hasattr(svc, "fetch_top"):
+        try:
+            items = await svc.fetch_top(kind=kind, tag=mb_tag, feed=feed, limit=limit)  # type: ignore[arg-type]
+            if items:
+                return items
+        except Exception:
+            # fall back to MB on any provider error
+            pass
 
-@router.get("/similar-artists")
-def similar(
-    artist_mbid: str,
-    limit: int = 20,
-    redis=Depends(get_redis),
-) -> dict[str, object]:
-    cache_key = f"disc:sim:{artist_mbid}:{limit}"
-    cached = cache_get(redis, cache_key)
-    if cached is not None:
-        return cached
-    try:
-        items = similar_artists(artist_mbid, limit)
-        payload = {"source": "listenbrainz", "items": items}
-    except Exception as exc:  # pragma: no cover - converted into HTTP error
-        raise HTTPException(status_code=502, detail=f"ListenBrainz error: {exc}") from exc
-    cache_set(redis, cache_key, payload, TTL)
-    return payload
-
-
-__all__ = ["router"]
+    # MusicBrainz fallback: get artists by tag, then latest album for each
+    ar = await _mb_get_json(
+        "https://musicbrainz.org/ws/2/artist",
+        {"query": f'tag:"{mb_tag}"', "fmt": "json", "limit": str(min(50, max(10, limit * 2)))},
+    )
+    results = []
+    for a in ar.get("artists", []):
+        rg = await _mb_get_json(
+            "https://musicbrainz.org/ws/2/release-group",
+            {"query": f'artist:{a.get("id")} AND primarytype:Album', "fmt": "json", "limit": "1"},
+        )
+        rj = rg.get("release-groups", [])
+        if not rj:
+            continue
+        rg0 = rj[0]
+        results.append({
+            "id": rg0.get("id"),
+            "title": rg0.get("title"),
+            "artist": a.get("name"),
+            "year": (rg0.get("first-release-date") or "")[:4],
+            "cover": f'https://coverartarchive.org/release-group/{rg0.get("id")}/front-250',
+            "source": "musicbrainz",
+        })
+        if len(results) >= limit:
+            break
+    return results

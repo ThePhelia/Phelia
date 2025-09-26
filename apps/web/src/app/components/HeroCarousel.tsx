@@ -54,7 +54,7 @@ function HeroCarousel({ items }: HeroCarouselProps) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.6 }}
-          className="relative h-[440px] w-full"
+          className="relative h-[360px] md:h-[420px] w-full"
         >
           {hasImage ? (
             <>
@@ -72,7 +72,7 @@ function HeroCarousel({ items }: HeroCarouselProps) {
           <div className="relative z-10 flex h-full flex-col justify-center gap-6 px-10 py-12 text-white md:max-w-xl">
             <div className="space-y-3">
               <p className="text-xs uppercase tracking-[0.4em] text-white/60">Featured</p>
-              <h2 className="text-3xl font-bold md:text-4xl">{current.title}</h2>
+              <h2 className="text-2xl font-bold md:text-3xl">{current.title}</h2>
               <p className="text-sm text-white/80 line-clamp-3">
                 {current.subtitle ?? current.genres?.slice(0, 3).join(' • ')}
               </p>

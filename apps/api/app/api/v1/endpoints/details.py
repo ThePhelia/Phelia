@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.media import Classification
-from app.schemas.ui import DetailLinks, DetailResponse, DiscoverItem
+from app.schemas.ui import DetailLinks, DetailResponse, DiscoverItem, MusicBrainzInfo
 from app.services import library as library_service
 from app.services.metadata import get_metadata_router
 from app.services.metadata.providers.tmdb import TMDB_IMAGE_BASE
@@ -178,6 +178,9 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
 
     cast_items, crew_items = _collect_people(_ensure_dict(tmdb_extra.get("credits")))
 
+    artist_info = _ensure_dict(musicbrainz_data.get("artist"))
+    release_group_info = _ensure_dict(musicbrainz_data.get("release_group"))
+
     detail = DetailResponse(
         id=item_id,
         kind=response_kind,
@@ -215,6 +218,11 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
         similar=_extract_similar(tmdb_extra.get("similar"), card.media_type),
         recommended=_extract_similar(
             tmdb_extra.get("recommendations"), card.media_type
+        ),
+        musicbrainz=MusicBrainzInfo(
+            artist_id=artist_info.get("id"),
+            artist_name=artist_info.get("name"),
+            release_group_id=release_group_info.get("id"),
         ),
     )
 

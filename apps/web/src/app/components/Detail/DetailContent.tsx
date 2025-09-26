@@ -1,10 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import DetailHeader from '@/app/components/Detail/DetailHeader';
 import TracksList from '@/app/components/Detail/TracksList';
 import SeasonsTabs from '@/app/components/Detail/SeasonsTabs';
 import RecommendationsRail from '@/app/components/Rails/RecommendationsRail';
-import type { DetailResponse } from '@/app/lib/types';
+import { Badge } from '@/app/components/ui/badge';
+import type { DetailResponse, SimilarArtist } from '@/app/lib/types';
+import { getSimilarArtists } from '@/app/lib/discovery';
 
 interface DetailContentProps {
   detail: DetailResponse;
@@ -17,6 +22,22 @@ function DetailContent({ detail }: DetailContentProps) {
     if (detail.tracks?.length) base.splice(2, 0, 'tracks');
     return base;
   }, [detail]);
+
+  const artistMbid = detail.musicbrainz?.artist_id ?? undefined;
+
+  const similarArtistsQuery = useQuery({
+    queryKey: ['similar-artists', artistMbid],
+    queryFn: () => getSimilarArtists(artistMbid!),
+    enabled: Boolean(artistMbid),
+    staleTime: 6 * 60 * 60 * 1000,
+    select: (items: SimilarArtist[]) => items.filter((artist) => artist.mbid),
+  });
+
+  useEffect(() => {
+    if (similarArtistsQuery.error) {
+      toast.error('Unable to load similar artists.');
+    }
+  }, [similarArtistsQuery.error]);
 
   return (
     <div className="space-y-8">
@@ -119,6 +140,33 @@ function DetailContent({ detail }: DetailContentProps) {
         <TabsContent value="related" className="space-y-6">
           <RecommendationsRail title="Similar" items={detail.similar} />
           <RecommendationsRail title="Recommended" items={detail.recommended} />
+          {artistMbid ? (
+            <section className="space-y-3">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Similar Artists
+              </h4>
+              {similarArtistsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading similar artists…</p>
+              ) : similarArtistsQuery.data?.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {similarArtistsQuery.data.map((artist) => (
+                    <Badge key={artist.mbid} variant="outline" className="rounded-full bg-background/60 px-3 py-1">
+                      <span className="font-medium text-foreground">
+                        {artist.name ?? 'Unknown Artist'}
+                      </span>
+                      {typeof artist.score === 'number' ? (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {artist.score.toFixed(2)}
+                        </span>
+                      ) : null}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No similar artists available.</p>
+              )}
+            </section>
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>

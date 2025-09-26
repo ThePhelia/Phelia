@@ -127,6 +127,12 @@ class DetailLinks(BaseModel):
     external: list[ExternalLink] | None = None
 
 
+class MusicBrainzInfo(BaseModel):
+    artist_id: str | None = None
+    artist_name: str | None = None
+    release_group_id: str | None = None
+
+
 class DetailResponse(BaseModel):
     """Comprehensive media details rendered on the detail page."""
 
@@ -148,6 +154,7 @@ class DetailResponse(BaseModel):
     recommended: list[DiscoverItem] | None = None
     links: DetailLinks | None = None
     availability: AvailabilityInfo | None = None
+    musicbrainz: MusicBrainzInfo | None = None
 
 
 class CapabilitiesResponse(BaseModel):

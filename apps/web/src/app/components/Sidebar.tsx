@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Film, Home, Bookmark, Music2, Settings, Tv, Download } from 'lucide-react';
+import { Bookmark, Compass, Download, Film, Home, Music2, Settings, Tv } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { useUiState } from '@/app/stores/ui';
@@ -8,6 +8,7 @@ import { cn } from '@/app/utils/cn';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: Home },
+  { to: '/browse', label: 'Browse', icon: Compass },
   { to: '/movies', label: 'Movies', icon: Film },
   { to: '/tv', label: 'TV Shows', icon: Tv },
   { to: '/music', label: 'Music', icon: Music2 },

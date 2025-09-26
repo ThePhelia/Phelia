@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     # Optional Last.fm key used to surface listening metrics and tags.
     LASTFM_API_KEY: str | None = None
 
+    # Apple Music RSS storefront used for discovery feeds.
+    APPLE_RSS_STOREFRONT: str = "us"
+
+    # Default cache TTL for discovery endpoints (seconds).
+    DISCOVERY_CACHE_TTL: int = 86_400
+
     # MusicBrainz encourages clients to send an informative user agent.
     # We ship a sensible default that complies with their etiquette.
     MB_USER_AGENT: str = "Phelia/0.1 (https://example.local)"

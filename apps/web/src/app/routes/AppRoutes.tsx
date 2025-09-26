@@ -9,6 +9,7 @@ const HomePage = lazy(() => import('@/app/routes/index'));
 const MoviesPage = lazy(() => import('@/app/routes/movies'));
 const TvPage = lazy(() => import('@/app/routes/tv'));
 const MusicPage = lazy(() => import('@/app/routes/music'));
+const BrowsePage = lazy(() => import('@/app/routes/browse'));
 const LibraryPage = lazy(() => import('@/app/routes/library'));
 const DownloadsPage = lazy(() => import('@/app/routes/downloads'));
 const SettingsPage = lazy(() => import('@/app/routes/settings'));
@@ -24,6 +25,7 @@ function AppRoutes() {
         <Routes location={state?.backgroundLocation ?? location}>
           <Route element={<AppShell />}>
             <Route index element={<HomePage />} />
+            <Route path="browse" element={<BrowsePage />} />
             <Route path="movies" element={<MoviesPage />} />
             <Route path="tv" element={<TvPage />} />
             <Route path="music" element={<MusicPage />} />

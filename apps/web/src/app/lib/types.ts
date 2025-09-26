@@ -128,6 +128,19 @@ export interface DetailResponse {
     external?: ExternalLink[];
   };
   availability?: AvailabilityInfo;
+  musicbrainz?: MusicBrainzInfo | null;
+}
+
+export interface MusicBrainzInfo {
+  artist_id?: string | null;
+  artist_name?: string | null;
+  release_group_id?: string | null;
+}
+
+export interface SimilarArtist {
+  mbid?: string | null;
+  name?: string | null;
+  score?: number | null;
 }
 
 export interface SearchParams {

@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.init_db import init_db
 from app.db.session import session_scope
 from app.routers import health, auth, downloads, trackers
+from app.api.routes import discovery as discovery_routes
 from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
 from app.api.v1.endpoints import search as metadata_search
@@ -40,6 +41,7 @@ app.include_router(trackers.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.public_router, prefix="/api/v1/meta")
 app.include_router(discover_endpoints.router, prefix="/api/v1")
+app.include_router(discovery_routes.router)
 app.include_router(index_endpoints.router, prefix="/api/v1/index")
 app.include_router(capabilities_endpoints.router, prefix="/api/v1")
 app.include_router(library_endpoints.router, prefix="/api/v1")

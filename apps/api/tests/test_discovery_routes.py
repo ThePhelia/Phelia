@@ -1,0 +1,239 @@
+import datetime
+from typing import Any
+
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.api.routes import discovery as discovery_routes
+from app.services import discovery_apple, discovery_mb
+
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:  # noqa: ARG002 - ttl unused
+        self.store[key] = value
+
+
+@pytest.mark.anyio
+async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDt:
+        class date:
+            @staticmethod
+            def today() -> datetime.date:
+                return datetime.date(2024, 5, 20)
+
+        timedelta = datetime.timedelta
+
+    captured: dict[str, Any] = {}
+
+    def fake_get(path: str, params: dict[str, str], timeout: int = 12) -> dict[str, Any]:  # noqa: ARG001
+        captured["path"] = path
+        captured["params"] = params
+        return {
+            "release-groups": [
+                {
+                    "id": "rg-1",
+                    "title": "Sample Album",
+                    "artist-credit": [{"name": "Test Artist"}],
+                    "first-release-date": "2024-05-01",
+                    "primary-type": "Album",
+                    "secondary-types": ["Live"],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(discovery_mb, "dt", FakeDt)
+    monkeypatch.setattr(discovery_mb, "_get", fake_get)
+
+    items = discovery_mb.new_releases_by_genre("techno", days=10, limit=5)
+
+    assert captured["path"] == "release-group"
+    query = captured["params"]["query"]
+    assert "tag:\"techno\"" in query
+    assert "firstreleasedate:[2024-05-10 TO 2024-05-20]" in query
+    assert captured["params"]["limit"] == "5"
+
+    assert items[0]["artist"] == "Test Artist"
+    assert items[0]["firstReleaseDate"] == "2024-05-01"
+    assert items[0]["secondaryTypes"] == ["Live"]
+
+
+@pytest.mark.anyio
+async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_redis = FakeRedis()
+
+    calls: list[tuple[str, int, int]] = []
+
+    def fake_service(genre: str, days: int, limit: int) -> list[dict[str, Any]]:
+        calls.append((genre, days, limit))
+        return [
+            {
+                "mbid": "rg-1",
+                "title": "Cached Album",
+                "artist": "Cache Band",
+            }
+        ]
+
+    monkeypatch.setattr(discovery_routes, "new_releases_by_genre", fake_service)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+    app.dependency_overrides[discovery_routes.get_redis] = lambda: fake_redis
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp1 = await client.get("/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20})
+        resp2 = await client.get("/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20})
+
+    assert resp1.status_code == 200
+    assert resp1.json()["items"][0]["title"] == "Cached Album"
+    assert resp2.json() == resp1.json()
+    assert calls == [("house", 30, 20)]
+
+
+@pytest.mark.anyio
+async def test_discovery_top_endpoint_handles_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_redis = FakeRedis()
+
+    def failing_service(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:  # noqa: ARG001 - we only raise
+        raise RuntimeError("upstream failure")
+
+    monkeypatch.setattr(discovery_routes, "apple_feed", failing_service)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+    app.dependency_overrides[discovery_routes.get_redis] = lambda: fake_redis
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/v1/discovery/top",
+            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+        )
+
+    assert resp.status_code == 502
+    assert "Apple RSS error" in resp.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_redis = FakeRedis()
+    calls: list[tuple[int, str, str, int, str]] = []
+
+    def fake_service(storefront: str, genre_id: int, feed: str, kind: str, limit: int) -> list[dict[str, Any]]:
+        calls.append((genre_id, feed, kind, limit, storefront))
+        return [
+            {
+                "id": "apple-1",
+                "title": "Fresh Album",
+                "artist": "Apple Trio",
+            }
+        ]
+
+    monkeypatch.setattr(discovery_routes, "apple_feed", fake_service)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+    app.dependency_overrides[discovery_routes.get_redis] = lambda: fake_redis
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp1 = await client.get(
+            "/api/v1/discovery/top",
+            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+        )
+        resp2 = await client.get(
+            "/api/v1/discovery/top",
+            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+        )
+
+    assert resp1.status_code == 200
+    assert resp1.json()["items"][0]["title"] == "Fresh Album"
+    assert resp2.json() == resp1.json()
+    assert calls == [(21, "most-recent", "albums", 10, "us")]
+
+
+@pytest.mark.anyio
+async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_redis = FakeRedis()
+    calls: list[tuple[str, int]] = []
+
+    def fake_similar(artist_mbid: str, limit: int) -> list[dict[str, Any]]:
+        calls.append((artist_mbid, limit))
+        return [
+            {"mbid": "artist-1", "name": "Example Artist", "score": 0.91},
+        ]
+
+    monkeypatch.setattr(discovery_routes, "similar_artists", fake_similar)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+    app.dependency_overrides[discovery_routes.get_redis] = lambda: fake_redis
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp1 = await client.get(
+            "/api/v1/discovery/similar-artists",
+            params={"artist_mbid": "artist-main", "limit": 5},
+        )
+        resp2 = await client.get(
+            "/api/v1/discovery/similar-artists",
+            params={"artist_mbid": "artist-main", "limit": 5},
+        )
+
+    assert resp1.status_code == 200
+    assert resp1.json()["items"][0]["name"] == "Example Artist"
+    assert resp2.json() == resp1.json()
+    assert calls == [("artist-main", 5)]
+
+
+def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResponse:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+            self.status_code = 200
+            self.ok = True
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def fake_get(url: str, timeout: int = 10):  # noqa: ARG001 - signature compatibility
+        return DummyResponse(
+            {
+                "feed": {
+                    "results": [
+                        {
+                            "id": "123",
+                            "name": "Test Album",
+                            "artistName": "Test Artist",
+                            "url": "https://example.com/album",
+                            "artworkUrl100": "https://example.com/art.jpg",
+                            "releaseDate": "2024-03-01",
+                        }
+                    ]
+                }
+            }
+        )
+
+    monkeypatch.setattr(discovery_apple.httpx, "get", fake_get)
+
+    items = discovery_apple.apple_feed("us", 21)
+    assert items == [
+        {
+            "id": "123",
+            "title": "Test Album",
+            "artist": "Test Artist",
+            "url": "https://example.com/album",
+            "artwork": "https://example.com/art.jpg",
+            "releaseDate": "2024-03-01",
+        }
+    ]

@@ -114,7 +114,7 @@ function SettingsPage() {
       }
       return parsed.toString();
     } catch {
-      const protocol = window.location.protocol || 'http:'\;
+      const protocol = window.location.protocol || 'http:';
       const hostname = window.location.hostname || 'localhost';
       return `${protocol}//${hostname}:9117`;
     }

@@ -198,13 +198,13 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="relative sm:max-w-3xl">
-        <DialogClose className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition hover:text-foreground">
+      <DialogContent className="relative w-full max-w-4xl lg:max-w-5xl p-6 sm:p-10">
+        <DialogClose className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition hover:text-foreground sm:right-8 sm:top-8">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogClose>
         {content}
-        <DialogFooter className="mt-6">
+        <DialogFooter className="mt-8 px-0 pb-0 pt-6 sm:mt-10 sm:px-0 sm:pt-8">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Close
           </Button>

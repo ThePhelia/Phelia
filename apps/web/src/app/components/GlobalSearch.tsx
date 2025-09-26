@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -36,6 +36,7 @@ function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<SearchKind>('all');
@@ -83,8 +84,27 @@ function GlobalSearch() {
     setOpen(false);
   };
 
+  const handleInputBlur = (event: FocusEvent<HTMLInputElement>) => {
+    if (typeof window === 'undefined') {
+      setOpen(false);
+      return;
+    }
+
+    const next = event.relatedTarget as HTMLElement | null;
+    if (next && containerRef.current?.contains(next)) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !containerRef.current?.contains(active)) {
+        setOpen(false);
+      }
+    }, 50);
+  };
+
   return (
-    <div className="relative w-full max-w-2xl">
+    <div ref={containerRef} className="relative w-full max-w-2xl">
       <div className="group relative flex items-center rounded-full border border-border/60 bg-background/80 px-4 py-2 shadow-sm focus-within:border-[color:var(--accent)]/80 focus-within:shadow-glow">
         <Search className="mr-2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -92,7 +112,7 @@ function GlobalSearch() {
           value={query}
           placeholder={t('common.searchPlaceholder')}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={handleInputBlur}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {

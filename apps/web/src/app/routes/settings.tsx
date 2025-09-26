@@ -97,6 +97,29 @@ function SettingsPage() {
   const [baselines, setBaselines] = useState<Record<string, string>>({});
   const previousPreviewsRef = useRef<Record<string, string>>({});
 
+  const jackettUrl = useMemo(() => {
+    const url = capabilities?.jackettUrl;
+    if (!url) return undefined;
+
+    if (typeof window === 'undefined') {
+      return url;
+    }
+
+    try {
+      const parsed = new URL(url);
+      const hostname = window.location.hostname || 'localhost';
+      parsed.hostname = hostname;
+      if (!parsed.port) {
+        parsed.port = '9117';
+      }
+      return parsed.toString();
+    } catch {
+      const protocol = window.location.protocol || 'http:'\;
+      const hostname = window.location.hostname || 'localhost';
+      return `${protocol}//${hostname}:9117`;
+    }
+  }, [capabilities?.jackettUrl]);
+
   const providers = useMemo(() => {
     if (!providerQuery.data) {
       return [];
@@ -397,9 +420,9 @@ function SettingsPage() {
           </div>
           {capabilitiesLoading ? (
             <Skeleton className="h-12 w-48 rounded-full" />
-          ) : capabilities?.jackettUrl ? (
+          ) : jackettUrl ? (
             <Button asChild>
-              <a href={capabilities.jackettUrl} target="_blank" rel="noopener noreferrer">
+              <a href={jackettUrl} target="_blank" rel="noopener noreferrer">
                 Open Jackett Dashboard
               </a>
             </Button>

@@ -1,8 +1,11 @@
 import datetime as dt
+import logging
 import time
 from typing import Dict, List
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 UA = "Phelia/1.0 (contact: admin@example.com)"
 BASE = "https://musicbrainz.org/ws/2"
@@ -32,7 +35,17 @@ def new_releases_by_genre(genre: str, days: int = 30, limit: int = 50) -> List[D
         f"AND firstreleasedate:[{start.isoformat()} TO {end.isoformat()}] "
         f'AND tag:"{genre}"'
     )
-    data = _get("release-group", {"query": query, "fmt": "json", "limit": str(limit)})
+    try:
+        data = _get("release-group", {"query": query, "fmt": "json", "limit": str(limit)})
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "musicbrainz new releases request failed genre=%s days=%s limit=%s error=%s",
+            genre,
+            days,
+            limit,
+            exc,
+        )
+        return []
     items: List[Dict[str, object]] = []
     for release_group in data.get("release-groups", []):
         credits = release_group.get("artist-credit", [])

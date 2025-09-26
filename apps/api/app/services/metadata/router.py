@@ -128,16 +128,17 @@ class MetadataRouter:
             tasks["MusicBrainz"] = asyncio.create_task(
                 self.musicbrainz.lookup_release_group(artist, album, year)
             )
-        if self.discogs and getattr(self.discogs, "token", None) and hasattr(self.discogs, "lookup_release"):
-            tasks["Discogs"] = asyncio.create_task(
-                self.discogs.lookup_release(artist, album, year, None)
-            )
-        else:
-            providers["Discogs"].extra = {"error": "not_configured"}
         if self.lastfm and getattr(self.lastfm, "api_key", None) and hasattr(self.lastfm, "get_album_info"):
             tasks["Last.fm"] = asyncio.create_task(self.lastfm.get_album_info(artist, album))
         else:
             providers["Last.fm"].extra = {"error": "not_configured"}
+        discogs_configured = (
+            self.discogs
+            and getattr(self.discogs, "token", None)
+            and hasattr(self.discogs, "lookup_release")
+        )
+        if not discogs_configured:
+            providers["Discogs"].extra = {"error": "not_configured"}
 
         results: dict[str, Any] = {}
         if tasks:
@@ -172,6 +173,30 @@ class MetadataRouter:
                     existing_value.update(value)
                 else:
                     musicbrainz_details[key] = value
+
+        if discogs_configured:
+            mb_release_group_id = None
+            if mb_data:
+                release_group = mb_data.get("release_group") or {}
+                mb_release_group_id = release_group.get("id")
+            try:
+                discogs_data = await self.discogs.lookup_release(
+                    artist, album, year, mb_release_group_id
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                logger.warning(
+                    "provider Discogs failed for title=%s artist=%s album=%s: %s",
+                    title,
+                    artist,
+                    album,
+                    exc,
+                )
+                providers["Discogs"].extra = {"error": str(exc)}
+                discogs_data = None
+            if discogs_data:
+                results["Discogs"] = discogs_data
+            elif providers["Discogs"].extra is None:
+                providers["Discogs"].extra = {"error": "no_result"}
 
         discogs_data = results.get("Discogs")
         if discogs_data:

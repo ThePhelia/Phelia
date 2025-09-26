@@ -1,6 +1,7 @@
 import datetime
 from typing import Any
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -62,6 +63,20 @@ async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest
     assert items[0]["artist"] == "Test Artist"
     assert items[0]["firstReleaseDate"] == "2024-05-01"
     assert items[0]["secondaryTypes"] == ["Live"]
+
+
+def test_new_releases_by_genre_handles_http_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = httpx.Request("GET", "https://musicbrainz.org/ws/2/release-group")
+
+    def failing_get(path: str, params: dict[str, str], timeout: int = 12) -> dict[str, object]:  # noqa: ARG001
+        response = httpx.Response(status_code=503, request=request)
+        raise httpx.HTTPStatusError("service unavailable", request=request, response=response)
+
+    monkeypatch.setattr(discovery_mb, "_get", failing_get)
+
+    items = discovery_mb.new_releases_by_genre("techno", days=10, limit=5)
+
+    assert items == []
 
 
 @pytest.mark.anyio

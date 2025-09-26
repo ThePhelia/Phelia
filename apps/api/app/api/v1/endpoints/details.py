@@ -180,6 +180,10 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
 
     artist_info = _ensure_dict(musicbrainz_data.get("artist"))
     release_group_info = _ensure_dict(musicbrainz_data.get("release_group"))
+    if not release_group_info and musicbrainz_data and "release_group" not in musicbrainz_data:
+        release_group_info = _ensure_dict(musicbrainz_data)
+
+    release_group_id = release_group_info.get("id") or musicbrainz_data.get("id")
 
     detail = DetailResponse(
         id=item_id,
@@ -220,9 +224,9 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
             tmdb_extra.get("recommendations"), card.media_type
         ),
         musicbrainz=MusicBrainzInfo(
-            artist_id=artist_info.get("id"),
+            artist_id=artist_info.get("id") or musicbrainz_data.get("artist_id"),
             artist_name=artist_info.get("name"),
-            release_group_id=release_group_info.get("id"),
+            release_group_id=release_group_id,
         ),
     )
 

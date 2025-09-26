@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import BrowsePage from '@/app/routes/browse';
+import MusicPage from '@/app/routes/music';
 import { renderWithProviders } from '@/app/test-utils';
 
 const { toastErrorMock, toastMock } = vi.hoisted(() => {
@@ -14,7 +14,39 @@ vi.mock('sonner', () => ({
   toast: toastMock,
 }));
 
-describe('BrowsePage', () => {
+const discoverMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: { pages: [{ items: [] }] },
+    isLoading: false,
+    isFetching: false,
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
+  })),
+);
+
+const searchMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: { pages: [{ items: [] }] },
+    isLoading: false,
+    isFetching: false,
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
+  })),
+);
+
+const mutateListMock = vi.hoisted(() => vi.fn(() => ({ mutateAsync: vi.fn() })));
+
+vi.mock('@/app/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app/lib/api')>();
+  return {
+    ...actual,
+    useDiscover: discoverMock,
+    useSearch: searchMock,
+    useMutateList: mutateListMock,
+  };
+});
+
+describe('MusicPage', () => {
   const fetchMock = vi.fn();
 
   function createResponse(data: unknown, ok = true, status = 200) {
@@ -28,10 +60,18 @@ describe('BrowsePage', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     toastErrorMock.mockReset();
+    discoverMock.mockClear();
+    searchMock.mockClear();
+    mutateListMock.mockClear();
+    (global as unknown as { IntersectionObserver?: unknown }).IntersectionObserver = vi.fn(() => ({
+      observe: vi.fn(),
+      disconnect: vi.fn(),
+      unobserve: vi.fn(),
+    }));
     global.fetch = fetchMock;
   });
 
-  it('renders curated genres', async () => {
+  it('renders curated genres from the API', async () => {
     fetchMock.mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as Request).url;
       if (url.includes('/genres')) {
@@ -45,7 +85,7 @@ describe('BrowsePage', () => {
       return createResponse({ items: [] });
     });
 
-    renderWithProviders(<BrowsePage />);
+    renderWithProviders(<MusicPage />);
 
     expect(await screen.findByRole('button', { name: /techno/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /house/i })).toBeInTheDocument();
@@ -103,7 +143,7 @@ describe('BrowsePage', () => {
       return createResponse({ items: [] });
     });
 
-    renderWithProviders(<BrowsePage />);
+    renderWithProviders(<MusicPage />);
 
     const ambientButton = await screen.findByRole('button', { name: /ambient/i });
     await user.click(ambientButton);
@@ -117,40 +157,12 @@ describe('BrowsePage', () => {
     expect(calls.some((url) => url.includes('/top'))).toBe(true);
   });
 
-  it('shows toasts on fetch errors but keeps UI responsive', async () => {
-    fetchMock.mockImplementation((input: RequestInfo) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      if (url.includes('/genres')) {
-        return createResponse({
-          genres: [{ key: 'rock', label: 'Rock', appleGenreId: 21 }],
-        });
-      }
-      if (url.includes('/new')) {
-        return createResponse({ message: 'upstream error' }, false, 502);
-      }
-      if (url.includes('/top')) {
-        return createResponse({
-          items: [
-            {
-              id: 'apple42',
-              title: 'Guitar Echoes',
-              artist: 'Ampersand',
-              releaseDate: '2024-03-01',
-            },
-          ],
-        });
-      }
-      return createResponse({ items: [] });
-    });
+  it('falls back to curated genres when the API fails', async () => {
+    fetchMock.mockRejectedValue(new Error('network error'));
 
-    renderWithProviders(<BrowsePage />);
+    renderWithProviders(<MusicPage />);
 
-    await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Unable to load new releases.');
-    });
-
-    const headers = await screen.findAllByText(/Most Recent/i);
-    expect(headers.length).toBeGreaterThan(0);
-    expect(screen.queryByText('Guitar Echoes')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /techno/i })).toBeInTheDocument();
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 });

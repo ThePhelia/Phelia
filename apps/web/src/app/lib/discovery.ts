@@ -1,83 +1,71 @@
-export interface DiscoveryGenre {
-  key: string;
-  label: string;
-  appleGenreId: number;
+export type AlbumItem = {
+  id: string;
+  canonical_key: string;
+  source: 'lastfm' | 'deezer' | 'itunes' | 'musicbrainz' | 'listenbrainz' | 'spotify';
+  title: string;
+  artist: string;
+  release_date?: string;
+  cover_url?: string;
+  source_url?: string;
+  tags: string[];
+  market?: string;
+  score?: number;
+  preview_url?: string;
+  extra?: Record<string, string>;
+};
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+
+function buildUrl(path: string, params?: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.set(key, String(value));
+      }
+    });
+  }
+  const qs = query.toString();
+  const base = API_BASE?.replace(/\/$/, '') ?? '';
+  if (base) {
+    return `${base}${path}${qs ? `?${qs}` : ''}`;
+  }
+  return `${path}${qs ? `?${qs}` : ''}`;
 }
 
-async function parseJson(response: Response) {
+async function fetchJson<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+  const response = await fetch(buildUrl(path, params), { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    throw new Error(`Failed to fetch ${path}: ${response.status}`);
   }
   return response.json();
 }
 
-const CURATED_FALLBACK: DiscoveryGenre[] = [
-  { key: 'techno', label: 'Techno', appleGenreId: 718 },
-  { key: 'house', label: 'House', appleGenreId: 1250 },
-  { key: 'dnb', label: 'Drum & Bass', appleGenreId: 1253 },
-  { key: 'ambient', label: 'Ambient', appleGenreId: 502 },
-  { key: 'rock', label: 'Rock', appleGenreId: 21 },
-  { key: 'pop', label: 'Pop', appleGenreId: 14 },
-  { key: 'hip-hop', label: 'Hip-Hop', appleGenreId: 18 },
-  { key: 'jazz', label: 'Jazz', appleGenreId: 11 },
-  { key: 'metal', label: 'Metal', appleGenreId: 1153 },
-  { key: 'indie', label: 'Indie', appleGenreId: 20 },
-  { key: 'classical', label: 'Classical', appleGenreId: 5 },
-];
-
-export async function getGenres(): Promise<DiscoveryGenre[]> {
-  try {
-    const response = await fetch('/api/v1/discovery/genres');
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-    const data = await response.json();
-    const genres = Array.isArray(data?.genres) ? data.genres : [];
-    return genres.length ? genres : CURATED_FALLBACK;
-  } catch (error) {
-    console.warn('Falling back to curated genres', error);
-    return CURATED_FALLBACK;
-  }
+export async function fetchDiscoveryNew(market?: string, limit = 50): Promise<AlbumItem[]> {
+  return fetchJson('/discovery/new', { market, limit });
 }
 
-export async function getNew(genre: string, days = 30, limit = 50) {
-  const params = new URLSearchParams({
-    genre,
-    days: String(days),
-    limit: String(limit),
-  });
-  const response = await fetch(`/api/v1/discovery/new?${params.toString()}`);
-  const data = await parseJson(response);
-  return Array.isArray(data?.items) ? data.items : [];
+export async function fetchDiscoveryCharts(market?: string, limit = 50): Promise<AlbumItem[]> {
+  return fetchJson('/discovery/charts', { market, limit });
 }
 
-export async function getTop(
-  genreId: number,
-  feed = 'most-recent',
-  kind = 'albums',
-  limit = 50,
-  storefront?: string,
-) {
-  const params = new URLSearchParams({
-    feed,
-    kind,
-    limit: String(limit),
-    genre_id: String(genreId),
-  });
-  if (storefront) {
-    params.append('storefront', storefront);
-  }
-  const response = await fetch(`/api/v1/discovery/top?${params.toString()}`);
-  const data = await parseJson(response);
-  return Array.isArray(data?.items) ? data.items : [];
+export async function fetchDiscoveryTag(tag: string, limit = 50): Promise<AlbumItem[]> {
+  return fetchJson('/discovery/tags', { tag, limit });
 }
 
-export async function getSimilarArtists(artistMbid: string, limit = 20) {
-  const params = new URLSearchParams({
-    artist_mbid: artistMbid,
-    limit: String(limit),
-  });
-  const response = await fetch(`/api/v1/discovery/similar-artists?${params.toString()}`);
-  const data = await parseJson(response);
-  return Array.isArray(data?.items) ? data.items : [];
+export async function fetchDiscoverySearch(query: string, limit = 25): Promise<AlbumItem[]> {
+  return fetchJson('/discovery/search', { q: query, limit });
+}
+
+export type DiscoveryProvidersStatus = {
+  lastfm: boolean;
+  deezer: boolean;
+  itunes: boolean;
+  musicbrainz: boolean;
+  listenbrainz: boolean;
+  spotify: boolean;
+};
+
+export async function fetchDiscoveryProviders(): Promise<DiscoveryProvidersStatus> {
+  return fetchJson('/discovery/providers/status');
 }

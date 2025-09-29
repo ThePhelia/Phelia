@@ -95,7 +95,8 @@ async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch
             }
         ]
 
-    monkeypatch.setattr(discovery_routes, "new_releases_by_genre", fake_service)
+    monkeypatch.setattr(discovery_routes, "new_releases_by_genre", fake_service, raising=False)
+    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -113,13 +114,82 @@ async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.anyio
+async def test_discovery_new_endpoint_wraps_mb_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+        return {
+            "release-groups": [
+                {
+                    "id": "rg-1",
+                    "title": "Fallback Album",
+                    "artist-credit": [{"name": "Fallback Artist"}],
+                    "first-release-date": "2024-05-01",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fake_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discovery/new", params={"genre": "techno", "limit": 5})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "items" in payload
+    assert isinstance(payload["items"], list)
+    assert payload["items"][0]["title"] == "Fallback Album"
+
+
+@pytest.mark.anyio
+async def test_discovery_new_endpoint_wraps_provider_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDiscoveryService:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, int]] = []
+
+        async def fetch_new_albums(self, tag: str, since: str, limit: int) -> list[dict[str, Any]]:
+            self.calls.append((tag, since, limit))
+            return [
+                {
+                    "id": "svc-1",
+                    "title": "Service Album",
+                }
+            ]
+
+    svc = FakeDiscoveryService()
+
+    async def fail_mb_get_json(*args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG001
+        raise AssertionError("MusicBrainz fallback should not be called")
+
+    monkeypatch.setattr(discovery_routes, "discovery_service", svc, raising=False)
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fail_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discovery/new", params={"genre": "techno", "limit": 5})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "items" in payload
+    assert isinstance(payload["items"], list)
+    assert payload["items"][0]["title"] == "Service Album"
+    assert svc.calls  # service was invoked
+
+
+@pytest.mark.anyio
 async def test_discovery_top_endpoint_handles_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = FakeRedis()
 
     def failing_service(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:  # noqa: ARG001 - we only raise
         raise RuntimeError("upstream failure")
 
-    monkeypatch.setattr(discovery_routes, "apple_feed", failing_service)
+    monkeypatch.setattr(discovery_routes, "apple_feed", failing_service, raising=False)
+    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -151,7 +221,8 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
             }
         ]
 
-    monkeypatch.setattr(discovery_routes, "apple_feed", fake_service)
+    monkeypatch.setattr(discovery_routes, "apple_feed", fake_service, raising=False)
+    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -175,6 +246,88 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.anyio
+async def test_discovery_top_endpoint_wraps_mb_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+        if url.endswith("/artist"):
+            return {
+                "artists": [
+                    {
+                        "id": "artist-1",
+                        "name": "Fallback Artist",
+                    }
+                ]
+            }
+        return {
+            "release-groups": [
+                {
+                    "id": "rg-1",
+                    "title": "Fallback Album",
+                    "first-release-date": "2023-09-01",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fake_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/v1/discovery/top",
+            params={"genre": "techno", "limit": 1},
+        )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "items" in payload
+    assert isinstance(payload["items"], list)
+    assert payload["items"][0]["artist"] == "Fallback Artist"
+
+
+@pytest.mark.anyio
+async def test_discovery_top_endpoint_wraps_provider_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDiscoveryService:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str, int]] = []
+
+        async def fetch_top(self, *, kind: str, tag: str, feed: str, limit: int) -> list[dict[str, Any]]:
+            self.calls.append((kind, tag, feed, limit))
+            return [
+                {
+                    "id": "svc-1",
+                    "title": "Service Album",
+                }
+            ]
+
+    svc = FakeDiscoveryService()
+
+    async def fail_mb_get_json(*args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG001
+        raise AssertionError("MusicBrainz fallback should not be called")
+
+    monkeypatch.setattr(discovery_routes, "discovery_service", svc, raising=False)
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fail_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/v1/discovery/top",
+            params={"genre": "techno", "limit": 5},
+        )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "items" in payload
+    assert isinstance(payload["items"], list)
+    assert payload["items"][0]["title"] == "Service Album"
+    assert svc.calls
+
+
+@pytest.mark.anyio
 async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = FakeRedis()
     calls: list[tuple[str, int]] = []
@@ -185,7 +338,8 @@ async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch)
             {"mbid": "artist-1", "name": "Example Artist", "score": 0.91},
         ]
 
-    monkeypatch.setattr(discovery_routes, "similar_artists", fake_similar)
+    monkeypatch.setattr(discovery_routes, "similar_artists", fake_similar, raising=False)
+    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
 
     app = FastAPI()
     app.include_router(discovery_routes.router)

@@ -96,7 +96,9 @@ async def new_albums(
         try:
             releases = await svc.fetch_new_albums(mb_tag, since, limit)  # type: ignore[arg-type]
             if releases:
-                return releases
+                if isinstance(releases, dict):
+                    return releases
+                return {"items": releases}
         except Exception:
             # fall through to MB fallback if provider errors out
             pass
@@ -117,7 +119,7 @@ async def new_albums(
             "cover": f"https://coverartarchive.org/release-group/{rg.get('id')}/front-250",
             "source": "musicbrainz",
         })
-    return out
+    return {"items": out}
 
 @router.get("/top")
 async def top_albums(
@@ -136,7 +138,9 @@ async def top_albums(
         try:
             items = await svc.fetch_top(kind=kind, tag=mb_tag, feed=feed, limit=limit)  # type: ignore[arg-type]
             if items:
-                return items
+                if isinstance(items, dict):
+                    return items
+                return {"items": items}
         except Exception:
             # fall back to MB on any provider error
             pass
@@ -166,4 +170,4 @@ async def top_albums(
         })
         if len(results) >= limit:
             break
-    return results
+    return {"items": results}

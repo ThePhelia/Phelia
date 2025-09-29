@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Iterable, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -511,12 +512,28 @@ async def lookup(body: LookupRequest) -> dict[str, Any]:
 
 @public_router.get("/providers/status")
 def providers_status() -> dict[str, Any]:
+    discovery = {
+        "lastfm": bool(os.getenv("LASTFM_API_KEY")),
+        "deezer": os.getenv("DEEZER_ENABLED", "true").lower() == "true",
+        "itunes": os.getenv("ITUNES_ENABLED", "true").lower() == "true",
+        "musicbrainz": os.getenv("MUSICBRAINZ_ENABLED", "true").lower() == "true",
+        "listenbrainz": (
+            os.getenv("LISTENBRAINZ_ENABLED", "false").lower() == "true"
+            and bool(os.getenv("LISTENBRAINZ_TOKEN"))
+        ),
+        "spotify": (
+            os.getenv("SPOTIFY_ENABLED", "false").lower() == "true"
+            and bool(os.getenv("SPOTIFY_CLIENT_ID"))
+            and bool(os.getenv("SPOTIFY_CLIENT_SECRET"))
+        ),
+    }
     return {
         "tmdb": runtime_settings.tmdb_enabled,
         "omdb": runtime_settings.omdb_enabled,
         "discogs": runtime_settings.discogs_enabled,
         "lastfm": runtime_settings.lastfm_enabled,
         "musicbrainz": bool(settings.MB_USER_AGENT),
+        "discovery": discovery,
     }
 
 

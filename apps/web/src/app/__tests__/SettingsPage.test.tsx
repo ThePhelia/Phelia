@@ -77,6 +77,9 @@ describe('SettingsPage services tab', () => {
     providerQueryState.data = [
       { provider: 'tmdb', configured: true, preview: '****abcd' },
       { provider: 'discogs', configured: false, preview: null },
+      { provider: 'listenbrainz', configured: false, preview: null },
+      { provider: 'spotify_client_id', configured: false, preview: null },
+      { provider: 'spotify_client_secret', configured: true, preview: '••••' },
     ];
 
     const user = userEvent.setup();
@@ -94,6 +97,12 @@ describe('SettingsPage services tab', () => {
       'href',
       'https://www.discogs.com/settings/developers',
     );
+    expect(screen.getByText('ListenBrainz token:', { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'https://listenbrainz.org/settings/' })).toHaveAttribute(
+      'href',
+      'https://listenbrainz.org/settings/',
+    );
+    expect(screen.getAllByText('Spotify Developer Dashboard:', { exact: false })).toHaveLength(2);
   });
 
   it('submits a provider key via the mutation hook', async () => {
@@ -104,11 +113,11 @@ describe('SettingsPage services tab', () => {
 
     await user.click(screen.getByRole('button', { name: /services/i }));
 
-    const input = screen.getByLabelText(/tmdb api key/i);
+    const input = screen.getByRole('textbox', { name: /tmdb api key/i });
     await user.clear(input);
     await user.type(input, 'abcd1234');
 
-    await user.click(screen.getByRole('button', { name: /save tmdb key/i }));
+    await user.click(screen.getByRole('button', { name: /save tmdb api key/i }));
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith({ provider: 'tmdb', api_key: 'abcd1234' });
@@ -117,6 +126,40 @@ describe('SettingsPage services tab', () => {
     const result = await mutateAsync.mock.results.at(-1)?.value;
     expect(result).toEqual({ provider: 'tmdb', configured: true });
     expect(toastSuccess).toHaveBeenCalledWith('TMDb API key saved.');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('handles Spotify client credentials independently', async () => {
+    providerQueryState.data = [
+      { provider: 'spotify_client_id', configured: false, preview: null },
+      { provider: 'spotify_client_secret', configured: true, preview: '••••••' },
+    ];
+
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(screen.getByRole('button', { name: /services/i }));
+
+    const clientIdInput = screen.getByRole('textbox', { name: /spotify client id/i });
+    await user.clear(clientIdInput);
+    await user.type(clientIdInput, 'spotify-client-id');
+
+    await user.click(screen.getByRole('button', { name: /save spotify client id/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({ provider: 'spotify_client_id', api_key: 'spotify-client-id' });
+    });
+    expect(toastSuccess).toHaveBeenCalledWith('Spotify Client ID saved.');
+
+    const clientSecretInput = screen.getByRole('textbox', { name: /spotify client secret/i });
+    await user.clear(clientSecretInput);
+
+    await user.click(screen.getByRole('button', { name: /save spotify client secret/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({ provider: 'spotify_client_secret', api_key: null });
+    });
+    expect(toastSuccess).toHaveBeenCalledWith('Spotify Client Secret cleared.');
     expect(toastError).not.toHaveBeenCalled();
   });
 });

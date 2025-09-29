@@ -5,6 +5,7 @@ import base64
 import os
 import random
 import time
+from collections.abc import Callable
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -14,27 +15,37 @@ from .base import Provider
 
 SPOTIFY_API_ROOT = "https://api.spotify.com/v1"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
-_token_cache: dict[str, tuple[str, float]] = {}
+_token_cache: dict[str, tuple[str, float, str]] = {}
 
 
 class SpotifyProvider(Provider):
     name = "spotify"
 
-    def __init__(self) -> None:
-        client_id = os.getenv("SPOTIFY_CLIENT_ID")
-        client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
-        enabled = os.getenv("SPOTIFY_ENABLED", "false").lower() == "true"
-        if not enabled or not client_id or not client_secret:
-            raise RuntimeError("Spotify disabled")
-        self.client_id = client_id
-        self.client_secret = client_secret
+    def __init__(
+        self,
+        *,
+        client_id_getter: Callable[[], Optional[str]],
+        client_secret_getter: Callable[[], Optional[str]],
+    ) -> None:
+        self._client_id_getter = client_id_getter
+        self._client_secret_getter = client_secret_getter
+        # Validate credentials immediately so misconfiguration surfaces early.
+        self._credentials()
         self.timeout = float(os.getenv("DISCOVERY_HTTP_TIMEOUT", "8"))
 
+    def _credentials(self) -> tuple[str, str]:
+        client_id = self._client_id_getter()
+        client_secret = self._client_secret_getter()
+        if not client_id or not client_secret:
+            raise RuntimeError("Spotify credentials missing")
+        return client_id, client_secret
+
     async def _get_token(self) -> str:
-        cached = _token_cache.get(self.client_id)
-        if cached and cached[1] > time.time():
+        client_id, client_secret = self._credentials()
+        cached = _token_cache.get(client_id)
+        if cached and cached[1] > time.time() and cached[2] == client_secret:
             return cached[0]
-        auth_header = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
+        auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
         data = {"grant_type": "client_credentials"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
@@ -46,7 +57,7 @@ class SpotifyProvider(Provider):
         payload = resp.json()
         token = payload.get("access_token")
         expires_in = int(payload.get("expires_in", 3600))
-        _token_cache[self.client_id] = (token, time.time() + expires_in - 60)
+        _token_cache[client_id] = (token, time.time() + expires_in - 60, client_secret)
         return token
 
     async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

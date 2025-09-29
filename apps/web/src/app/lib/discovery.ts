@@ -1,3 +1,5 @@
+import { SimilarArtist } from './types';
+
 export type AlbumItem = {
   id: string;
   canonical_key: string;
@@ -14,7 +16,7 @@ export type AlbumItem = {
   extra?: Record<string, string>;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
 function buildUrl(path: string, params?: Record<string, string | number | undefined>) {
   const query = new URLSearchParams();
@@ -55,6 +57,17 @@ export async function fetchDiscoveryTag(tag: string, limit = 50): Promise<AlbumI
 
 export async function fetchDiscoverySearch(query: string, limit = 25): Promise<AlbumItem[]> {
   return fetchJson('/discovery/search', { q: query, limit });
+}
+
+export async function getSimilarArtists(
+  artistMbid: string,
+  limit = 20,
+): Promise<SimilarArtist[]> {
+  const response = await fetchJson<{ items: SimilarArtist[] }>('/discovery/similar-artists', {
+    artist_mbid: artistMbid,
+    limit,
+  });
+  return response.items;
 }
 
 export type DiscoveryProvidersStatus = {

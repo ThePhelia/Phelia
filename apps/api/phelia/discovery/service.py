@@ -5,6 +5,8 @@ import os
 from collections.abc import Iterable
 from typing import Dict, List, Optional
 
+from app.core.runtime_settings import runtime_settings
+
 from .cache import build_cache_key, cache_get_json, cache_set_json
 from .models import AlbumItem, DiscoveryResponse, ProvidersStatus
 from .providers.base import Provider
@@ -52,7 +54,7 @@ def _canonical_key(item: AlbumItem) -> str:
 def _provider_enabled(name: str) -> bool:
     env = os.getenv
     if name == "lastfm":
-        return bool(env("LASTFM_API_KEY"))
+        return runtime_settings.is_configured("lastfm")
     if name == "deezer":
         return env("DEEZER_ENABLED", "true").lower() == "true"
     if name == "itunes":
@@ -60,11 +62,11 @@ def _provider_enabled(name: str) -> bool:
     if name == "musicbrainz":
         return env("MUSICBRAINZ_ENABLED", "true").lower() == "true"
     if name == "listenbrainz":
-        enabled = env("LISTENBRAINZ_ENABLED", "false").lower() == "true"
-        return enabled and bool(env("LISTENBRAINZ_TOKEN"))
+        return runtime_settings.is_configured("listenbrainz")
     if name == "spotify":
-        enabled = env("SPOTIFY_ENABLED", "false").lower() == "true"
-        return enabled and bool(env("SPOTIFY_CLIENT_ID")) and bool(env("SPOTIFY_CLIENT_SECRET"))
+        return runtime_settings.is_configured("spotify_client_id") and runtime_settings.is_configured(
+            "spotify_client_secret"
+        )
     return False
 
 
@@ -75,7 +77,7 @@ def _get_provider(name: str) -> Optional[Provider]:
         return _PROVIDER_CACHE[name]
     try:
         if name == "lastfm":
-            provider = LastFMProvider()
+            provider = LastFMProvider(runtime_settings.key_getter("lastfm"))
         elif name == "deezer":
             provider = DeezerProvider()
         elif name == "itunes":
@@ -83,9 +85,12 @@ def _get_provider(name: str) -> Optional[Provider]:
         elif name == "musicbrainz":
             provider = MusicBrainzProvider()
         elif name == "listenbrainz":
-            provider = ListenBrainzProvider()
+            provider = ListenBrainzProvider(runtime_settings.key_getter("listenbrainz"))
         elif name == "spotify":
-            provider = SpotifyProvider()
+            provider = SpotifyProvider(
+                client_id_getter=runtime_settings.key_getter("spotify_client_id"),
+                client_secret_getter=runtime_settings.key_getter("spotify_client_secret"),
+            )
         else:
             return None
     except Exception:  # noqa: BLE001

@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 import pytest
 import httpx
 
+from app.core.runtime_settings import runtime_settings
+
 from phelia.discovery import cache, service
 
 
@@ -24,9 +26,19 @@ async def reset_cache(monkeypatch):
     dummy = DummyRedis()
     monkeypatch.setattr(cache, "_redis_client", dummy, raising=False)
     monkeypatch.setattr(cache, "_ensure_client", lambda: dummy, raising=False)
+    runtime_settings.reset_to_env()
+    runtime_settings.update_many(
+        {
+            "lastfm": None,
+            "listenbrainz": None,
+            "spotify_client_id": None,
+            "spotify_client_secret": None,
+        }
+    )
     service._PROVIDER_CACHE.clear()
     yield
     service._PROVIDER_CACHE.clear()
+    runtime_settings.reset_to_env()
 
 
 class MockAsyncClient:
@@ -55,8 +67,6 @@ class MockAsyncClient:
 @pytest.mark.anyio
 async def test_get_charts_uses_cache(monkeypatch):
     monkeypatch.setenv("DEEZER_ENABLED", "true")
-    monkeypatch.delenv("SPOTIFY_ENABLED", raising=False)
-    monkeypatch.delenv("LASTFM_API_KEY", raising=False)
     responses = [
         (
             200,
@@ -92,10 +102,9 @@ async def test_get_charts_uses_cache(monkeypatch):
 
 @pytest.mark.anyio
 async def test_get_tag_enriches_from_itunes(monkeypatch):
-    monkeypatch.setenv("LASTFM_API_KEY", "key")
+    runtime_settings.set("lastfm", "key")
     monkeypatch.setenv("ITUNES_ENABLED", "true")
     monkeypatch.delenv("DEEZER_ENABLED", raising=False)
-    monkeypatch.delenv("SPOTIFY_ENABLED", raising=False)
     responses = [
         (
             200,
@@ -144,13 +153,13 @@ async def test_get_tag_enriches_from_itunes(monkeypatch):
 
 @pytest.mark.anyio
 async def test_providers_status_flags(monkeypatch):
-    monkeypatch.setenv("LASTFM_API_KEY", "key")
+    runtime_settings.set("lastfm", "key")
+    runtime_settings.set("spotify_client_id", None)
+    runtime_settings.set("spotify_client_secret", None)
+    runtime_settings.set("listenbrainz", None)
     monkeypatch.setenv("DEEZER_ENABLED", "true")
     monkeypatch.setenv("ITUNES_ENABLED", "true")
     monkeypatch.setenv("MUSICBRAINZ_ENABLED", "true")
-    monkeypatch.setenv("SPOTIFY_ENABLED", "false")
-    monkeypatch.delenv("SPOTIFY_CLIENT_ID", raising=False)
-    monkeypatch.delenv("SPOTIFY_CLIENT_SECRET", raising=False)
 
     status = await service.providers_status()
     assert status.lastfm is True

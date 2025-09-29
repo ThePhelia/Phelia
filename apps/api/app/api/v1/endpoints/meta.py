@@ -513,18 +513,14 @@ async def lookup(body: LookupRequest) -> dict[str, Any]:
 @public_router.get("/providers/status")
 def providers_status() -> dict[str, Any]:
     discovery = {
-        "lastfm": bool(os.getenv("LASTFM_API_KEY")),
+        "lastfm": runtime_settings.is_configured("lastfm"),
         "deezer": os.getenv("DEEZER_ENABLED", "true").lower() == "true",
         "itunes": os.getenv("ITUNES_ENABLED", "true").lower() == "true",
         "musicbrainz": os.getenv("MUSICBRAINZ_ENABLED", "true").lower() == "true",
-        "listenbrainz": (
-            os.getenv("LISTENBRAINZ_ENABLED", "false").lower() == "true"
-            and bool(os.getenv("LISTENBRAINZ_TOKEN"))
-        ),
+        "listenbrainz": runtime_settings.is_configured("listenbrainz"),
         "spotify": (
-            os.getenv("SPOTIFY_ENABLED", "false").lower() == "true"
-            and bool(os.getenv("SPOTIFY_CLIENT_ID"))
-            and bool(os.getenv("SPOTIFY_CLIENT_SECRET"))
+            runtime_settings.is_configured("spotify_client_id")
+            and runtime_settings.is_configured("spotify_client_secret")
         ),
     }
     return {

@@ -17,6 +17,9 @@ interface ProviderMeta {
   helpPrefix: string;
   helpUrl?: string;
   helpLabel?: string;
+  title?: string;
+  successLabel?: string;
+  inputAriaLabel?: string;
 }
 
 const PROVIDER_META: Record<string, ProviderMeta> = {
@@ -60,9 +63,48 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
     helpUrl: 'https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#User_Agent',
     helpLabel: 'https://musicbrainz.org/doc/Development/XML_Web_Service/Version_2#User_Agent',
   },
+  listenbrainz: {
+    label: 'ListenBrainz',
+    description: 'Share your ListenBrainz token so Phelia can pull in your listening history.',
+    fieldLabel: 'User token',
+    helpPrefix: 'ListenBrainz token:',
+    helpUrl: 'https://listenbrainz.org/settings/',
+    helpLabel: 'https://listenbrainz.org/settings/',
+  },
+  spotify_client_id: {
+    label: 'Spotify',
+    title: 'Spotify Client ID',
+    description: 'Connect Phelia to your Spotify application by providing its client ID.',
+    fieldLabel: 'Client ID',
+    helpPrefix: 'Spotify Developer Dashboard:',
+    helpUrl: 'https://developer.spotify.com/dashboard',
+    helpLabel: 'https://developer.spotify.com/dashboard',
+    successLabel: 'Spotify Client ID',
+    inputAriaLabel: 'Spotify Client ID',
+  },
+  spotify_client_secret: {
+    label: 'Spotify',
+    title: 'Spotify Client Secret',
+    description: 'Paste the client secret from your Spotify application. Keep this value private.',
+    fieldLabel: 'Client secret',
+    helpPrefix: 'Spotify Developer Dashboard:',
+    helpUrl: 'https://developer.spotify.com/dashboard',
+    helpLabel: 'https://developer.spotify.com/dashboard',
+    successLabel: 'Spotify Client Secret',
+    inputAriaLabel: 'Spotify Client Secret',
+  },
 };
 
-const PROVIDER_ORDER: MetadataProviderSlug[] = ['tmdb', 'omdb', 'discogs', 'lastfm', 'musicbrainz'];
+const PROVIDER_ORDER: MetadataProviderSlug[] = [
+  'tmdb',
+  'omdb',
+  'discogs',
+  'lastfm',
+  'musicbrainz',
+  'listenbrainz',
+  'spotify_client_id',
+  'spotify_client_secret',
+];
 
 function formatProviderLabel(provider: string): string {
   return provider
@@ -312,6 +354,7 @@ function SettingsPage() {
             <ul className="grid gap-4 sm:grid-cols-2">
               {providers.map((provider) => {
                 const meta = getProviderMeta(provider.provider);
+                const displayLabel = meta.title ?? meta.label;
                 const inputId = `provider-${provider.provider}`;
                 const currentValue = values[provider.provider] ?? '';
                 const baseline = baselines[provider.provider] ?? '';
@@ -322,6 +365,9 @@ function SettingsPage() {
                   updateProvider.isPending && updateProvider.variables?.provider === provider.provider;
                 const statusClass = provider.configured ? 'text-emerald-400' : 'text-muted-foreground';
                 const statusLabel = provider.configured ? 'Configured' : 'Not configured';
+                const combinedLabel = `${meta.label}${meta.fieldLabel ? ` ${meta.fieldLabel}` : ''}`.trim();
+                const successLabel = meta.successLabel ?? combinedLabel;
+                const inputAriaLabel = meta.inputAriaLabel ?? combinedLabel;
 
                 const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
                   event.preventDefault();
@@ -333,8 +379,8 @@ function SettingsPage() {
                     await updateProvider.mutateAsync({ provider: provider.provider, api_key: payload });
                     const successMessage =
                       payload === null
-                        ? `${meta.label} ${meta.fieldLabel} cleared.`
-                        : `${meta.label} ${meta.fieldLabel} saved.`;
+                        ? `${successLabel} cleared.`
+                        : `${successLabel} saved.`;
                     toast.success(successMessage);
                     setTouched((prev) => ({ ...prev, [provider.provider]: false }));
                     setValues((prev) => ({ ...prev, [provider.provider]: payload ?? '' }));
@@ -358,7 +404,7 @@ function SettingsPage() {
                   <li key={provider.provider} className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-1">
-                        <h3 className="text-base font-semibold text-foreground">{meta.label}</h3>
+                        <h3 className="text-base font-semibold text-foreground">{displayLabel}</h3>
                         <p className="text-sm text-muted-foreground">{meta.description}</p>
                       </div>
                       <span className={`text-xs font-medium ${statusClass}`}>{statusLabel}</span>
@@ -373,7 +419,7 @@ function SettingsPage() {
                           value={currentValue}
                           onChange={handleChange}
                           placeholder={`Enter ${meta.fieldLabel.toLowerCase()} or leave blank to remove`}
-                          aria-label={`${meta.label} ${meta.fieldLabel}`}
+                          aria-label={inputAriaLabel}
                           disabled={isSaving}
                         />
                       </div>
@@ -396,7 +442,7 @@ function SettingsPage() {
                         <p>Leave blank to remove the saved key.</p>
                       </div>
                       <div className="flex justify-end">
-                        <Button type="submit" disabled={!isDirty || isSaving} aria-label={`Save ${meta.label} key`}>
+                        <Button type="submit" disabled={!isDirty || isSaving} aria-label={`Save ${successLabel}`}>
                           {isSaving ? 'Saving...' : 'Save'}
                         </Button>
                       </div>

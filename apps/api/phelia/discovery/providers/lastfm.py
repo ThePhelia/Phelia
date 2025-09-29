@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+from collections.abc import Callable
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -16,15 +17,17 @@ LASTFM_API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 class LastFMProvider(Provider):
     name = "lastfm"
 
-    def __init__(self) -> None:
-        api_key = os.getenv("LASTFM_API_KEY")
-        if not api_key:
+    def __init__(self, api_key_getter: Callable[[], Optional[str]]) -> None:
+        self._api_key_getter = api_key_getter
+        if not self._api_key_getter():
             raise RuntimeError("LASTFM_API_KEY missing")
-        self.api_key = api_key
         self.timeout = float(os.getenv("DISCOVERY_HTTP_TIMEOUT", "8"))
 
     async def _request(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        params = {**params, "api_key": self.api_key, "format": "json"}
+        api_key = self._api_key_getter()
+        if not api_key:
+            raise RuntimeError("LASTFM_API_KEY missing")
+        params = {**params, "api_key": api_key, "format": "json"}
         retries = 2
         delay = 0.5
         last_error: Exception | None = None

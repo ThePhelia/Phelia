@@ -203,6 +203,9 @@ export type MetadataProviderSlug =
   | 'discogs'
   | 'lastfm'
   | 'musicbrainz'
+  | 'listenbrainz'
+  | 'spotify_client_id'
+  | 'spotify_client_secret'
   | (string & {});
 
 export interface ProviderSettingSummary {

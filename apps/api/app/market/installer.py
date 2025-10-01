@@ -16,6 +16,8 @@ from app.plugins.loader import (
     register_plugin,
     remove_plugin,
 )
+from app.db.session import session_scope
+from app.services import plugin_settings as plugin_settings_service
 from app.plugins.manifest import PluginManifest
 
 from .registry import PluginIndexItem, verify_sha256
@@ -86,6 +88,9 @@ def uninstall(plugin_id: str) -> None:
         disable_plugin(plugin_id, {})
     except KeyError:
         pass
+
+    with session_scope() as db:
+        plugin_settings_service.delete_settings(db, plugin_id)
 
     remove_plugin(plugin_id)
 

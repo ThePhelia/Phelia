@@ -250,23 +250,6 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
             if parsed_seasons:
                 detail.seasons = parsed_seasons
 
-    availability = {}
-    jackett = _ensure_dict(details.get("jackett"))
-    if jackett:
-        torrents = []
-        if any(jackett.get(field) for field in ("magnet", "seeders", "tracker")):
-            torrents.append(
-                {
-                    "provider": jackett.get("tracker") or jackett.get("indexer"),
-                    "seeders": jackett.get("seeders"),
-                    "size": jackett.get("size"),
-                }
-            )
-        if torrents:
-            availability["torrents"] = torrents
-    if availability:
-        detail.availability = availability
-
     links = []
     ids = card.ids if isinstance(card.ids, dict) else {}
     imdb_id = ids.get("imdb_id")

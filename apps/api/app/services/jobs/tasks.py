@@ -13,7 +13,6 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.models import Download
 from app.services.bt.qbittorrent import QbClient
-from app.services.jackett_adapter import JackettAdapter
 from app.services.broadcast import broadcast_download
 
 
@@ -247,25 +246,6 @@ def poll_status() -> int:
         return len(changed) + len(removed)
     finally:
         db.close()
-
-
-@celery_app.task(name="app.services.jobs.tasks.index_with_jackett")
-def index_with_jackett(payload: dict[str, Any]) -> dict[str, Any]:
-    """Best-effort Jackett search executed via Celery."""
-
-    query = (payload or {}).get("query")
-    categories = (payload or {}).get("categories")
-    adapter = JackettAdapter()
-
-    async def _run() -> dict[str, Any]:
-        results = await adapter.search(query=query or "", categories=categories)
-        return {"query": query, "results": results}
-
-    try:
-        return asyncio.run(_run())
-    except Exception as exc:  # pragma: no cover - defensive log
-        logger.warning("Celery Jackett indexing failed query=%s error=%s", query, exc)
-        raise
 
 
 def _safe_list_torrents(qb: QbClient) -> List[dict]:

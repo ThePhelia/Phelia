@@ -79,25 +79,3 @@ export interface MetaDetail {
   canonical: CanonicalPayload;
 }
 
-export interface StartIndexingPayload {
-  type: MetaItemType;
-  canonicalTitle: string;
-  movie?: CanonicalMovie;
-  tv?: CanonicalTV;
-  album?: CanonicalAlbum;
-}
-
-export interface JackettSearchItem {
-  title: string;
-  size?: string | null;
-  seeders?: number | null;
-  leechers?: number | null;
-  tracker?: string | null;
-  magnet?: string | null;
-  link?: string | null;
-}
-
-export interface JackettSearchResponse {
-  query: string;
-  results: JackettSearchItem[];
-}

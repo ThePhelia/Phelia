@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 import logging
@@ -8,7 +8,7 @@ import redis.asyncio as redis
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.db.session import session_scope
-from app.routers import health, auth, downloads, trackers
+from app.routers import health, auth, downloads
 from app.api.routes import discovery as discovery_routes
 from phelia.routers import discovery as discovery_router
 from app.api.v1.endpoints import discover as discover_endpoints
@@ -18,8 +18,6 @@ from app.api.v1.endpoints import capabilities as capabilities_endpoints
 from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
-from app.api.v1.endpoints import index as index_endpoints
-from app.services.search.jackett_bootstrap import ensure_jackett_tracker
 from app.services.bt.qbittorrent import health_check as qb_health_check
 from app.services.settings import load_provider_credentials
 
@@ -38,13 +36,11 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(downloads.router, prefix="/api/v1")
-app.include_router(trackers.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.public_router, prefix="/api/v1/meta")
 app.include_router(discover_endpoints.router, prefix="/api/v1")
 app.include_router(discovery_routes.router)
 app.include_router(discovery_router.router, prefix="/discovery", tags=["discovery"])
-app.include_router(index_endpoints.router, prefix="/api/v1/index")
 app.include_router(capabilities_endpoints.router, prefix="/api/v1")
 app.include_router(library_endpoints.router, prefix="/api/v1")
 app.include_router(details_endpoints.router, prefix="/api/v1")
@@ -63,13 +59,19 @@ async def startup_event():
     except Exception:
         logger.exception("Error loading provider credentials")
     try:
-        ensure_jackett_tracker()
-    except Exception as e:
-        logger.exception("Error ensuring Jackett tracker")
-    try:
         await qb_health_check()
     except Exception:
         logger.exception("Error checking qBittorrent connectivity")
+
+
+@app.get("/jackett/_removed")
+async def jackett_removed() -> None:
+    """Return a clear 410 for legacy Jackett URLs."""
+
+    raise HTTPException(
+        status_code=410,
+        detail="Jackett integration was removed from core.",
+    )
 
 
 @app.websocket("/ws/downloads/{download_id}")

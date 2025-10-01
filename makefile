@@ -37,9 +37,6 @@ worker-logs:
 beat-logs:
 	$(COMPOSE) logs -f beat
 
-jackett-logs:
-	$(COMPOSE) logs -f jackett
-
 db-logs:
 	$(COMPOSE) logs -f db
 
@@ -71,9 +68,6 @@ redis-cli:
 health:
 	curl -fsS http://localhost:$${API_PORT:-8000}/api/v1/health >/dev/null && echo "OK" || (echo "FAILED"; exit 1)
 
-jackett-apikey:
-	cd $(COMPOSE_DIR) && docker compose exec jackett sh -lc "grep -o 'APIKey[^,]*' /config/Jackett/ServerConfig.json | head -n1"
-
 api-restart:
 	$(COMPOSE) restart api
 
@@ -82,6 +76,6 @@ help:
 	@grep -E '^[a-zA-Z0-9_.-]+:|^## ' $(MAKEFILE_LIST) | \
 	awk 'BEGIN{FS=":|## "}{if($$0 ~ /:$$/){t=$$1}else if($$0 ~ /^## /){printf "  \033[36m%-18s\033[0m %s\n", t, $$2}}'
 
-.PHONY: up rebuild down down-v restart ps logs api-logs web-logs worker-logs beat-logs jackett-logs db-logs redis-logs \
-        revision migrate api-sh worker-sh web-sh psql redis-cli health jackett-apikey api-restart help
+.PHONY: up rebuild down down-v restart ps logs api-logs web-logs worker-logs beat-logs db-logs redis-logs \
+        revision migrate api-sh worker-sh web-sh psql redis-cli health api-restart help
 

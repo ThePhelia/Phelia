@@ -96,21 +96,6 @@ class StartIndexingPayload(BaseModel):
     album: CanonicalAlbum | None = None
 
 
-class JackettSearchItem(BaseModel):
-    title: str
-    size: str | None = None
-    seeders: int | None = Field(default=None, ge=0)
-    leechers: int | None = Field(default=None, ge=0)
-    tracker: str | None = None
-    magnet: str | None = None
-    link: str | None = None
-
-
-class JackettSearchResponse(BaseModel):
-    query: str
-    results: list[JackettSearchItem] = Field(default_factory=list)
-
-
 __all__ = [
     "MetaItemType",
     "MetaSearchItem",
@@ -125,6 +110,4 @@ __all__ = [
     "CanonicalAlbum",
     "CanonicalPayload",
     "StartIndexingPayload",
-    "JackettSearchItem",
-    "JackettSearchResponse",
 ]

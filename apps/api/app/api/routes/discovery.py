@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Query, HTTPException
+from collections.abc import Generator
 from datetime import datetime, timedelta
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, Callable
+
 import httpx
+import json
+from fastapi import APIRouter, Query, HTTPException, Depends
+
+from app.core.config import settings
 #
 # If your module previously imported/defined `discovery_service` and `GENRES_BY_ID`,
 # keep them present. This file is resilient: it will use them when available,
@@ -9,6 +14,47 @@ import httpx
 #
 
 router = APIRouter(prefix="/api/v1/discovery", tags=["discovery"])
+
+
+def get_redis():  # pragma: no cover - default dependency for overrides
+    return None
+
+
+def _resolve_cache_backend(candidate: Any) -> Any:
+    """Normalize redis dependency outputs (generator, direct client, None)."""
+
+    if candidate in (None, False):
+        return None
+
+    if isinstance(candidate, Generator):
+        try:
+            value = next(candidate)
+        except StopIteration:
+            return None
+        try:  # pragma: no cover - defensive cleanup
+            candidate.close()
+        except Exception:
+            pass
+        return value
+
+    return candidate
+
+
+def _get_cache(redis: Any) -> Any:
+    cache = _resolve_cache_backend(redis)
+    if cache not in (None, False):
+        return cache
+
+    fallback: Callable[[], Any] | None = globals().get("get_redis")  # type: ignore[assignment]
+    if callable(fallback):
+        try:
+            cache = _resolve_cache_backend(fallback())
+        except TypeError:
+            cache = _resolve_cache_backend(fallback)  # pragma: no cover - defensive branch
+        if cache not in (None, False):
+            return cache
+
+    return None
 
 # Slug -> MusicBrainz tag normalization for common genres.
 # Extend freely; keys are slugs you use in the UI.
@@ -85,10 +131,21 @@ async def new_albums(
     genre: Optional[str] = Query(None, description="Genre slug, e.g., 'techno'"),
     days: int = Query(30, ge=1, le=120),
     limit: int = Query(24, ge=1, le=100),
-):
+    redis = Depends(get_redis),
+) -> dict[str, Any]:
     """Newly released albums for a given genre (keyless fallback supported)."""
     mb_tag = _normalize_genre(genre, genre_id)
     since = (datetime.utcnow() - timedelta(days=days)).date().isoformat()
+
+    cache_key = f"discovery:new:{mb_tag}:{days}:{limit}"
+    cache = _get_cache(redis)
+    if cache:
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                return json.loads(cached)
+            except (TypeError, ValueError):
+                pass
 
     # Try existing provider first if discovery_service is available.
     svc = globals().get("discovery_service")
@@ -97,11 +154,30 @@ async def new_albums(
             releases = await svc.fetch_new_albums(mb_tag, since, limit)  # type: ignore[arg-type]
             if releases:
                 if isinstance(releases, dict):
-                    return releases
-                return {"items": releases}
+                    payload = releases
+                else:
+                    payload = {"items": releases}
+                if cache:
+                    cache.set(cache_key, json.dumps(payload), ex=3600)
+                return payload
         except Exception:
             # fall through to MB fallback if provider errors out
             pass
+
+    provider_fn = globals().get("new_releases_by_genre")
+    if callable(provider_fn):
+        try:
+            releases = provider_fn(mb_tag, days, limit)
+            if releases:
+                if isinstance(releases, dict):
+                    payload = releases
+                else:
+                    payload = {"items": releases}
+                if cache:
+                    cache.set(cache_key, json.dumps(payload), ex=3600)
+                return payload
+        except Exception as exc:  # pragma: no cover - provider specific
+            raise HTTPException(status_code=502, detail=f"New releases provider error: {exc}")
 
     # MusicBrainz fallback (no keys required)
     query = f'tag:"{mb_tag}" AND primarytype:Album AND firstreleasedate:[{since} TO *]'
@@ -119,7 +195,10 @@ async def new_albums(
             "cover": f"https://coverartarchive.org/release-group/{rg.get('id')}/front-250",
             "source": "musicbrainz",
         })
-    return {"items": out}
+    payload = {"items": out}
+    if cache:
+        cache.set(cache_key, json.dumps(payload), ex=3600)
+    return payload
 
 @router.get("/top")
 async def top_albums(
@@ -128,24 +207,75 @@ async def top_albums(
     kind: str = Query("albums", pattern="^(albums|artists)$"),
     feed: str = Query("most-recent", pattern="^(most-recent|weekly|monthly)$"),
     limit: int = Query(24, ge=1, le=100),
-):
+    redis = Depends(get_redis),
+) -> dict[str, Any]:
     """Top albums (or artists) for a given genre; provider first, MB fallback next."""
-    mb_tag = _normalize_genre(genre, genre_id)
+    cache_subject = None
+    if isinstance(genre, str) and genre.strip():
+        cache_subject = f"slug:{genre.strip().lower()}"
+    elif genre_id is not None:
+        cache_subject = f"id:{genre_id}"
+    else:
+        cache_subject = "all"
+
+    cache_key = f"discovery:top:{cache_subject}:{kind}:{feed}:{limit}"
+    cache = _get_cache(redis)
+    if cache:
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                return json.loads(cached)
+            except (TypeError, ValueError):
+                pass
+
+    mb_tag: Optional[str] = None
+
+    def ensure_mb_tag() -> Optional[str]:
+        nonlocal mb_tag
+        if mb_tag is not None:
+            return mb_tag
+        try:
+            mb_tag = _normalize_genre(genre, genre_id)
+        except HTTPException:
+            mb_tag = None
+        return mb_tag
 
     # Try existing provider first
     svc = globals().get("discovery_service")
     if svc and hasattr(svc, "fetch_top"):
+        tag = ensure_mb_tag()
+        if tag:
+            try:
+                items = await svc.fetch_top(kind=kind, tag=tag, feed=feed, limit=limit)  # type: ignore[arg-type]
+                if items:
+                    if isinstance(items, dict):
+                        payload = items
+                    else:
+                        payload = {"items": items}
+                    if cache:
+                        cache.set(cache_key, json.dumps(payload), ex=3600)
+                    return payload
+            except Exception:
+                # fall back to other providers on error
+                pass
+
+    apple_fn = globals().get("apple_feed")
+    if callable(apple_fn):
         try:
-            items = await svc.fetch_top(kind=kind, tag=mb_tag, feed=feed, limit=limit)  # type: ignore[arg-type]
-            if items:
-                if isinstance(items, dict):
-                    return items
-                return {"items": items}
-        except Exception:
-            # fall back to MB on any provider error
-            pass
+            storefront = getattr(settings, "APPLE_RSS_STOREFRONT", "us")
+            genre_key = genre_id if genre_id is not None else 0
+            items = apple_fn(storefront, genre_key, feed, kind, limit)
+            payload = {"items": items or []}
+            if cache:
+                cache.set(cache_key, json.dumps(payload), ex=3600)
+            return payload
+        except Exception as exc:  # pragma: no cover - provider specific
+            raise HTTPException(status_code=502, detail=f"Apple RSS error: {exc}")
 
     # MusicBrainz fallback: get artists by tag, then latest album for each
+    mb_tag = ensure_mb_tag()
+    if not mb_tag:
+        raise HTTPException(status_code=400, detail="Unknown genre/genre_id")
     ar = await _mb_get_json(
         "https://musicbrainz.org/ws/2/artist",
         {"query": f'tag:"{mb_tag}"', "fmt": "json", "limit": str(min(50, max(10, limit * 2)))},
@@ -170,4 +300,39 @@ async def top_albums(
         })
         if len(results) >= limit:
             break
-    return {"items": results}
+    payload = {"items": results}
+    if cache:
+        cache.set(cache_key, json.dumps(payload), ex=3600)
+    return payload
+
+
+@router.get("/similar-artists")
+async def similar_artists_endpoint(
+    artist_mbid: str = Query(..., description="MusicBrainz artist id"),
+    limit: int = Query(10, ge=1, le=50),
+    redis=Depends(get_redis),
+) -> dict[str, Any]:
+    """Return similar artists using the configured provider when available."""
+
+    cache_key = f"discovery:similar:{artist_mbid}:{limit}"
+    cache = _get_cache(redis)
+    if cache:
+        cached = cache.get(cache_key)
+        if cached:
+            try:
+                return json.loads(cached)
+            except (TypeError, ValueError):
+                pass
+
+    provider_fn = globals().get("similar_artists")
+    if callable(provider_fn):
+        try:
+            items = provider_fn(artist_mbid, limit)
+        except Exception as exc:  # pragma: no cover - provider specific
+            raise HTTPException(status_code=502, detail=f"Similar artists provider error: {exc}")
+        payload = {"items": items or []}
+        if cache:
+            cache.set(cache_key, json.dumps(payload), ex=3600)
+        return payload
+
+    raise HTTPException(status_code=404, detail="similar_artist_provider_unavailable")

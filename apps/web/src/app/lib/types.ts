@@ -62,20 +62,7 @@ export interface EnrichedProvider {
   extra?: Record<string, unknown> | null;
 }
 
-export interface JackettTorrentDetails {
-  magnet?: string | null;
-  url?: string | null;
-  size?: string | number | null;
-  seeders?: number | null;
-  leechers?: number | null;
-  tracker?: string | null;
-  indexer?: string | Record<string, unknown> | null;
-  category?: string | string[] | null;
-  title?: string | null;
-}
-
 export interface SearchResultMeta {
-  jackett?: JackettTorrentDetails;
   confidence?: number;
   needs_confirmation?: boolean;
   reasons?: string[];
@@ -93,7 +80,6 @@ export interface SearchResultItem extends DiscoverItem {
 
 export interface SearchResponseMeta {
   message?: string;
-  jackett_ui_url?: string;
   error?: string;
   [key: string]: unknown;
 }
@@ -184,11 +170,7 @@ export interface DownloadItem {
 export interface CapabilitiesResponse {
   services: Record<string, boolean>;
   version: string;
-  links?: {
-    jackett?: string;
-    [key: string]: string | undefined;
-  };
-  jackettUrl?: string;
+  links?: Record<string, string | undefined>;
 }
 
 export interface ListMutationInput {

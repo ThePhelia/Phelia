@@ -25,8 +25,7 @@ class DummyQbClient:
 @pytest.mark.anyio
 async def test_capabilities_reports_service_status(monkeypatch):
     monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient())
-    monkeypatch.setattr(capabilities_router.settings, "JACKETT_API_KEY", "secret")
-    monkeypatch.setattr(capabilities_router.settings, "PHELIA_PUBLIC_BASE_URL", "http://public")
+    monkeypatch.setattr(capabilities_router.search_registry, "is_configured", lambda: True)
     runtime_settings.set("tmdb", "tmdb")
     runtime_settings.set("omdb", "omdb")
     runtime_settings.set("discogs", "discogs")
@@ -42,8 +41,8 @@ async def test_capabilities_reports_service_status(monkeypatch):
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["services"]["qbittorrent"] is True
-    assert payload["services"]["jackett"] is True
-    assert payload["links"]["jackett"] == capabilities_router.settings.jackett_public_url
+    assert payload["services"]["torrent_search"] is True
+    assert payload.get("links") is None
 
 
 @pytest.mark.anyio

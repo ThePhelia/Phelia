@@ -81,7 +81,6 @@ def upgrade() -> None:
             server_default=sa.true(),
         ),
         sa.Column("torznab_url", sa.String(length=255), nullable=False),
-        sa.Column("jackett_indexer_id", sa.String(length=64), nullable=True),
         sa.Column(
             "requires_auth",
             sa.Boolean(),

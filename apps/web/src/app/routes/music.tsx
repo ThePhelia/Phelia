@@ -1,21 +1,74 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { Button } from '@/app/components/ui/button';
 import { Skeleton } from '@/app/components/ui/skeleton';
-import type { AlbumItem, DiscoveryProvidersStatus } from '@/app/lib/discovery';
+import type { AlbumItem, DiscoveryGenre, DiscoveryProvidersStatus } from '@/app/lib/discovery';
 import {
   fetchDiscoveryCharts,
+  fetchDiscoveryGenres,
   fetchDiscoveryNew,
   fetchDiscoveryProviders,
-  fetchDiscoveryTag,
 } from '@/app/lib/discovery';
 
-const TAGS = ['techno', 'ambient', 'shoegaze', 'hip-hop'];
+const STATIC_TAGS = ['techno', 'shoegaze', 'hip-hop'];
+const FALLBACK_GENRES: DiscoveryGenre[] = STATIC_TAGS.map((tag) => ({
+  key: tag,
+  label: tag.replace(/\b\w/g, (char) => char.toUpperCase()).replace(/-(\w)/g, (_, letter) => ` ${letter.toUpperCase()}`),
+}));
 
 function MusicPage() {
   const [newReleases, setNewReleases] = useState<AlbumItem[] | null>(null);
   const [charts, setCharts] = useState<AlbumItem[] | null>(null);
-  const [tagShelves, setTagShelves] = useState<Record<string, AlbumItem[]>>({});
   const [providers, setProviders] = useState<DiscoveryProvidersStatus | null>(null);
+  const [genres, setGenres] = useState<DiscoveryGenre[]>([]);
+  const [genresLoading, setGenresLoading] = useState(true);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const requestRef = useRef(0);
+
+  const selectedGenre = useMemo(
+    () => (selectedKey ? genres.find((genre) => genre.key === selectedKey) ?? null : null),
+    [genres, selectedKey],
+  );
+
+  const loadGenre = useCallback((genre: Pick<DiscoveryGenre, 'key' | 'appleGenreId'> | null) => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+
+    if (!genre) {
+      setSelectedKey(null);
+      setNewReleases([]);
+      setCharts([]);
+      return;
+    }
+
+    setSelectedKey(genre.key);
+    setNewReleases(null);
+    setCharts(null);
+
+    fetchDiscoveryNew(genre.key, 30)
+      .then((items) => {
+        if (requestRef.current === requestId) {
+          setNewReleases(items);
+        }
+      })
+      .catch(() => {
+        if (requestRef.current === requestId) {
+          setNewReleases([]);
+        }
+      });
+
+    fetchDiscoveryCharts(genre.appleGenreId, genre.key, 30)
+      .then((items) => {
+        if (requestRef.current === requestId) {
+          setCharts(items);
+        }
+      })
+      .catch(() => {
+        if (requestRef.current === requestId) {
+          setCharts([]);
+        }
+      });
+  }, []);
 
   useEffect(() => {
     fetchDiscoveryProviders()
@@ -28,16 +81,36 @@ function MusicPage() {
         listenbrainz: false,
         spotify: false,
       }));
-    fetchDiscoveryNew(undefined, 30)
-      .then(setNewReleases)
-      .catch(() => setNewReleases([]));
-    fetchDiscoveryCharts(undefined, 30)
-      .then(setCharts)
-      .catch(() => setCharts([]));
-    Promise.all(TAGS.map((tag) => fetchDiscoveryTag(tag, 24).then((items) => [tag, items] as const)))
-      .then((entries) => setTagShelves(Object.fromEntries(entries)))
-      .catch(() => setTagShelves({}));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setGenresLoading(true);
+    fetchDiscoveryGenres()
+      .then((list) => {
+        if (cancelled) {
+          return;
+        }
+        const normalised = list.length ? list : FALLBACK_GENRES;
+        setGenres(normalised);
+        loadGenre(normalised[0] ?? null);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setGenres(FALLBACK_GENRES);
+        loadGenre(FALLBACK_GENRES[0] ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setGenresLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadGenre]);
 
   return (
     <div className="space-y-12">
@@ -48,24 +121,59 @@ function MusicPage() {
         </p>
         {providers ? (
           <p className="text-xs text-muted-foreground">
-            Providers active: {Object.entries(providers).filter(([, enabled]) => enabled).map(([name]) => name).join(', ') || 'none'}
+            Providers active:{' '}
+            {Object.entries(providers)
+              .filter(([, enabled]) => enabled)
+              .map(([name]) => name)
+              .join(', ') || 'none'}
           </p>
         ) : (
           <Skeleton className="h-4 w-40" />
         )}
       </header>
 
-      <DiscoverySection title="New Releases" subtitle="Cross-provider" items={newReleases} />
-      <DiscoverySection title="Top Albums" subtitle="Charts" items={charts} />
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Curated Genres</h2>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Select a genre to load rails</p>
+          </div>
+        </div>
+        {genresLoading ? (
+          <Skeleton className="h-10 w-full max-w-md" />
+        ) : genres.length ? (
+          <div className="flex flex-wrap gap-2">
+            {genres.map((genre) => {
+              const isSelected = genre.key === selectedGenre?.key;
+              return (
+                <Button
+                  key={genre.key}
+                  type="button"
+                  variant={isSelected ? 'default' : 'outline'}
+                  onClick={() => loadGenre(genre)}
+                  aria-pressed={isSelected}
+                >
+                  {genre.label}
+                </Button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No genres available right now.</p>
+        )}
+      </section>
 
-      {TAGS.map((tag) => (
-        <DiscoverySection
-          key={tag}
-          title={tag.toUpperCase()}
-          subtitle="Tag shelf"
-          items={tagShelves[tag]}
-        />
-      ))}
+      <DiscoverySection
+        title="New Releases"
+        subtitle={selectedGenre ? selectedGenre.label : 'Select a genre'}
+        items={selectedGenre ? newReleases : []}
+      />
+      <DiscoverySection
+        title="Top Albums"
+        subtitle={selectedGenre ? `${selectedGenre.label} charts` : 'Select a genre'}
+        items={selectedGenre ? charts : []}
+      />
+
     </div>
   );
 }
@@ -92,7 +200,7 @@ function DiscoverySection({
       ) : items && items.length ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {items.map((item) => (
-            <AlbumCard key={item.canonical_key} item={item} />
+            <AlbumCard key={item.id} item={item} />
           ))}
         </div>
       ) : (
@@ -103,6 +211,7 @@ function DiscoverySection({
 }
 
 function AlbumCard({ item }: { item: AlbumItem }) {
+  const release = item.release_date;
   return (
     <div className="w-40 flex-shrink-0 space-y-2">
       <div className="h-40 w-40 overflow-hidden rounded-xl bg-muted">
@@ -115,10 +224,12 @@ function AlbumCard({ item }: { item: AlbumItem }) {
       <div className="space-y-1">
         <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
         <p className="truncate text-xs text-muted-foreground">{item.artist}</p>
-        {item.release_date ? (
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.release_date}</p>
+        {release ? (
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{release}</p>
         ) : null}
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.source}</p>
+        {item.source ? (
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.source}</p>
+        ) : null}
       </div>
     </div>
   );

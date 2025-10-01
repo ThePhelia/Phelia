@@ -16,12 +16,7 @@ import type {
   SearchParams,
   SearchResponse,
 } from './types';
-import type {
-  JackettSearchResponse,
-  MetaDetail,
-  MetaSearchResponse,
-  StartIndexingPayload as MetaStartIndexingPayload,
-} from '@/app/types/meta';
+import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
 
 type QueryRecordValue = string | number | boolean | null | undefined;
 
@@ -34,8 +29,6 @@ export const API_BASE: string =
   (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
 
 const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
-
-const DEFAULT_JACKETT_URL = 'http://localhost:9117';
 
 function buildUrl(path: string, query?: Record<string, QueryRecordValue>): string {
   const normalizedPath = path.replace(/^\//, '');
@@ -139,10 +132,6 @@ export function metaSearch(q: string, limit = 20): Promise<MetaSearchResponse> {
 
 export function metaDetail(params: { type: 'movie' | 'tv' | 'album'; id: string; provider: string }) {
   return http<MetaDetail>('meta/detail', { query: params });
-}
-
-export function startIndexing(payload: MetaStartIndexingPayload) {
-  return http<JackettSearchResponse>('index/start', { json: payload });
 }
 
 export function useMetaSearch(query: string, limit = 20) {
@@ -282,28 +271,6 @@ export function useCapabilities() {
     queryKey: ['capabilities'],
     queryFn: () => http<CapabilitiesResponse>('capabilities'),
     staleTime: 10 * 60_000,
-    select: (capabilities) => {
-      if (capabilities.jackettUrl) {
-        return capabilities;
-      }
-
-      const jackettLink = capabilities.links?.jackett;
-      if (jackettLink) {
-        return {
-          ...capabilities,
-          jackettUrl: jackettLink,
-        };
-      }
-
-      if (capabilities.services['jackett']) {
-        return {
-          ...capabilities,
-          jackettUrl: DEFAULT_JACKETT_URL,
-        };
-      }
-
-      return capabilities;
-    },
   });
 }
 
@@ -356,7 +323,7 @@ export function useUpdateProviderSetting() {
   });
 }
 
-export function fetchJackettSearch(query: string, options?: { limit?: number }) {
+export function fetchTorrentSearch(query: string, options?: { limit?: number }) {
   const limit = options?.limit;
   return http<SearchResponse>('search', {
     query: {

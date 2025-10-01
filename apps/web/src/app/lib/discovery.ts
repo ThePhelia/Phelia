@@ -2,18 +2,17 @@ import { SimilarArtist } from './types';
 
 export type AlbumItem = {
   id: string;
-  canonical_key: string;
-  source: 'lastfm' | 'deezer' | 'itunes' | 'musicbrainz' | 'listenbrainz' | 'spotify';
   title: string;
   artist: string;
-  release_date?: string;
   cover_url?: string;
-  source_url?: string;
-  tags: string[];
-  market?: string;
-  score?: number;
-  preview_url?: string;
-  extra?: Record<string, string>;
+  release_date?: string;
+  source?: string;
+};
+
+export type DiscoveryGenre = {
+  key: string;
+  label: string;
+  appleGenreId?: number;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
@@ -43,27 +42,155 @@ async function fetchJson<T>(path: string, params?: Record<string, string | numbe
   return response.json();
 }
 
-export async function fetchDiscoveryNew(market?: string, limit = 50): Promise<AlbumItem[]> {
-  return fetchJson('/discovery/new', { market, limit });
+function normaliseAlbumItem(entry: unknown): AlbumItem | null {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const value = entry as Record<string, unknown>;
+  const idSource =
+    value.id ??
+    value.mbid ??
+    value.mbid ??
+    value.slug ??
+    value.key ??
+    (typeof value.title === 'string' ? `${value.title}:${value.artist ?? ''}` : undefined);
+  const id = String(idSource ?? Math.random().toString(36).slice(2));
+
+  const title = String(value.title ?? value.name ?? 'Untitled');
+  const artist = String(value.artist ?? value.artistName ?? value.creator ?? 'Unknown Artist');
+
+  const coverCandidate =
+    value.cover_url ??
+    value.cover ??
+    value.artwork ??
+    value.image ??
+    value.coverImage ??
+    value.image_url;
+  const releaseCandidate =
+    value.release_date ??
+    value.releaseDate ??
+    value.year ??
+    value.firstReleaseDate ??
+    value.first_release_date;
+
+  const sourceCandidate = value.source ?? value.provider ?? value.origin ?? value.storefront;
+
+  return {
+    id,
+    title,
+    artist,
+    cover_url: typeof coverCandidate === 'string' ? coverCandidate : undefined,
+    release_date:
+      typeof releaseCandidate === 'number'
+        ? String(releaseCandidate)
+        : typeof releaseCandidate === 'string'
+          ? releaseCandidate
+          : undefined,
+    source: typeof sourceCandidate === 'string' ? sourceCandidate : undefined,
+  };
 }
 
-export async function fetchDiscoveryCharts(market?: string, limit = 50): Promise<AlbumItem[]> {
-  return fetchJson('/discovery/charts', { market, limit });
+function extractItems(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    const value = payload as Record<string, unknown>;
+    if (Array.isArray(value.items)) {
+      return value.items;
+    }
+  }
+  return [];
 }
 
-export async function fetchDiscoveryTag(tag: string, limit = 50): Promise<AlbumItem[]> {
-  return fetchJson('/discovery/tags', { tag, limit });
+function normaliseGenres(payload: unknown): DiscoveryGenre[] {
+  const entries = extractItems(payload);
+  return entries
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+      const value = entry as Record<string, unknown>;
+      const key = value.key ?? value.slug ?? value.id ?? value.genre;
+      if (typeof key !== 'string' || !key.trim()) {
+        return null;
+      }
+      const label =
+        typeof value.label === 'string'
+          ? value.label
+          : typeof value.name === 'string'
+            ? value.name
+            : key.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      const appleGenreId =
+        typeof value.appleGenreId === 'number'
+          ? value.appleGenreId
+          : typeof value.apple_genre_id === 'number'
+            ? value.apple_genre_id
+            : undefined;
+      return { key, label, appleGenreId } satisfies DiscoveryGenre;
+    })
+    .filter((genre): genre is DiscoveryGenre => Boolean(genre));
+}
+
+export async function fetchDiscoveryGenres(): Promise<DiscoveryGenre[]> {
+  try {
+    const payload = await fetchJson('/api/v1/discovery/genres');
+    const genres = normaliseGenres(payload);
+    if (genres.length) {
+      return genres;
+    }
+    if (payload && typeof payload === 'object') {
+      const value = payload as Record<string, unknown>;
+      if (Array.isArray(value.genres)) {
+        return normaliseGenres(value.genres);
+      }
+    }
+  } catch (error) {
+    // swallow and fall back to defaults
+  }
+  return [];
+}
+
+export async function fetchDiscoveryNew(genre: string, limit = 24, days = 30): Promise<AlbumItem[]> {
+  const payload = await fetchJson('/api/v1/discovery/new', { genre, limit, days });
+  return extractItems(payload)
+    .map(normaliseAlbumItem)
+    .filter((item): item is AlbumItem => Boolean(item));
+}
+
+export async function fetchDiscoveryCharts(
+  genreId?: number,
+  genre?: string,
+  limit = 24,
+): Promise<AlbumItem[]> {
+  const payload = await fetchJson('/api/v1/discovery/top', {
+    genre_id: genreId,
+    genre,
+    kind: 'albums',
+    feed: 'most-recent',
+    limit,
+  });
+  return extractItems(payload)
+    .map(normaliseAlbumItem)
+    .filter((item): item is AlbumItem => Boolean(item));
+}
+
+export async function fetchDiscoveryTag(tag: string, limit = 24): Promise<AlbumItem[]> {
+  return fetchDiscoveryNew(tag, limit);
 }
 
 export async function fetchDiscoverySearch(query: string, limit = 25): Promise<AlbumItem[]> {
-  return fetchJson('/discovery/search', { q: query, limit });
+  const payload = await fetchJson('/api/v1/discovery/search', { q: query, limit });
+  return extractItems(payload)
+    .map(normaliseAlbumItem)
+    .filter((item): item is AlbumItem => Boolean(item));
 }
 
 export async function getSimilarArtists(
   artistMbid: string,
   limit = 20,
 ): Promise<SimilarArtist[]> {
-  const response = await fetchJson<{ items: SimilarArtist[] }>('/discovery/similar-artists', {
+  const response = await fetchJson<{ items: SimilarArtist[] }>('/api/v1/discovery/similar-artists', {
     artist_mbid: artistMbid,
     limit,
   });
@@ -80,5 +207,5 @@ export type DiscoveryProvidersStatus = {
 };
 
 export async function fetchDiscoveryProviders(): Promise<DiscoveryProvidersStatus> {
-  return fetchJson('/discovery/providers/status');
+  return fetchJson('/api/v1/discovery/providers/status');
 }

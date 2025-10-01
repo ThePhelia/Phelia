@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fetchJackettSearch } from '@/app/lib/api';
+import { fetchTorrentSearch } from '@/app/lib/api';
 import type { MediaKind, SearchResultItem } from '@/app/lib/types';
 
 interface TorrentSearchItemContext {
@@ -16,7 +16,6 @@ interface TorrentSearchState {
   isLoading: boolean;
   results: SearchResultItem[];
   message?: string;
-  jackettUiUrl?: string;
   error?: string;
   metaError?: string;
   activeItem?: TorrentSearchItemContext;
@@ -58,7 +57,6 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => {
         error: 'Unable to fetch torrents without a title.',
         metaError: undefined,
         message: undefined,
-        jackettUiUrl: undefined,
         activeItem: context,
         query: undefined,
       });
@@ -72,19 +70,16 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => {
       error: undefined,
       metaError: undefined,
       message: undefined,
-      jackettUiUrl: undefined,
       activeItem: context,
       query: trimmed,
     });
 
     try {
-      const response = await fetchJackettSearch(trimmed);
+      const response = await fetchTorrentSearch(trimmed);
       set({
         isLoading: false,
         results: response.items ?? [],
         message: typeof response.message === 'string' ? response.message : undefined,
-        jackettUiUrl:
-          typeof response.jackett_ui_url === 'string' ? response.jackett_ui_url : undefined,
         metaError: typeof response.error === 'string' ? response.error : undefined,
       });
     } catch (err) {
@@ -102,7 +97,6 @@ export const useTorrentSearch = create<TorrentSearchState>((set) => {
     isLoading: false,
     results: [],
     message: undefined,
-    jackettUiUrl: undefined,
     error: undefined,
     metaError: undefined,
     activeItem: undefined,

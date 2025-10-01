@@ -39,10 +39,9 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 
 class SearchResponse(PaginatedResponse[DiscoverItem]):
-    """Paginated response with optional Jackett metadata for search results."""
+    """Paginated response with optional metadata for search results."""
 
     message: str | None = None
-    jackett_ui_url: str | None = None
     error: str | None = None
 
     model_config = {

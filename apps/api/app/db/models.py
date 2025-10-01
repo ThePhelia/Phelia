@@ -127,3 +127,13 @@ class ProviderCredential(Base):
         onupdate=datetime.utcnow,
         server_default=func.now(),
     )
+
+
+class PluginSetting(Base):
+    __tablename__ = "plugin_settings"
+
+    plugin_id: Mapped[str] = mapped_column(String(128), primary_key=True, nullable=False)
+    key: Mapped[str] = mapped_column(String(128), primary_key=True, nullable=False)
+    value_json: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSON, nullable=True
+    )

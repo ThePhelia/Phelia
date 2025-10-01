@@ -13,6 +13,10 @@ import type {
   ProviderSettingStatus,
   ProviderSettingsApiResponse,
   ProviderSettingUpdateRequest,
+  PluginSettingsListResponse,
+  PluginSettingsSummary,
+  PluginSettingsUpdateRequest,
+  PluginSettingsValuesResponse,
   SearchParams,
   SearchResponse,
 } from './types';
@@ -319,6 +323,50 @@ export function useUpdateProviderSetting() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['settings', 'providers'] });
+    },
+  });
+}
+
+export function usePluginSettingsList() {
+  return useQuery<PluginSettingsSummary[], Error>({
+    queryKey: ['settings', 'plugins'],
+    queryFn: async () => {
+      const response = await http<PluginSettingsListResponse>('settings/plugins');
+      return response.plugins ?? [];
+    },
+    staleTime: 60_000,
+  });
+}
+
+interface UsePluginSettingsOptions {
+  enabled?: boolean;
+}
+
+export function usePluginSettings(
+  pluginId: string,
+  options?: UsePluginSettingsOptions,
+) {
+  const enabled = options?.enabled ?? true;
+
+  return useQuery<PluginSettingsValuesResponse, Error>({
+    queryKey: ['settings', 'plugins', pluginId],
+    queryFn: () => http<PluginSettingsValuesResponse>(`settings/plugins/${pluginId}`),
+    enabled: enabled && Boolean(pluginId),
+  });
+}
+
+export function useUpdatePluginSettings(pluginId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<PluginSettingsValuesResponse, Error, PluginSettingsUpdateRequest>({
+    mutationFn: (payload) =>
+      http<PluginSettingsValuesResponse>(`settings/plugins/${pluginId}`, {
+        method: 'POST',
+        json: payload,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins', pluginId] });
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins'] });
     },
   });
 }

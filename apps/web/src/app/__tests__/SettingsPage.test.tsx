@@ -5,9 +5,22 @@ import { renderWithProviders } from '@/app/test-utils';
 import type {
   ProviderSettingMutationVariables,
   ProviderSettingStatus,
+  PluginSettingsSummary,
 } from '@/app/lib/types';
 
-const { providerQueryState, capabilitiesState, mutationState, mutateAsync, toastMock, toastSuccess, toastError } =
+const {
+  providerQueryState,
+  capabilitiesState,
+  mutationState,
+  mutateAsync,
+  toastMock,
+  toastSuccess,
+  toastError,
+  pluginListState,
+  pluginValuesState,
+  pluginMutationState,
+  pluginMutateAsync,
+} =
   vi.hoisted(() => {
     const providerQueryState = {
       data: [] as ProviderSettingStatus[] | undefined,
@@ -35,6 +48,32 @@ const { providerQueryState, capabilitiesState, mutationState, mutateAsync, toast
       return { provider: variables.provider, configured: Boolean(variables.api_key) } as ProviderSettingStatus;
     });
 
+    const pluginListState = {
+      data: [] as PluginSettingsSummary[] | undefined,
+      isLoading: false,
+      isError: false,
+      error: null as Error | null,
+    };
+
+    const pluginValuesState = {
+      data: { values: {} },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null as Error | null,
+    };
+
+    const pluginMutationState = {
+      isPending: false,
+    };
+
+    const pluginMutateAsync = vi.fn(async () => {
+      pluginMutationState.isPending = true;
+      await Promise.resolve();
+      pluginMutationState.isPending = false;
+      return { values: {} };
+    });
+
     const toastSuccess = vi.fn();
     const toastError = vi.fn();
     const toastMock = Object.assign(vi.fn(), {
@@ -42,7 +81,19 @@ const { providerQueryState, capabilitiesState, mutationState, mutateAsync, toast
       error: toastError,
     });
 
-    return { providerQueryState, capabilitiesState, mutationState, mutateAsync, toastMock, toastSuccess, toastError };
+    return {
+      providerQueryState,
+      capabilitiesState,
+      mutationState,
+      mutateAsync,
+      toastMock,
+      toastSuccess,
+      toastError,
+      pluginListState,
+      pluginValuesState,
+      pluginMutationState,
+      pluginMutateAsync,
+    };
   });
 
 vi.mock('sonner', () => ({
@@ -56,6 +107,12 @@ vi.mock('@/app/lib/api', () => ({
     mutateAsync,
     isPending: mutationState.isPending,
     variables: mutationState.variables,
+  }),
+  usePluginSettingsList: () => pluginListState,
+  usePluginSettings: () => pluginValuesState,
+  useUpdatePluginSettings: () => ({
+    mutateAsync: pluginMutateAsync,
+    isPending: pluginMutationState.isPending,
   }),
 }));
 
@@ -71,6 +128,17 @@ describe('SettingsPage services tab', () => {
     providerQueryState.isError = false;
     providerQueryState.error = null;
     providerQueryState.data = [];
+    pluginListState.data = [];
+    pluginListState.isLoading = false;
+    pluginListState.isError = false;
+    pluginListState.error = null;
+    pluginValuesState.data = { values: {} };
+    pluginValuesState.isLoading = false;
+    pluginValuesState.isFetching = false;
+    pluginValuesState.isError = false;
+    pluginValuesState.error = null;
+    pluginMutateAsync.mockClear();
+    pluginMutationState.isPending = false;
   });
 
   it('renders provider guidance links', async () => {

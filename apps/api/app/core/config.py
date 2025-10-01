@@ -68,27 +68,6 @@ class Settings(BaseSettings):
     # We ship a sensible default that complies with their etiquette.
     MB_USER_AGENT: str = "Phelia/0.1 (https://example.local)"
 
-    # Jackett connectivity for search + metadata classification.
-    JACKETT_BASE: str = "http://jackett:9117"
-    JACKETT_API_KEY: str | None = None
-
-    # Optional category overrides for Jackett queries.
-    JACKETT_MOVIE_CATS: str | None = None
-    JACKETT_TV_CATS: str | None = None
-    JACKETT_MUSIC_CATS: str | None = None
-
-    # Public URL used by the web UI when opening the Jackett dashboard.
-    PHELIA_PUBLIC_BASE_URL: str | None = None
-
-    @property
-    def jackett_public_url(self) -> str:
-        """Return the URL that should be used to open the Jackett UI."""
-
-        if self.PHELIA_PUBLIC_BASE_URL:
-            base = self.PHELIA_PUBLIC_BASE_URL.rstrip("/")
-            return f"{base}/jackett"
-        return self.JACKETT_BASE.rstrip("/")
-
     class Config:
         extra = "ignore"
 

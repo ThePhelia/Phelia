@@ -41,25 +41,6 @@ services:
       timeout: 5s
       retries: 30
 
-  jackett:
-    image: lscr.io/linuxserver/jackett:latest
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TZ: ${TZ:-Etc/UTC}
-      AUTO_UPDATE: "true"
-    volumes:
-      - jackett_config:/config
-      - downloads:/downloads
-    ports:
-      - "9117:9117"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9117/ >/dev/null || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 60
-      start_period: 60s
-
   api:
     build:
       context: ../apps/api
@@ -80,13 +61,10 @@ services:
         condition: service_healthy
       qbittorrent:
         condition: service_healthy
-      jackett:
-        condition: service_started
     volumes:
       - ../apps/api:/app
       - downloads:/downloads
       - music:/music
-      - jackett_config:/jackett_config:ro
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:
@@ -176,5 +154,4 @@ volumes:
   qb_config:
   downloads:
   music:
-  jackett_config:
 

@@ -2,6 +2,8 @@ import os
 import sys
 import logging
 import asyncio
+from contextlib import contextmanager
+
 import pytest
 
 # Ensure environment variables for Settings before importing the app
@@ -21,12 +23,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app import main
 
 
+def _stub_session_scope():
+    @contextmanager
+    def _cm():
+        yield None
+
+    return _cm
+
+
 def test_init_db_exception_logged(monkeypatch, caplog):
     def bad_init():
         raise RuntimeError("init failure")
 
     monkeypatch.setattr(main, "init_db", bad_init)
-    monkeypatch.setattr(main, "ensure_jackett_tracker", lambda: None)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
+    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None)
 
     async def noop_qb_health_check():
         return None
@@ -39,13 +50,14 @@ def test_init_db_exception_logged(monkeypatch, caplog):
     assert any("Error initializing database" in record.message for record in caplog.records)
 
 
-def test_ensure_jackett_tracker_exception_logged(monkeypatch, caplog):
+def test_provider_credential_exception_logged(monkeypatch, caplog):
     monkeypatch.setattr(main, "init_db", lambda: None)
 
-    def bad_jackett():
-        raise RuntimeError("jackett failure")
+    def bad_loader(_db):
+        raise RuntimeError("load failure")
 
-    monkeypatch.setattr(main, "ensure_jackett_tracker", bad_jackett)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
+    monkeypatch.setattr(main, "load_provider_credentials", bad_loader)
 
     async def noop_qb_health_check():
         return None
@@ -55,4 +67,20 @@ def test_ensure_jackett_tracker_exception_logged(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         asyncio.run(main.startup_event())
 
-    assert any("Error ensuring Jackett tracker" in record.message for record in caplog.records)
+    assert any("Error loading provider credentials" in record.message for record in caplog.records)
+
+
+def test_qb_health_check_exception_logged(monkeypatch, caplog):
+    monkeypatch.setattr(main, "init_db", lambda: None)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
+    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None)
+
+    async def bad_qb_health_check():
+        raise RuntimeError("qb failure")
+
+    monkeypatch.setattr(main, "qb_health_check", bad_qb_health_check)
+
+    with caplog.at_level(logging.ERROR, logger=main.logger.name):
+        asyncio.run(main.startup_event())
+
+    assert any("Error checking qBittorrent connectivity" in record.message for record in caplog.records)

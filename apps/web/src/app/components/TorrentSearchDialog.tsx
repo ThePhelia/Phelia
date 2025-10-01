@@ -5,7 +5,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { useTorrentSearch } from '@/app/stores/torrent-search';
-import type { JackettTorrentDetails, SearchResultItem } from '@/app/lib/types';
+import type { SearchResultItem } from '@/app/lib/types';
 import { useCreateDownload } from '@/app/lib/api';
 
 function TorrentSearchDialog() {
@@ -15,7 +15,6 @@ function TorrentSearchDialog() {
     isLoading,
     results,
     message,
-    jackettUiUrl,
     error,
     metaError,
     activeItem,
@@ -23,8 +22,8 @@ function TorrentSearchDialog() {
   } = useTorrentSearch();
 
   const description = activeItem?.title
-    ? `Aggregated Jackett torrents for "${activeItem.title}"`
-    : 'Aggregated Jackett torrents from configured indexers.';
+    ? `Aggregated torrent results for "${activeItem.title}"`
+    : 'Aggregated torrent results from configured providers.';
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -43,16 +42,16 @@ function TorrentSearchDialog() {
           {query ? (
             <p className="text-xs text-muted-foreground">Search query: <span className="font-mono text-foreground/80">{query}</span></p>
           ) : null}
-          {message ? <MessageBanner message={message} jackettUiUrl={jackettUiUrl} /> : null}
-          {metaError ? <WarningBanner message={metaError} jackettUiUrl={jackettUiUrl} /> : null}
+          {message ? <MessageBanner message={message} /> : null}
+          {metaError ? <WarningBanner message={metaError} /> : null}
           {isLoading ? (
             <LoadingState />
           ) : error ? (
-            <ErrorState message={error} jackettUiUrl={jackettUiUrl} />
+            <ErrorState message={error} />
           ) : results.length ? (
             <ResultsList items={results} />
           ) : (
-            <EmptyState jackettUiUrl={jackettUiUrl} />
+            <EmptyState />
           )}
         </div>
       </DialogContent>
@@ -81,58 +80,43 @@ function LoadingState() {
   );
 }
 
-function MessageBanner({ message, jackettUiUrl }: { message: string; jackettUiUrl?: string }) {
+function MessageBanner({ message }: { message: string }) {
   return (
     <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-border/60 bg-muted/10 p-4 text-sm text-muted-foreground">
       <Info className="mt-0.5 h-5 w-5 text-[color:var(--accent)]" />
       <div className="space-y-2">
         <p>{message}</p>
-        <JackettLink jackettUiUrl={jackettUiUrl} />
       </div>
     </div>
   );
 }
 
-function WarningBanner({ message, jackettUiUrl }: { message: string; jackettUiUrl?: string }) {
+function WarningBanner({ message }: { message: string }) {
   return (
     <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-orange-300/40 bg-orange-400/10 p-4 text-sm text-orange-200">
       <AlertTriangle className="mt-0.5 h-5 w-5" />
       <div className="space-y-2">
         <p>{message}</p>
-        <JackettLink jackettUiUrl={jackettUiUrl} />
       </div>
     </div>
   );
 }
 
-function ErrorState({ message, jackettUiUrl }: { message: string; jackettUiUrl?: string }) {
+function ErrorState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-8 text-center text-sm text-destructive">
       <AlertTriangle className="h-8 w-8" />
       <p>{message}</p>
-      <JackettLink jackettUiUrl={jackettUiUrl} />
     </div>
   );
 }
 
-function EmptyState({ jackettUiUrl }: { jackettUiUrl?: string }) {
+function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-background/60 p-8 text-center text-sm text-muted-foreground">
       <DownloadCloud className="h-8 w-8 text-muted-foreground" />
       <p>No torrents were returned for this query.</p>
-      <JackettLink jackettUiUrl={jackettUiUrl} />
     </div>
-  );
-}
-
-function JackettLink({ jackettUiUrl }: { jackettUiUrl?: string }) {
-  if (!jackettUiUrl) return null;
-  return (
-    <Button asChild variant="outline" size="sm" className="w-fit">
-      <a href={jackettUiUrl} target="_blank" rel="noreferrer">
-        <ExternalLink className="mr-2 h-4 w-4" /> Open Jackett
-      </a>
-    </Button>
   );
 }
 
@@ -150,19 +134,27 @@ function ResultsList({ items }: { items: SearchResultItem[] }) {
 
 function TorrentResultCard({ item }: { item: SearchResultItem }) {
   const meta = item.meta ?? {};
-  const details = (meta.jackett ?? {}) as JackettTorrentDetails;
-  const magnetLink = typeof details.magnet === 'string' && details.magnet.length > 0 ? details.magnet : undefined;
-  const downloadUrl = typeof details.url === 'string' && details.url.length > 0 ? details.url : undefined;
-  const indexerName = getIndexerName(details.indexer);
-  const category = formatCategory(details.category);
+  const providers = Array.isArray(meta.providers) ? meta.providers.filter((provider) => provider.used) : [];
+  const sourceExtras = providers
+    .map((provider) => provider.extra)
+    .filter((extra): extra is Record<string, unknown> => extra != null && typeof extra === 'object');
+  const sources = Array.isArray(meta.sources)
+    ? meta.sources.filter((entry): entry is Record<string, unknown> => entry != null && typeof entry === 'object')
+    : [];
+  const mergedSources = [...sourceExtras, ...sources];
+  const magnetLink = findFirstString(mergedSources, 'magnet');
+  const downloadUrl = findFirstString(mergedSources, 'url');
+  const tracker =
+    findFirstString(mergedSources, 'tracker') ??
+    findFirstString(mergedSources, 'provider') ??
+    findFirstString(mergedSources, 'indexer');
+  const category = findFirstString(mergedSources, 'category');
+  const sizeLabel = formatSizeLabel(findFirstValue(mergedSources, 'size'));
+  const seeders = findFirstNumber(mergedSources, 'seeders');
+  const leechers = findFirstNumber(mergedSources, 'leechers');
   const confidence =
     typeof meta.confidence === 'number' ? Math.round(Math.max(0, Math.min(meta.confidence, 1)) * 100) : undefined;
-  const sizeLabel = formatSize(details.size);
   const reasons = Array.isArray(meta.reasons) ? meta.reasons : [];
-  const seeders = isNumber(details.seeders) ? details.seeders : undefined;
-  const leechers = isNumber(details.leechers) ? details.leechers : undefined;
-  const tracker = typeof details.tracker === 'string' ? details.tracker : undefined;
-  const providers = Array.isArray(meta.providers) ? meta.providers.filter((provider) => provider.used) : [];
   const needsConfirmation = meta.needs_confirmation === true;
   const sourceKind = typeof meta.source_kind === 'string' ? meta.source_kind : item.kind;
 
@@ -187,31 +179,30 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
   return (
     <div className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline" className="uppercase tracking-wide text-foreground/80">
-            {sourceKind}
-          </Badge>
-          {typeof confidence === 'number' ? <Badge variant="accent">{confidence}% match</Badge> : null}
-          {needsConfirmation ? (
-            <Badge variant="outline" className="border-orange-400 text-orange-300">
-              Needs confirmation
+        <div>
+          <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="outline" className="uppercase tracking-wide text-foreground/80">
+              {sourceKind}
             </Badge>
-          ) : null}
-            {indexerName ? (
+            {typeof confidence === 'number' ? <Badge variant="accent">{confidence}% match</Badge> : null}
+            {needsConfirmation ? (
+              <Badge variant="outline" className="border-orange-400 text-orange-300">
+                Needs confirmation
+              </Badge>
+            ) : null}
+            {tracker ? (
               <Badge variant="outline" className="text-foreground/70">
-                {indexerName}
+                {tracker}
               </Badge>
             ) : null}
           </div>
+          {sizeLabel ? <p className="text-sm text-muted-foreground">{sizeLabel}</p> : null}
         </div>
-        {sizeLabel ? <p className="text-sm text-muted-foreground">{sizeLabel}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         {seeders !== undefined ? <span>Seeders: {seeders}</span> : null}
         {leechers !== undefined ? <span>Leechers: {leechers}</span> : null}
-        {tracker ? <span>Tracker: {tracker}</span> : null}
         {category ? <span>Category: {category}</span> : null}
       </div>
       {providers.length ? (
@@ -226,12 +217,7 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
       ) : null}
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            onClick={handleAddDownload}
-            disabled={!hasDownloadSource || isPending}
-            variant="default"
-          >
+          <Button size="sm" onClick={handleAddDownload} disabled={!hasDownloadSource || isPending} variant="default">
             {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -239,10 +225,15 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
             )}
             {isPending ? 'Adding…' : 'Download'}
           </Button>
+          {magnetLink ? (
+            <Button size="sm" variant="secondary" onClick={() => void copyToClipboard(magnetLink)}>
+              <Magnet className="mr-2 h-4 w-4" /> Copy magnet
+            </Button>
+          ) : null}
           {downloadUrl ? (
-            <Button asChild size="sm" variant="ghost">
+            <Button asChild size="sm" variant="outline">
               <a href={downloadUrl} target="_blank" rel="noreferrer">
-                <Magnet className="mr-2 h-4 w-4" /> magnetLink (advanced)
+                <ExternalLink className="mr-2 h-4 w-4" /> Open source
               </a>
             </Button>
           ) : null}
@@ -263,45 +254,71 @@ function TorrentResultCard({ item }: { item: SearchResultItem }) {
   );
 }
 
-function getIndexerName(indexer: JackettTorrentDetails['indexer']): string | undefined {
-  if (!indexer) return undefined;
-  if (typeof indexer === 'string') return indexer;
-  if (typeof indexer === 'object' && indexer !== null) {
-    const maybeName =
-      typeof indexer.name === 'string'
-        ? indexer.name
-        : typeof indexer.id === 'string'
-          ? indexer.id
-          : undefined;
-    if (maybeName) return maybeName;
+function findFirstString(objects: Record<string, unknown>[], key: string): string | undefined {
+  for (const obj of objects) {
+    const value = obj[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
   }
   return undefined;
 }
 
-function formatCategory(category: JackettTorrentDetails['category']): string | undefined {
-  if (!category) return undefined;
-  if (Array.isArray(category)) {
-    return category.filter((value) => typeof value === 'string').join(', ');
+function findFirstNumber(objects: Record<string, unknown>[], key: string): number | undefined {
+  for (const obj of objects) {
+    const value = obj[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
   }
-  return typeof category === 'string' ? category : undefined;
+  return undefined;
 }
 
-function formatSize(size: JackettTorrentDetails['size']): string | undefined {
-  if (size === null || size === undefined) return undefined;
-  if (typeof size === 'string') return size;
-  if (!Number.isFinite(size)) return undefined;
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = size;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
+function findFirstValue(objects: Record<string, unknown>[], key: string): unknown {
+  for (const obj of objects) {
+    if (key in obj) {
+      return obj[key];
+    }
   }
-  return `${value.toFixed(value >= 10 || value % 1 === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  return undefined;
 }
 
-function isNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+function formatSizeLabel(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let num = value;
+    let unitIndex = 0;
+    while (num >= 1024 && unitIndex < units.length - 1) {
+      num /= 1024;
+      unitIndex += 1;
+    }
+    const precision = num >= 10 || Number.isInteger(num) ? 0 : 1;
+    return `${num.toFixed(precision)} ${units[unitIndex]}`;
+  }
+  return undefined;
+}
+
+async function copyToClipboard(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success('Magnet link copied to clipboard.');
+  } catch (error) {
+    toast.error('Unable to copy magnet link.');
+  }
 }
 
 export default TorrentSearchDialog;

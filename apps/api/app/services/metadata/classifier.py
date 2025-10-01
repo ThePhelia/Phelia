@@ -10,7 +10,7 @@ MediaType = Literal["music", "movie", "tv", "other"]
 
 
 class Classifier:
-    """Apply heuristic scoring to Torznab/Jackett search results."""
+    """Apply heuristic scoring to torrent search results."""
 
     category_weights: Dict[str, tuple[MediaType, float]]
     indexer_priors: Dict[str, tuple[MediaType, float]]
@@ -79,14 +79,14 @@ class Classifier:
     def classify_torrent(
         self,
         title: str,
-        jackett_category_desc: Optional[str] = None,
+        category_hint: Optional[str] = None,
         indexer_name: Optional[str] = None,
         indexer: Optional[dict[str, object]] = None,
     ) -> Classification:
         """Return a Classification for the provided torrent."""
 
         normalized_title = title or ""
-        category = (jackett_category_desc or "").lower()
+        category = (category_hint or "").lower()
 
         # Defensive: handle dict passed as indexer_name
         if isinstance(indexer_name, dict):

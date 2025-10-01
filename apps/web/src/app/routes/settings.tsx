@@ -129,7 +129,7 @@ function getProviderMeta(provider: string): ProviderMeta {
 }
 
 function SettingsPage() {
-  const { data: capabilities, isLoading: capabilitiesLoading } = useCapabilities();
+  const { data: capabilities } = useCapabilities();
   const providerQuery = useProviderSettings();
   const updateProvider = useUpdateProviderSetting();
   const { mode, setMode } = useTheme();
@@ -138,29 +138,6 @@ function SettingsPage() {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [baselines, setBaselines] = useState<Record<string, string>>({});
   const previousPreviewsRef = useRef<Record<string, string>>({});
-
-  const jackettUrl = useMemo(() => {
-    const url = capabilities?.jackettUrl;
-    if (!url) return undefined;
-
-    if (typeof window === 'undefined') {
-      return url;
-    }
-
-    try {
-      const parsed = new URL(url);
-      const hostname = window.location.hostname || 'localhost';
-      parsed.hostname = hostname;
-      if (!parsed.port) {
-        parsed.port = '9117';
-      }
-      return parsed.toString();
-    } catch {
-      const protocol = window.location.protocol || 'http:';
-      const hostname = window.location.hostname || 'localhost';
-      return `${protocol}//${hostname}:9117`;
-    }
-  }, [capabilities?.jackettUrl]);
 
   const providers = useMemo(() => {
     if (!providerQuery.data) {
@@ -298,7 +275,6 @@ function SettingsPage() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
-          <TabsTrigger value="jackett">Jackett</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="space-y-4 rounded-3xl border border-border/60 bg-background/50 p-6">
           <div>
@@ -455,31 +431,6 @@ function SettingsPage() {
             <p className="text-sm text-muted-foreground">No provider settings available.</p>
           )}
           {capabilities ? <p className="text-xs text-muted-foreground">Phelia version {capabilities.version}</p> : null}
-        </TabsContent>
-        <TabsContent value="jackett" className="space-y-4 rounded-3xl border border-border/60 bg-background/50 p-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">Jackett Dashboard</h2>
-            <p className="text-sm text-muted-foreground">
-              Jackett lets you manage and configure torrent indexers that Phelia can search against when looking for
-              new media.
-            </p>
-          </div>
-          {capabilitiesLoading ? (
-            <Skeleton className="h-12 w-48 rounded-full" />
-          ) : jackettUrl ? (
-            <Button asChild>
-              <a href={jackettUrl} target="_blank" rel="noopener noreferrer">
-                Open Jackett Dashboard
-              </a>
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <Button disabled>Jackett Dashboard Unavailable</Button>
-              <p className="text-xs text-muted-foreground">
-                The server did not provide a Jackett dashboard link. Contact your administrator if you expect one.
-              </p>
-            </div>
-          )}
         </TabsContent>
       </Tabs>
     </div>

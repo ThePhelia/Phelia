@@ -57,7 +57,6 @@ class Tracker(Base):
     type: Mapped[str] = mapped_column(String(16))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     torznab_url: Mapped[str] = mapped_column(String(255))
-    jackett_indexer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requires_auth: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()

@@ -1,4 +1,4 @@
-"""Search endpoint returning classified + enriched Jackett results."""
+"""Search endpoint returning classified + enriched torrent results."""
 
 from __future__ import annotations
 
@@ -9,14 +9,15 @@ from fastapi import APIRouter, Depends, Query
 
 from app.schemas.discover import DiscoverItem, SearchResponse
 from app.schemas.media import EnrichedCard
-from app.services.jackett_adapter import JackettAdapter
+from app.services.search.registry import search_registry
+from app.ext.interfaces import SearchProvider
 
 
 router = APIRouter(prefix="/search", tags=["metadata-search"])
 
 
-def get_adapter() -> JackettAdapter:
-    return JackettAdapter()
+def get_provider() -> SearchProvider:
+    return search_registry.primary()
 
 
 def _ensure_str(value: Any) -> str | None:
@@ -160,18 +161,8 @@ def _select_identifier(card: EnrichedCard, kind: str, details: dict[str, Any]) -
         if candidate:
             return candidate
 
-    jackett = details.get("jackett") if isinstance(details, dict) else None
-    if isinstance(jackett, dict):
-        for key in ("guid", "magnet", "url"):
-            candidate = _ensure_str(jackett.get(key))
-            if candidate:
-                digest = hashlib.sha1(candidate.encode("utf-8"), usedforsecurity=False)
-                return digest.hexdigest()
-
     fallback_source = "||".join(
-        value
-        for value in [kind, card.title, _ensure_str(jackett.get("title") if isinstance(jackett, dict) else None)]
-        if value
+        value for value in [kind, card.title] if value
     )
     if not fallback_source:
         fallback_source = f"{kind}:{card.title or 'unknown'}"
@@ -191,8 +182,6 @@ def _card_to_discover_item(card: EnrichedCard) -> DiscoverItem | None:
     tmdb = details.get("tmdb") if isinstance(details.get("tmdb"), dict) else {}
     discogs = details.get("discogs") if isinstance(details.get("discogs"), dict) else {}
     musicbrainz = details.get("musicbrainz") if isinstance(details.get("musicbrainz"), dict) else {}
-    jackett = details.get("jackett") if isinstance(details.get("jackett"), dict) else {}
-
     title = _first_str(
         tmdb.get("title"),
         tmdb.get("name"),
@@ -243,13 +232,16 @@ def _card_to_discover_item(card: EnrichedCard) -> DiscoverItem | None:
         "providers": [provider.model_dump() for provider in card.providers],
         "ids": card.ids or None,
         "parsed": card.parsed,
-        "jackett": jackett or None,
         "source_title": card.title,
         "source_kind": card.media_type,
     }
 
     # Prune empty entries to keep payload compact.
-    meta = {key: value for key, value in meta.items() if value not in (None, {}, [])}
+    meta = {
+        key: value
+        for key, value in meta.items()
+        if value not in (None, {}, []) or key == "providers"
+    }
 
     identifier = _select_identifier(card, kind, details)
 
@@ -274,10 +266,10 @@ async def search(
     limit: int = Query(40, ge=1, le=100),
     kind: Literal["all", "movie", "tv", "music"] = Query("all"),
     page: int = Query(1, ge=1),
-    adapter: JackettAdapter = Depends(get_adapter),
+    provider: SearchProvider = Depends(get_provider),
 ) -> SearchResponse:
     fetch_limit = limit * page
-    cards, meta = await adapter.search_with_metadata(q, limit=fetch_limit, kind=kind)
+    cards, meta = await provider.search(q, limit=fetch_limit, kind=kind)
     items: list[DiscoverItem] = []
     for card in cards:
         item = _card_to_discover_item(card)

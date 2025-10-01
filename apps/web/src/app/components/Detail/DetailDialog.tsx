@@ -6,7 +6,7 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import DetailContent from '@/app/components/Detail/DetailContent';
-import { useDetails, useMetaDetail, startIndexing } from '@/app/lib/api';
+import { useDetails, useMetaDetail } from '@/app/lib/api';
 import type { DetailResponse, MediaKind } from '@/app/lib/types';
 import type { MetaDetail as MetaDetailType } from '@/app/types/meta';
 import { useTorrentSearch } from '@/app/stores/torrent-search';
@@ -111,36 +111,44 @@ function DetailDialog({ kind, id, provider, open, onOpenChange }: DetailDialogPr
     if (!isMetaFlow || !metaDetail) return;
     const seasonNumber = season === '' ? null : Number(season);
     const episodeNumber = episode === '' ? null : Number(episode);
-    const payload = {
-      type: metaDetail.type,
-      canonicalTitle: metaDetail.canonical.query || metaDetail.title,
-      movie: metaDetail.canonical.movie ?? undefined,
-      tv: metaDetail.canonical.tv
-        ? { ...metaDetail.canonical.tv, season: seasonNumber, episode: episodeNumber }
-        : metaDetail.type === 'tv'
-        ? { title: metaDetail.title, season: seasonNumber, episode: episodeNumber }
-        : undefined,
-      album: metaDetail.canonical.album ?? undefined,
-    };
-
     setHasSearched(false);
     setLastQuery('');
     setIsIndexing(true);
     try {
-      const response = await startIndexing(payload);
-      setLastQuery(response.query);
-      setHasSearched(true);
-      void fetchTorrentSearch(response.query, {
+      const baseTitle = metaDetail.title.trim();
+      const context = {
         id,
-        title: metaDetail.title,
+        title: baseTitle,
         kind: metaDetail.type,
         year: typeof metaDetail.year === 'number' ? metaDetail.year : undefined,
         artist: metaDetail.album?.artist,
         subtitle: metaDetail.album?.artist,
-      });
-      if (response.results.length === 0) {
-        toast('No torrents found. Try adjusting the season, episode or query.');
+      } as const;
+      const queryParts: string[] = [];
+      if (metaDetail.type === 'album') {
+        const artist = context.artist ?? '';
+        const normalized = artist ? `${artist} - ${baseTitle}` : baseTitle;
+        if (normalized) {
+          queryParts.push(normalized);
+        }
+      } else if (baseTitle) {
+        queryParts.push(baseTitle);
       }
+      if (typeof metaDetail.year === 'number') {
+        queryParts.push(String(metaDetail.year));
+      }
+      if (metaDetail.type === 'tv') {
+        const seasonLabel = seasonNumber ? `S${String(seasonNumber).padStart(2, '0')}` : '';
+        const episodeLabel = episodeNumber ? `E${String(episodeNumber).padStart(2, '0')}` : '';
+        const combined = `${seasonLabel}${episodeLabel}`.trim();
+        if (combined) {
+          queryParts.push(combined);
+        }
+      }
+      const query = queryParts.filter(Boolean).join(' ').trim();
+      setLastQuery(query);
+      setHasSearched(true);
+      await fetchTorrentSearch(query, context);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to search torrents';
       toast.error(message);
@@ -364,9 +372,9 @@ function MetaDetailContent({
         </div>
       </div>
       {isIndexing ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-8 text-sm text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin text-[color:var(--accent)]" /> Searching Jackett…
-        </div>
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-8 text-sm text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-[color:var(--accent)]" /> Searching torrents…
+      </div>
       ) : hasSearched ? (
         <div className="space-y-2 rounded-2xl border border-border/60 bg-background/60 p-6 text-sm text-muted-foreground">
           <p>Torrent results have been opened in the Torrent results window.</p>

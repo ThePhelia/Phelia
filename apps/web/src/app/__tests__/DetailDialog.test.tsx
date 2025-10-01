@@ -4,10 +4,10 @@ import type { DetailResponse } from "@/app/lib/types";
 import { renderWithProviders } from "@/app/test-utils";
 import type { MetaDetail } from "@/app/types/meta";
 
-const { useDetailsMock, useMetaDetailMock, startIndexingMock, detailContentSpy, toastMock } = vi.hoisted(() => ({
+const { useDetailsMock, useMetaDetailMock, fetchForQueryMock, detailContentSpy, toastMock } = vi.hoisted(() => ({
   useDetailsMock: vi.fn(),
   useMetaDetailMock: vi.fn(),
-  startIndexingMock: vi.fn(),
+  fetchForQueryMock: vi.fn(),
   detailContentSpy: vi.fn(({ detail }: { detail: DetailResponse }) => (
     <div data-testid="detail-content">{detail.title}</div>
   )),
@@ -17,7 +17,6 @@ const { useDetailsMock, useMetaDetailMock, startIndexingMock, detailContentSpy, 
 vi.mock("@/app/lib/api", () => ({
   useDetails: useDetailsMock,
   useMetaDetail: useMetaDetailMock,
-  startIndexing: startIndexingMock,
 }));
 
 vi.mock("@/app/components/Detail/DetailContent", () => ({
@@ -26,6 +25,13 @@ vi.mock("@/app/components/Detail/DetailContent", () => ({
 
 vi.mock('sonner', () => ({
   toast: toastMock,
+}));
+
+vi.mock('@/app/stores/torrent-search', () => ({
+  useTorrentSearch: (selector?: (state: { fetchForQuery: typeof fetchForQueryMock }) => unknown) => {
+    const state = { fetchForQuery: fetchForQueryMock } as const;
+    return selector ? selector(state) : state;
+  },
 }));
 
 describe("DetailDialog", () => {
@@ -41,7 +47,7 @@ describe("DetailDialog", () => {
   beforeEach(() => {
     useDetailsMock.mockReset();
     useMetaDetailMock.mockReset();
-    startIndexingMock.mockReset();
+    fetchForQueryMock.mockReset();
     detailContentSpy.mockClear();
     toastMock.mockClear();
     toastMock.error.mockClear();
@@ -91,7 +97,7 @@ describe("DetailDialog", () => {
       },
     };
     useMetaDetailMock.mockReturnValue({ data: metaDetail, isLoading: false, isError: false });
-    startIndexingMock.mockResolvedValue({ query: 'Blade Runner 1982', results: [] });
+    fetchForQueryMock.mockResolvedValue(undefined);
 
     renderWithProviders(
       <DetailDialog kind="movie" id="101" provider="tmdb" open onOpenChange={() => {}} />
@@ -102,7 +108,6 @@ describe("DetailDialog", () => {
     expect(button).toBeInTheDocument();
 
     fireEvent.click(button);
-    await waitFor(() => expect(startIndexingMock).toHaveBeenCalled());
-    expect(toastMock).toHaveBeenCalledWith(expect.stringMatching(/no torrents/i));
+    await waitFor(() => expect(fetchForQueryMock).toHaveBeenCalled());
   });
 });

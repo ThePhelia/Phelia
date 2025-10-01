@@ -2,25 +2,38 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.v1.endpoints.search import get_adapter, router
+from app.api.v1.endpoints.search import get_provider, router
+from app.ext.interfaces import ProviderDescriptor, SearchProvider
 from app.schemas.media import EnrichedCard
 
 
-class DummyAdapter:
+class DummyProvider(SearchProvider):
+    slug = "dummy"
+    name = "Dummy search"
+
     def __init__(self, cards, meta):
         self.cards = cards
         self.meta = meta
         self.calls = []
 
-    async def search_with_metadata(self, query: str, limit: int = 40, kind: str = "all"):
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            slug=self.slug,
+            name=self.name,
+            kind="search",
+            configured=True,
+            healthy=True,
+        )
+
+    async def search(self, query: str, *, limit: int, kind: str):
         self.calls.append((query, limit, kind))
         return self.cards, self.meta
 
 
-def build_app(adapter: DummyAdapter) -> FastAPI:
+def build_app(provider: DummyProvider) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="")
-    app.dependency_overrides[get_adapter] = lambda: adapter
+    app.dependency_overrides[get_provider] = lambda: provider
     return app
 
 
@@ -41,10 +54,6 @@ async def test_search_transforms_cards():
             "images": {
                 "poster": "https://images.example/movie.jpg",
                 "backdrop": "https://images.example/movie-bg.jpg",
-            },
-            "jackett": {
-                "magnet": "magnet:?xt=urn:btih:movie",
-                "indexer": "TrackerOne",
             },
         },
         reasons=["tmdb_match"],
@@ -69,15 +78,11 @@ async def test_search_transforms_cards():
                 "year": 2007,
             },
             "tags": ["Alternative", "Rock"],
-            "jackett": {
-                "magnet": "magnet:?xt=urn:btih:album",
-                "indexer": "TrackerTwo",
-            },
         },
     )
 
-    adapter = DummyAdapter([movie_card, album_card], {"jackett_ui_url": "http://jackett.local"})
-    app = build_app(adapter)
+    provider = DummyProvider([movie_card, album_card], {"message": "dummy meta"})
+    app = build_app(provider)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -88,7 +93,7 @@ async def test_search_transforms_cards():
 
     assert payload["page"] == 1
     assert payload["total_pages"] == 1
-    assert payload["jackett_ui_url"] == "http://jackett.local"
+    assert payload.get("message") == "dummy meta"
 
     assert len(payload["items"]) == 2
 
@@ -99,7 +104,7 @@ async def test_search_transforms_cards():
     assert movie["title"] == "Example Movie"
     assert movie["poster"] == "https://images.example/movie.jpg"
     assert movie["meta"]["confidence"] == pytest.approx(0.92)
-    assert movie["meta"]["jackett"]["magnet"] == "magnet:?xt=urn:btih:movie"
+    assert "providers" in movie["meta"]
 
     assert album["id"] == "rg-1"
     assert album["title"] == "In Rainbows"
@@ -107,7 +112,7 @@ async def test_search_transforms_cards():
     assert album["poster"] == "https://images.example/in-rainbows.jpg"
     assert set(album["genres"]) == {"Alternative", "Rock"}
     assert album["meta"]["source_kind"] == "music"
-    assert album["meta"]["jackett"]["magnet"] == "magnet:?xt=urn:btih:album"
+    assert "providers" in album["meta"]
 
     # Adapter should have been invoked with the requested query and default pagination.
-    assert adapter.calls == [("example", 40, "all")]
+    assert provider.calls == [("example", 40, "all")]

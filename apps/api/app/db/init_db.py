@@ -48,7 +48,6 @@ def init_db() -> None:
                 type="public",
                 enabled=False,
                 torznab_url="https://example.com",
-                jackett_indexer_id=None,
                 requires_auth=False,
             )
             db.add(tracker)

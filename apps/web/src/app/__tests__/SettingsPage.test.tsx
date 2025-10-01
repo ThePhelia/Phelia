@@ -18,7 +18,7 @@ const { providerQueryState, capabilitiesState, mutationState, mutateAsync, toast
     };
 
     const capabilitiesState = {
-      data: { version: '1.2.3', jackettUrl: 'http://jackett.local' },
+      data: { version: '1.2.3', services: { torrent_search: false } },
       isLoading: false,
     };
 

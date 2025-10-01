@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
 from app.schemas.ui import CapabilitiesResponse
 from app.services.bt.qbittorrent import QbClient
+from app.services.search.registry import search_registry
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ async def read_capabilities(request: Request) -> CapabilitiesResponse:
 
     services = {
         "qbittorrent": qb_ok,
-        "jackett": bool(settings.JACKETT_API_KEY),
+        "torrent_search": search_registry.is_configured(),
         "tmdb": runtime_settings.tmdb_enabled,
         "omdb": runtime_settings.omdb_enabled,
         "discogs": runtime_settings.discogs_enabled,
@@ -47,5 +48,5 @@ async def read_capabilities(request: Request) -> CapabilitiesResponse:
     return CapabilitiesResponse(
         services=services,
         version=version,
-        links={"jackett": settings.jackett_public_url},
+        links=None,
     )

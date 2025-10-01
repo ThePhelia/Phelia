@@ -9,6 +9,8 @@ from app.core.config import settings
 from app.db.init_db import init_db
 from app.db.session import session_scope
 from app.routers import health, auth, downloads
+from app.routes import market as market_routes
+from app.routes import market_text as market_text_routes
 from app.api.routes import discovery as discovery_routes
 from phelia.routers import discovery as discovery_router
 from app.api.v1.endpoints import discover as discover_endpoints
@@ -36,6 +38,8 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(downloads.router, prefix="/api/v1")
+app.include_router(market_routes.router, prefix="/api/v1")
+app.include_router(market_text_routes.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.public_router, prefix="/api/v1/meta")
 app.include_router(discover_endpoints.router, prefix="/api/v1")

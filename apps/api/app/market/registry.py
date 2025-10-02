@@ -7,7 +7,9 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 
-class Artifact(BaseModel):
+class PhexArtifact(BaseModel):
+    """Location of a `.phex` archive in a registry."""
+
     url: str
     sha256: str
 
@@ -17,12 +19,10 @@ class PluginIndexItem(BaseModel):
     name: str
     version: str
     description: str | None = None
-    entry_point: str
-    artifact: Artifact
+    artifact: PhexArtifact
     permissions: list[str] = Field(default_factory=list)
-    settings_schema: dict[str, Any] | None = None
-    routes: bool | None = None
-    contributes_settings: bool | None = None
+    min_phelia: str | None = None
+    author: dict[str, Any] | None = None
 
 
 class RegistryIndex(BaseModel):
@@ -44,10 +44,3 @@ async def fetch_registry() -> RegistryIndex:
         return RegistryIndex.model_validate(data)
     except ValidationError as exc:
         raise ValueError("Invalid registry response") from exc
-
-
-def verify_sha256(file_bytes: bytes, expected: str) -> None:
-    digest = hashlib.sha256(file_bytes).hexdigest()
-    if digest.lower() != expected.lower():
-        raise ValueError("SHA256 mismatch for downloaded artifact")
-

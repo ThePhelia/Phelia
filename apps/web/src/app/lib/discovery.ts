@@ -127,9 +127,13 @@ function normaliseGenres(payload: unknown): DiscoveryGenre[] {
           : typeof value.apple_genre_id === 'number'
             ? value.apple_genre_id
             : undefined;
-      return { key, label, appleGenreId } satisfies DiscoveryGenre;
+      const genre: DiscoveryGenre = { key, label };
+      if (appleGenreId !== undefined) {
+        genre.appleGenreId = appleGenreId;
+      }
+      return genre;
     })
-    .filter((genre): genre is DiscoveryGenre => Boolean(genre));
+    .filter((genre): genre is DiscoveryGenre => genre !== null);
 }
 
 export async function fetchDiscoveryGenres(): Promise<DiscoveryGenre[]> {

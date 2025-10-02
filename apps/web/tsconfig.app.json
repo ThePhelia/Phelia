@@ -21,7 +21,8 @@
       "@/styles/*": ["src/styles/*"],
       "@/components/*": ["src/app/components/*"],
       "@/lib/*": ["src/app/lib/*"],
-      "@/hooks/*": ["src/app/hooks/*"]
+      "@/hooks/*": ["src/app/hooks/*"],
+      "@/pages/*": ["src/pages/*"]
     }
   },
   "include": ["src"],

@@ -31,7 +31,7 @@ class RegistryIndex(BaseModel):
 
 
 REGISTRY_URL = (
-    "https://raw.githubusercontent.com/yourorg/phelia-plugin-registry/main/index.json"
+    "https://phelia-plugins.github.io/plugins-index/index.json"
 )
 
 

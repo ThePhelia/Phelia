@@ -64,18 +64,18 @@ make up
 - WebUI: http://localhost:5173/
 - Default login: created on first launch
 
-### Plugins
+## Plugins
 
 Plugins are distributed as .phex archives.
 They can be installed manually or from the built-in store.
 
-## Installing manually
+### Installing manually
 
 Download .phex file
 
 Upload via Plugins → Install in the UI
 
-## Installing from store
+### Installing from store
 
 Open Plugins → Store
 
@@ -83,7 +83,7 @@ Browse available plugins
 
 One-click install
 
-#### ⚠️ Disclaimer
+## ⚠️ Disclaimer
 
 Phelia does not come pre-configured with trackers or indexers.
 Users are responsible for how they use plugins and providers.

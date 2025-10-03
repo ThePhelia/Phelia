@@ -14,7 +14,11 @@ from app.market.installer import (
     install_phex_from_url,
     uninstall as uninstall_plugin,
 )
-from app.market.registry import RegistryIndex, fetch_registry
+from app.market.registry import (
+    RegistryIndex,
+    RegistryUnavailableError,
+    fetch_registry,
+)
 from app.plugins import loader
 
 
@@ -58,7 +62,13 @@ def _runtime_summary(runtime: loader.PluginRuntime) -> dict[str, Any]:
 
 @router.get("/registry", response_model=RegistryIndex)
 async def get_registry() -> RegistryIndex:
-    return await fetch_registry()
+    try:
+        return await fetch_registry()
+    except RegistryUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=error.detail,
+        ) from error
 
 
 @router.get("/plugins")

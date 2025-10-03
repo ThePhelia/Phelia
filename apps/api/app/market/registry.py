@@ -7,6 +7,15 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 
+class RegistryUnavailableError(Exception):
+    """Raised when the plugin registry cannot be reached or returns an error."""
+
+    def __init__(self, status_code: int | None, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
 class PhexArtifact(BaseModel):
     """Location of a `.phex` archive in a registry."""
 
@@ -26,7 +35,9 @@ class PluginIndexItem(BaseModel):
 
 
 class RegistryIndex(BaseModel):
-    registry_version: int
+    registry_version: int | None = None
+    repo: str | None = None
+    generated_at: str | None = None
     plugins: list[PluginIndexItem]
 
 
@@ -36,10 +47,24 @@ REGISTRY_URL = (
 
 
 async def fetch_registry() -> RegistryIndex:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(REGISTRY_URL, timeout=30.0)
-        response.raise_for_status()
-        data = response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(REGISTRY_URL, timeout=30.0)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        detail = (
+            f"Registry request failed with status {status_code}"
+            if status_code is not None
+            else "Registry request failed with an unknown status"
+        )
+        raise RegistryUnavailableError(status_code=status_code, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise RegistryUnavailableError(
+            status_code=None,
+            detail=f"Error while requesting registry: {exc}",
+        ) from exc
+    data = response.json()
     try:
         return RegistryIndex.model_validate(data)
     except ValidationError as exc:

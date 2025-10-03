@@ -9,6 +9,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from app.market.installer import (
     InstallerError,
@@ -17,6 +19,7 @@ from app.market.installer import (
     uninstall,
 )
 from app.plugins import loader
+from app.routes.market import router as market_router
 
 
 def _build_plugin_archive(
@@ -25,12 +28,18 @@ def _build_plugin_archive(
     plugin_id: str | None = None,
     module_name: str | None = None,
     permissions: dict | None = None,
+    wrap_in_folder: bool = False,
 ) -> tuple[Path, str, str]:
     plugin_id = plugin_id or f"com.phelia.tests.{uuid4().hex}"
     module_name = module_name or f"plugin_{uuid4().hex}"
 
-    root = tmp_path / module_name
-    root.mkdir()
+    archive_root = tmp_path / module_name
+    archive_root.mkdir()
+
+    plugin_root = archive_root
+    if wrap_in_folder:
+        plugin_root = archive_root / f"{module_name}_wrapped"
+        plugin_root.mkdir()
 
     manifest = textwrap.dedent(
         f"""
@@ -45,9 +54,9 @@ def _build_plugin_archive(
               entrypoint: {module_name}.main:Plugin
         """
     )
-    (root / "phelia.yaml").write_text(manifest, encoding="utf-8")
+    (plugin_root / "phelia.yaml").write_text(manifest, encoding="utf-8")
 
-    backend_dir = root / "backend" / module_name
+    backend_dir = plugin_root / "backend" / module_name
     backend_dir.mkdir(parents=True)
     (backend_dir / "__init__.py").write_text("", encoding="utf-8")
     plugin_code = textwrap.dedent(
@@ -73,14 +82,14 @@ def _build_plugin_archive(
     if permissions:
         import yaml
 
-        (root / "permissions.yaml").write_text(
+        (plugin_root / "permissions.yaml").write_text(
             yaml.safe_dump(permissions), encoding="utf-8"
         )
 
     archive_path = tmp_path / f"{module_name}.phex"
     with tarfile.open(archive_path, "w:gz") as tar:
-        for path in root.rglob("*"):
-            tar.add(path, arcname=str(path.relative_to(root)))
+        for path in archive_root.rglob("*"):
+            tar.add(path, arcname=str(path.relative_to(archive_root)))
     return archive_path, plugin_id, module_name
 
 
@@ -97,6 +106,82 @@ def plugin_env(tmp_path: Path):
 
 
 @pytest.mark.anyio
+async def test_upload_route_installs_plugin(
+    plugin_env: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    _, modules = plugin_env
+    archive_path, plugin_id, module_name = _build_plugin_archive(tmp_path)
+    app = FastAPI()
+    app.include_router(market_router, prefix="/api/v1")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        missing = await client.post("/api/v1/market/plugins/install/upload")
+        assert missing.status_code in {400, 422}
+        response = await client.post(
+            "/api/v1/market/plugins/install/upload",
+            files={
+                "file": (
+                    archive_path.name,
+                    archive_path.read_bytes(),
+                    "application/octet-stream",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == plugin_id
+    assert payload["version"] == "1.0.0"
+    runtime = loader.get_runtime(plugin_id)
+    assert runtime is not None and runtime.enabled
+
+    module = importlib.import_module(f"{module_name}.main")
+    modules.extend([module_name, f"{module_name}.main"])
+    assert module.CALLS[:2] == ["install", "enable"]
+
+
+@pytest.mark.anyio
+async def test_install_from_url_route(
+    plugin_env: tuple[Path, list[str]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, modules = plugin_env
+    archive_path, plugin_id, module_name = _build_plugin_archive(tmp_path)
+    archive_bytes = archive_path.read_bytes()
+
+    class DummyResponse:
+        def __init__(self, content: bytes) -> None:
+            self.content = content
+
+        def raise_for_status(self) -> None:  # pragma: no cover - trivial
+            return None
+
+    async def fake_get(self, url: str, timeout: float):  # type: ignore[override]
+        return DummyResponse(archive_bytes)
+
+    monkeypatch.setattr("httpx.AsyncClient.get", fake_get)
+
+    app = FastAPI()
+    app.include_router(market_router, prefix="/api/v1")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/market/plugins/install/url",
+            json={"url": "https://example.com/plugin.phex"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == plugin_id
+    assert payload["version"] == "1.0.0"
+
+    module = importlib.import_module(f"{module_name}.main")
+    modules.extend([module_name, f"{module_name}.main"])
+    assert "enable" in module.CALLS
+
+
+@pytest.mark.anyio
 async def test_install_phex_from_file_happy_path(plugin_env: tuple[Path, list[str]], tmp_path: Path) -> None:
     _, modules = plugin_env
     archive_path, plugin_id, module_name = _build_plugin_archive(tmp_path)
@@ -110,6 +195,23 @@ async def test_install_phex_from_file_happy_path(plugin_env: tuple[Path, list[st
     module = importlib.import_module(f"{module_name}.main")
     modules.extend([module_name, f"{module_name}.main"])
     assert module.CALLS[:2] == ["install", "enable"]
+
+
+@pytest.mark.anyio
+async def test_install_phex_from_file_ignores_blank_expected_sha(
+    plugin_env: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    archive_path, plugin_id, _ = _build_plugin_archive(tmp_path)
+    # Provide whitespace and empty strings to mimic form submissions that
+    # include the field but without a value.
+    result_with_space = await install_phex_from_file(
+        archive_path.read_bytes(), expected_sha256=" "
+    )
+    assert result_with_space["id"] == plugin_id
+    result_with_empty = await install_phex_from_file(
+        archive_path.read_bytes(), expected_sha256=""
+    )
+    assert result_with_empty["id"] == plugin_id
 
 
 @pytest.mark.anyio

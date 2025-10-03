@@ -27,6 +27,7 @@ type QueryRecordValue = string | number | boolean | null | undefined;
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   query?: Record<string, QueryRecordValue>;
   json?: unknown;
+  body?: BodyInit | null;
 }
 
 export const API_BASE: string =
@@ -49,7 +50,7 @@ function buildUrl(path: string, query?: Record<string, QueryRecordValue>): strin
 }
 
 async function http<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { query, json, headers, method, ...rest } = options;
+  const { query, json, headers, method, body: rawBody, ...rest } = options;
   const url = buildUrl(path, query);
   const finalHeaders = new Headers(headers);
 
@@ -61,6 +62,8 @@ async function http<T>(path: string, options: RequestOptions = {}): Promise<T> {
       finalHeaders.set('Content-Type', 'application/json');
     }
     body = JSON.stringify(json);
+  } else if (rawBody !== undefined) {
+    body = rawBody ?? undefined;
   }
 
   if (!finalHeaders.has('Accept')) {
@@ -275,6 +278,37 @@ export function useCapabilities() {
     queryKey: ['capabilities'],
     queryFn: () => http<CapabilitiesResponse>('capabilities'),
     staleTime: 10 * 60_000,
+  });
+}
+
+export function useInstallPluginFromUrl() {
+  const qc = useQueryClient();
+  return useMutation<{ id: string; version: string }, Error, { url: string; expectedSha256?: string }>({
+    mutationFn: (payload) =>
+      http('market/plugins/install/url', {
+        method: 'POST',
+        json: payload,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
+    },
+  });
+}
+
+export function useUploadPlugin() {
+  const qc = useQueryClient();
+  return useMutation<{ id: string; version: string }, Error, File>({
+    mutationFn: async (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      return http('market/plugins/install/upload', {
+        method: 'POST',
+        body: form,
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
+    },
   });
 }
 

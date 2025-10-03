@@ -41,6 +41,13 @@ MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 DOWNLOAD_TIMEOUT = 60.0
 
 
+def _normalize_expected_digest(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
 class InstallerError(RuntimeError):
     """Raised when installing a plugin fails."""
 
@@ -75,13 +82,45 @@ def _compute_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _prepare_site_directory(staging_dir: Path) -> Path:
-    site_dir = staging_dir / "site"
+def _remove_metadata_entries(path: Path) -> None:
+    """Drop packaging artefacts that should not affect installation."""
+
+    macos_dir = path / "__MACOSX"
+    if macos_dir.exists():
+        shutil.rmtree(macos_dir, ignore_errors=True)
+
+    for ds_store in path.glob(".DS_Store"):
+        ds_store.unlink(missing_ok=True)
+
+
+def _determine_plugin_root(staging_dir: Path) -> Path:
+    """Return the directory that contains the plugin manifest."""
+
+    _remove_metadata_entries(staging_dir)
+
+    manifest_path = staging_dir / "phelia.yaml"
+    if manifest_path.exists():
+        return staging_dir
+
+    candidate_dirs = [
+        entry
+        for entry in staging_dir.iterdir()
+        if entry.is_dir() and (entry / "phelia.yaml").exists()
+    ]
+
+    if len(candidate_dirs) == 1:
+        return candidate_dirs[0]
+
+    raise PhexError("Missing phelia.yaml manifest")
+
+
+def _prepare_site_directory(plugin_root: Path) -> Path:
+    site_dir = plugin_root / "site"
     if site_dir.exists():
         shutil.rmtree(site_dir)
     site_dir.mkdir(parents=True, exist_ok=True)
 
-    backend_dir = staging_dir / "backend"
+    backend_dir = plugin_root / "backend"
     if backend_dir.exists():
         for entry in backend_dir.iterdir():
             if entry.name in {"pyproject.toml", "requirements.txt"}:
@@ -106,9 +145,9 @@ def _select_web_assets(manifest_data: dict[str, Any]) -> str | None:
     return None
 
 
-def _parse_manifest(staging_dir: Path) -> tuple[dict[str, Any], PluginManifest, list[str]]:
-    manifest_data = load_phelia_manifest(staging_dir)
-    permissions = read_permissions(staging_dir)
+def _parse_manifest(plugin_root: Path) -> tuple[dict[str, Any], PluginManifest, list[str]]:
+    manifest_data = load_phelia_manifest(plugin_root)
+    permissions = read_permissions(plugin_root)
     web_assets = _select_web_assets(manifest_data)
     manifest_model = PluginManifest.from_yaml_mapping(
         manifest_data,
@@ -150,10 +189,12 @@ async def install_phex_from_file(
     file_bytes: bytes,
     expected_sha256: str | None,
 ) -> dict[str, Any]:
+    normalized_expected = _normalize_expected_digest(expected_sha256)
     archive_path = _create_temp_archive(file_bytes)
     try:
         digest = _compute_sha256(archive_path)
-        if expected_sha256 and digest.lower() != expected_sha256.lower():
+        digest_lower = digest.lower()
+        if normalized_expected and digest_lower != normalized_expected:
             raise InstallerError("sha256_mismatch", "Uploaded archive SHA-256 does not match")
         return await _install_from_archive(archive_path, digest, source="upload")
     finally:
@@ -165,6 +206,7 @@ async def install_phex_from_url(
     url: str,
     expected_sha256: str | None,
 ) -> dict[str, Any]:
+    normalized_expected = _normalize_expected_digest(expected_sha256)
     async with httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT) as client:
         response = await client.get(url, timeout=DOWNLOAD_TIMEOUT)
         response.raise_for_status()
@@ -173,7 +215,8 @@ async def install_phex_from_url(
     archive_path = _create_temp_archive(data)
     try:
         digest = _compute_sha256(archive_path)
-        if expected_sha256 and digest.lower() != expected_sha256.lower():
+        digest_lower = digest.lower()
+        if normalized_expected and digest_lower != normalized_expected:
             raise InstallerError("sha256_mismatch", "Downloaded archive SHA-256 does not match")
         return await _install_from_archive(archive_path, digest, source="url")
     finally:
@@ -184,18 +227,20 @@ async def install_phex_from_url(
 async def _install_from_archive(archive_path: Path, digest: str, source: str) -> dict[str, Any]:
     staging_root = _staging_dir()
     staging_path = Path(tempfile.mkdtemp(dir=staging_root))
+    cleanup_candidate = staging_path
     existing_runtime: PluginRuntime | None = None
     was_enabled = False
     target_dir: Path | None = None
 
     try:
         safe_extract_tar_gz(archive_path, staging_path)
-        manifest_data, manifest_model, permissions = _parse_manifest(staging_path)
+        extracted_root = _determine_plugin_root(staging_path)
+        manifest_data, manifest_model, permissions = _parse_manifest(extracted_root)
 
         _validate_version_compatibility(manifest_model)
 
-        sig_path = staging_path / "signature.sig"
-        pubkey_path = staging_path / "public.pem"
+        sig_path = extracted_root / "signature.sig"
+        pubkey_path = extracted_root / "public.pem"
         integrity_status = verify_integrity(
             archive_path,
             manifest_data,
@@ -212,7 +257,7 @@ async def _install_from_archive(archive_path: Path, digest: str, source: str) ->
             if was_enabled:
                 disable_plugin(manifest_model.id, {})
 
-        _prepare_site_directory(staging_path)
+        _prepare_site_directory(extracted_root)
 
         plugin_root = plugin_root_dir(manifest_model.id)
         versions_dir = plugin_root / "versions"
@@ -221,8 +266,11 @@ async def _install_from_archive(archive_path: Path, digest: str, source: str) ->
         if target_dir.exists():
             shutil.rmtree(target_dir)
 
-        shutil.move(str(staging_path), str(target_dir))
+        shutil.move(str(extracted_root), str(target_dir))
+        if extracted_root != staging_path:
+            shutil.rmtree(staging_path, ignore_errors=True)
         staging_path = target_dir  # Avoid cleanup deleting the moved directory
+        cleanup_candidate = staging_path
 
         runtime = PluginRuntime(
             manifest=manifest_model,
@@ -267,8 +315,12 @@ async def _install_from_archive(archive_path: Path, digest: str, source: str) ->
                 enable_plugin(existing_runtime.manifest.id, {})
         raise InstallerError("internal_error", str(exc)) from exc
     finally:
-        if staging_path.exists() and staging_path.is_dir() and staging_path.parent == staging_root:
-            shutil.rmtree(staging_path, ignore_errors=True)
+        if (
+            cleanup_candidate.exists()
+            and cleanup_candidate.is_dir()
+            and cleanup_candidate.parent == staging_root
+        ):
+            shutil.rmtree(cleanup_candidate, ignore_errors=True)
 
 
 def uninstall(plugin_id: str) -> None:

@@ -157,10 +157,17 @@ class DetailResponse(BaseModel):
     musicbrainz: MusicBrainzInfo | None = None
 
 
+class PluginCapabilities(BaseModel):
+    upload: bool = True
+    urlInstall: bool = True
+    phexOnly: bool = True
+
+
 class CapabilitiesResponse(BaseModel):
     """Service capability information for the settings page."""
 
     services: dict[str, bool]
     version: str
     links: dict[str, str | None] | None = None
+    plugins: PluginCapabilities | None = None
 

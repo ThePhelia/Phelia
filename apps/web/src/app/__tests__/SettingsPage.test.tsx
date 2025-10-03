@@ -20,6 +20,10 @@ const {
   pluginValuesState,
   pluginMutationState,
   pluginMutateAsync,
+  uploadMutationState,
+  uploadMutateAsync,
+  installUrlMutationState,
+  installUrlMutateAsync,
 } =
   vi.hoisted(() => {
     const providerQueryState = {
@@ -74,6 +78,28 @@ const {
       return { values: {} };
     });
 
+    const uploadMutationState = {
+      isPending: false,
+    };
+
+    const uploadMutateAsync = vi.fn(async () => {
+      uploadMutationState.isPending = true;
+      await Promise.resolve();
+      uploadMutationState.isPending = false;
+      return { id: 'plugin.uploaded', version: '1.0.0' };
+    });
+
+    const installUrlMutationState = {
+      isPending: false,
+    };
+
+    const installUrlMutateAsync = vi.fn(async () => {
+      installUrlMutationState.isPending = true;
+      await Promise.resolve();
+      installUrlMutationState.isPending = false;
+      return { id: 'plugin.url', version: '1.0.0' };
+    });
+
     const toastSuccess = vi.fn();
     const toastError = vi.fn();
     const toastMock = Object.assign(vi.fn(), {
@@ -93,6 +119,10 @@ const {
       pluginValuesState,
       pluginMutationState,
       pluginMutateAsync,
+      uploadMutationState,
+      uploadMutateAsync,
+      installUrlMutationState,
+      installUrlMutateAsync,
     };
   });
 
@@ -113,6 +143,14 @@ vi.mock('@/app/lib/api', () => ({
   useUpdatePluginSettings: () => ({
     mutateAsync: pluginMutateAsync,
     isPending: pluginMutationState.isPending,
+  }),
+  useUploadPlugin: () => ({
+    mutateAsync: uploadMutateAsync,
+    isPending: uploadMutationState.isPending,
+  }),
+  useInstallPluginFromUrl: () => ({
+    mutateAsync: installUrlMutateAsync,
+    isPending: installUrlMutationState.isPending,
   }),
 }));
 
@@ -139,6 +177,11 @@ describe('SettingsPage services tab', () => {
     pluginValuesState.error = null;
     pluginMutateAsync.mockClear();
     pluginMutationState.isPending = false;
+    uploadMutateAsync.mockClear();
+    uploadMutationState.isPending = false;
+    installUrlMutateAsync.mockClear();
+    installUrlMutationState.isPending = false;
+    capabilitiesState.data = { version: '1.2.3', services: { torrent_search: false } };
   });
 
   it('renders provider guidance links', async () => {
@@ -229,5 +272,21 @@ describe('SettingsPage services tab', () => {
     });
     expect(toastSuccess).toHaveBeenCalledWith('Spotify Client Secret cleared.');
     expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('shows plugin installation toolbar when capabilities allow', async () => {
+    capabilitiesState.data = {
+      version: '1.2.3',
+      services: { torrent_search: false },
+      plugins: { upload: true, urlInstall: true, phexOnly: true },
+    };
+
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(screen.getByRole('button', { name: /plugins/i }));
+
+    expect(screen.getByRole('button', { name: 'Upload .phex' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Install from URL' })).toBeInTheDocument();
   });
 });

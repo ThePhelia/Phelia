@@ -171,6 +171,11 @@ export interface CapabilitiesResponse {
   services: Record<string, boolean>;
   version: string;
   links?: Record<string, string | undefined>;
+  plugins?: {
+    upload: boolean;
+    urlInstall: boolean;
+    phexOnly: boolean;
+  };
 }
 
 export interface ListMutationInput {

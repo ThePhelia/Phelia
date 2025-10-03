@@ -1,7 +1,5 @@
 import pytest
 from fastapi import FastAPI
-import pytest
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.endpoints import capabilities as capabilities_router
@@ -43,6 +41,9 @@ async def test_capabilities_reports_service_status(monkeypatch):
     assert payload["services"]["qbittorrent"] is True
     assert payload["services"]["torrent_search"] is True
     assert payload.get("links") is None
+    assert payload["plugins"]["upload"] is True
+    assert payload["plugins"]["urlInstall"] is True
+    assert payload["plugins"]["phexOnly"] is True
 
 
 @pytest.mark.anyio

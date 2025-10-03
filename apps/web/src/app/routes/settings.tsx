@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Switch } from '@/app/components/ui/switch';
@@ -6,11 +6,13 @@ import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import {
   useCapabilities,
+  useInstallPluginFromUrl,
   usePluginSettings,
   usePluginSettingsList,
   useProviderSettings,
   useUpdatePluginSettings,
   useUpdateProviderSetting,
+  useUploadPlugin,
 } from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
@@ -453,6 +455,81 @@ function PluginSettingsCard({ plugin }: PluginSettingsCardProps) {
   );
 }
 
+function PluginInstallToolbar() {
+  const capsQuery = useCapabilities();
+  const uploadMutation = useUploadPlugin();
+  const urlMutation = useInstallPluginFromUrl();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const canUpload = Boolean(capsQuery.data?.plugins?.upload ?? true);
+  const canUrl = Boolean(capsQuery.data?.plugins?.urlInstall ?? true);
+
+  const onPickFile = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      await uploadMutation.mutateAsync(file);
+      toast.success(`Plugin installed: ${file.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Upload failed: ${message}`);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const onInstallFromUrl = async () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const url = window.prompt('Paste .phex URL:');
+    if (!url) {
+      return;
+    }
+    try {
+      await urlMutation.mutateAsync({ url });
+      toast.success(`Plugin installed from URL: ${url}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Install failed: ${message}`);
+    }
+  };
+
+  if (!canUpload && !canUrl) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {canUpload ? (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".phex,.tar.gz"
+            className="hidden"
+            onChange={onFileSelected}
+          />
+          <Button variant="secondary" onClick={onPickFile} disabled={uploadMutation.isPending}>
+            {uploadMutation.isPending ? 'Uploading…' : 'Upload .phex'}
+          </Button>
+        </>
+      ) : null}
+      {canUrl ? (
+        <Button onClick={onInstallFromUrl} disabled={urlMutation.isPending}>
+          {urlMutation.isPending ? 'Installing…' : 'Install from URL'}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { data: capabilities } = useCapabilities();
   const providerQuery = useProviderSettings();
@@ -773,6 +850,7 @@ function SettingsPage() {
               Manage plugin-specific settings contributed by installed extensions.
             </p>
           </div>
+          <PluginInstallToolbar />
           {pluginListQuery.isLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 2 }).map((_, index) => (

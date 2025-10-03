@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 
 from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
-from app.schemas.ui import CapabilitiesResponse
+from app.schemas.ui import CapabilitiesResponse, PluginCapabilities
 from app.services.bt.qbittorrent import QbClient
 from app.services.search.registry import search_registry
 
@@ -49,4 +49,5 @@ async def read_capabilities(request: Request) -> CapabilitiesResponse:
         services=services,
         version=version,
         links=None,
+        plugins=PluginCapabilities(upload=True, urlInstall=True, phexOnly=True),
     )

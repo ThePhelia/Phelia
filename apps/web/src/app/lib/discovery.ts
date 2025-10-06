@@ -15,8 +15,6 @@ export type DiscoveryGenre = {
   appleGenreId?: number;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
-
 function buildUrl(path: string, params?: Record<string, string | number | undefined>) {
   const query = new URLSearchParams();
   if (params) {
@@ -27,11 +25,18 @@ function buildUrl(path: string, params?: Record<string, string | number | undefi
     });
   }
   const qs = query.toString();
-  const base = API_BASE?.replace(/\/$/, '') ?? '';
-  if (base) {
-    return `${base}${path}${qs ? `?${qs}` : ''}`;
+  const rawBase = import.meta.env.VITE_API_BASE ?? '';
+  const normalisedBase = rawBase.replace(/\/+$/, '');
+  const normalisedPath = path.replace(/^\/+/, '');
+
+  let url = normalisedPath;
+
+  if (normalisedBase) {
+    const baseWithSlash = `${normalisedBase}/`;
+    url = normalisedPath ? `${baseWithSlash}${normalisedPath}` : baseWithSlash;
   }
-  return `${path}${qs ? `?${qs}` : ''}`;
+
+  return `${url}${qs ? `?${qs}` : ''}`;
 }
 
 async function fetchJson<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
@@ -138,7 +143,7 @@ function normaliseGenres(payload: unknown): DiscoveryGenre[] {
 
 export async function fetchDiscoveryGenres(): Promise<DiscoveryGenre[]> {
   try {
-    const payload = await fetchJson('/api/v1/discovery/genres');
+    const payload = await fetchJson('discovery/genres');
     const genres = normaliseGenres(payload);
     if (genres.length) {
       return genres;
@@ -156,7 +161,7 @@ export async function fetchDiscoveryGenres(): Promise<DiscoveryGenre[]> {
 }
 
 export async function fetchDiscoveryNew(genre: string, limit = 24, days = 30): Promise<AlbumItem[]> {
-  const payload = await fetchJson('/api/v1/discovery/new', { genre, limit, days });
+  const payload = await fetchJson('discovery/new', { genre, limit, days });
   return extractItems(payload)
     .map(normaliseAlbumItem)
     .filter((item): item is AlbumItem => Boolean(item));
@@ -167,7 +172,7 @@ export async function fetchDiscoveryCharts(
   genre?: string,
   limit = 24,
 ): Promise<AlbumItem[]> {
-  const payload = await fetchJson('/api/v1/discovery/top', {
+  const payload = await fetchJson('discovery/top', {
     genre_id: genreId,
     genre,
     kind: 'albums',
@@ -184,7 +189,7 @@ export async function fetchDiscoveryTag(tag: string, limit = 24): Promise<AlbumI
 }
 
 export async function fetchDiscoverySearch(query: string, limit = 25): Promise<AlbumItem[]> {
-  const payload = await fetchJson('/api/v1/discovery/search', { q: query, limit });
+  const payload = await fetchJson('discovery/search', { q: query, limit });
   return extractItems(payload)
     .map(normaliseAlbumItem)
     .filter((item): item is AlbumItem => Boolean(item));
@@ -194,7 +199,7 @@ export async function getSimilarArtists(
   artistMbid: string,
   limit = 20,
 ): Promise<SimilarArtist[]> {
-  const response = await fetchJson<{ items: SimilarArtist[] }>('/api/v1/discovery/similar-artists', {
+  const response = await fetchJson<{ items: SimilarArtist[] }>('discovery/similar-artists', {
     artist_mbid: artistMbid,
     limit,
   });
@@ -211,5 +216,5 @@ export type DiscoveryProvidersStatus = {
 };
 
 export async function fetchDiscoveryProviders(): Promise<DiscoveryProvidersStatus> {
-  return fetchJson('/api/v1/discovery/providers/status');
+  return fetchJson('discovery/providers/status');
 }

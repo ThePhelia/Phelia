@@ -328,6 +328,91 @@ async def test_discovery_top_endpoint_wraps_provider_results(monkeypatch: pytest
 
 
 @pytest.mark.anyio
+async def test_discovery_providers_status_with_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDiscoveryService:
+        async def providers_status(self) -> dict[str, bool]:
+            return {"lastfm": True, "spotify": True}
+
+    monkeypatch.setattr(discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discovery/providers/status")
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["lastfm"] is True
+    assert payload["spotify"] is True
+    assert payload["deezer"] is False
+
+
+@pytest.mark.anyio
+async def test_discovery_search_endpoint_uses_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDiscoveryService:
+        async def search(self, query: str, limit: int) -> list[dict[str, str]]:  # noqa: ARG002
+            return [
+                {
+                    "id": "svc-1",
+                    "title": "Service Album",
+                    "artist": "Mixer",
+                    "source": "spotify",
+                }
+            ]
+
+    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+        return {"release-groups": []}
+
+    monkeypatch.setattr(discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False)
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fake_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discovery/search", params={"q": "techno", "limit": 3})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["items"]
+    assert payload["items"][0]["title"] == "Service Album"
+    assert payload["items"][0]["source"] == "spotify"
+
+
+@pytest.mark.anyio
+async def test_discovery_search_endpoint_falls_back_to_mb(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+        return {
+            "release-groups": [
+                {
+                    "id": "rg-123",
+                    "title": "MB Album",
+                    "artist-credit": [{"name": "MB Artist"}],
+                    "first-release-date": "2024-05-01",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(discovery_routes, "discovery_service", None, raising=False)
+    monkeypatch.setattr(discovery_routes, "_mb_get_json", fake_mb_get_json)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/discovery/search", params={"q": "ambient", "limit": 2})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["items"]
+    assert payload["items"][0]["artist"] == "MB Artist"
+
+
+@pytest.mark.anyio
 async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = FakeRedis()
     calls: list[tuple[str, int]] = []

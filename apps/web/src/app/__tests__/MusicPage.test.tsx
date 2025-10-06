@@ -58,6 +58,7 @@ describe('MusicPage', () => {
   }
 
   beforeEach(() => {
+    vi.stubEnv('VITE_API_BASE', 'http://phelia.test/api/v1');
     fetchMock.mockReset();
     toastErrorMock.mockReset();
     discoverMock.mockClear();
@@ -69,6 +70,10 @@ describe('MusicPage', () => {
       unobserve: vi.fn(),
     }));
     global.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('renders curated genres from the API', async () => {
@@ -153,7 +158,9 @@ describe('MusicPage', () => {
       expect(screen.getByText('Ambient Flow')).toBeInTheDocument();
     });
 
-    expect(calls.some((url) => url.includes('/new?genre=ambient'))).toBe(true);
+    const newReleaseUrl = calls.find((url) => url.includes('/discovery/new') && url.includes('genre=ambient'));
+    expect(newReleaseUrl).toBeDefined();
+    expect(newReleaseUrl).toBe('http://phelia.test/api/v1/discovery/new?genre=ambient&limit=30&days=30');
     expect(calls.some((url) => url.includes('/top'))).toBe(true);
   });
 

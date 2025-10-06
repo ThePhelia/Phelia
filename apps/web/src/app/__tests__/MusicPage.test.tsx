@@ -79,6 +79,16 @@ describe('MusicPage', () => {
   it('renders curated genres from the API', async () => {
     fetchMock.mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/providers/status')) {
+        return createResponse({
+          lastfm: true,
+          deezer: false,
+          itunes: true,
+          musicbrainz: false,
+          listenbrainz: false,
+          spotify: true,
+        });
+      }
       if (url.includes('/genres')) {
         return createResponse({
           genres: [
@@ -96,12 +106,59 @@ describe('MusicPage', () => {
     expect(screen.getByRole('button', { name: /house/i })).toBeInTheDocument();
   });
 
+  it('shows configured providers in the header', async () => {
+    fetchMock.mockImplementation((input: RequestInfo) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/providers/status')) {
+        return createResponse({
+          lastfm: true,
+          deezer: false,
+          itunes: true,
+          musicbrainz: false,
+          listenbrainz: false,
+          spotify: true,
+        });
+      }
+      if (url.includes('/genres')) {
+        return createResponse({
+          genres: [
+            { key: 'techno', label: 'Techno', appleGenreId: 1 },
+            { key: 'house', label: 'House', appleGenreId: 2 },
+          ],
+        });
+      }
+      return createResponse({ items: [] });
+    });
+
+    renderWithProviders(<MusicPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('http://phelia.test/api/v1/providers/status', {
+        cache: 'no-store',
+      });
+    });
+
+    expect(
+      await screen.findByText('Providers active: lastfm, itunes, spotify'),
+    ).toBeInTheDocument();
+  });
+
   it('loads rails when selecting a genre', async () => {
     const user = userEvent.setup();
     const calls: string[] = [];
     fetchMock.mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as Request).url;
       calls.push(url);
+      if (url.includes('/providers/status')) {
+        return createResponse({
+          lastfm: true,
+          deezer: false,
+          itunes: true,
+          musicbrainz: false,
+          listenbrainz: false,
+          spotify: true,
+        });
+      }
       if (url.includes('/genres')) {
         return createResponse({
           genres: [

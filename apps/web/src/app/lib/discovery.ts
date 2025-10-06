@@ -216,5 +216,5 @@ export type DiscoveryProvidersStatus = {
 };
 
 export async function fetchDiscoveryProviders(): Promise<DiscoveryProvidersStatus> {
-  return fetchJson('discovery/providers/status');
+  return fetchJson('providers/status');
 }

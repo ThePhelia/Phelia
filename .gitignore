@@ -10,3 +10,4 @@ __pycache__/
 *.pyc
 
 /apps/web/node_modules
+phelia_discovery_top_fix.patch

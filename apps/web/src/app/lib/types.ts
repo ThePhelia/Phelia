@@ -184,40 +184,6 @@ export interface ListMutationInput {
   item: { kind: MediaKind; id: string };
 }
 
-export type MetadataProviderSlug =
-  | 'tmdb'
-  | 'omdb'
-  | 'discogs'
-  | 'lastfm'
-  | 'musicbrainz'
-  | 'listenbrainz'
-  | 'spotify_client_id'
-  | 'spotify_client_secret'
-  | (string & {});
-
-export interface ProviderSettingSummary {
-  configured: boolean;
-  preview?: string | null;
-}
-
-export interface ProviderSettingStatus extends ProviderSettingSummary {
-  provider: MetadataProviderSlug;
-}
-
-export type ProviderSettingsApiResponse =
-  | { providers: ProviderSettingStatus[] }
-  | { providers: Record<string, ProviderSettingSummary | ProviderSettingStatus> }
-  | Record<string, ProviderSettingSummary | ProviderSettingStatus>;
-
-export interface ProviderSettingMutationVariables {
-  provider: MetadataProviderSlug;
-  api_key: string | null;
-}
-
-export interface ProviderSettingUpdateRequest {
-  api_key: string | null;
-}
-
 export interface PluginSettingFieldSchema {
   type?: string | string[];
   title?: string;

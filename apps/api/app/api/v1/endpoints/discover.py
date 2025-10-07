@@ -6,14 +6,14 @@ import logging
 from functools import lru_cache
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
 from app.schemas.discover import DiscoverItem, PaginatedResponse
-from app.services.metadata.providers.lastfm import LastFMClient
+from app.services.metadata.constants import TMDB_IMAGE_BASE
+from app.services.metadata.metadata_client import MetadataProxyError, get_metadata_client
 from app.services.metadata.providers.musicbrainz import MusicBrainzClient
-from app.services.metadata.providers.tmdb import TMDBClient, TMDB_IMAGE_BASE
 
 
 logger = logging.getLogger(__name__)
@@ -24,58 +24,57 @@ SortOption = Literal["trending", "popular", "new", "az"]
 
 
 @lru_cache
-def _tmdb_client() -> TMDBClient:
-    return TMDBClient(api_key=runtime_settings.key_getter("tmdb"))
-
-
-@lru_cache
 def _musicbrainz_client() -> MusicBrainzClient:
     return MusicBrainzClient(user_agent=settings.MB_USER_AGENT)
-
-
-@lru_cache
-def _lastfm_client() -> LastFMClient:
-    return LastFMClient(api_key=runtime_settings.key_getter("lastfm"))
-
-
-def get_tmdb_client() -> TMDBClient:
-    return _tmdb_client()
 
 
 def get_musicbrainz_client() -> MusicBrainzClient:
     return _musicbrainz_client()
 
 
-def get_lastfm_client() -> LastFMClient:
-    return _lastfm_client()
+def _tmdb_discover_request(
+    media_type: Literal["movie", "tv"], sort: SortOption, page: int
+) -> tuple[str, dict[str, Any]]:
+    normalized = (sort or "trending").lower()
+    params: dict[str, Any] = {"page": max(1, page), "language": "en-US"}
+    if normalized == "popular":
+        path = f"{media_type}/popular"
+    elif normalized == "new":
+        path = "movie/now_playing" if media_type == "movie" else "tv/on_the_air"
+    elif normalized == "az":
+        path = f"discover/{media_type}"
+        params.update({"sort_by": "original_title.asc", "include_adult": False})
+    else:
+        path = f"trending/{media_type}/day"
+    return path, params
 
 
 @router.get("/movie", response_model=PaginatedResponse[DiscoverItem])
 async def discover_movies(
     sort: SortOption = Query("trending"),
     page: int = Query(1, ge=1, le=1000),
-    client: TMDBClient = Depends(get_tmdb_client),
 ) -> PaginatedResponse[DiscoverItem]:
-    return await _discover_video("movie", sort, page, client)
+    metadata = get_metadata_client()
+    return await _discover_video("movie", sort, page, metadata)
 
 
 @router.get("/tv", response_model=PaginatedResponse[DiscoverItem])
 async def discover_tv(
     sort: SortOption = Query("trending"),
     page: int = Query(1, ge=1, le=1000),
-    client: TMDBClient = Depends(get_tmdb_client),
 ) -> PaginatedResponse[DiscoverItem]:
-    return await _discover_video("tv", sort, page, client)
+    metadata = get_metadata_client()
+    return await _discover_video("tv", sort, page, metadata)
 
 
 @router.get("/album", response_model=PaginatedResponse[DiscoverItem])
 async def discover_albums(
     sort: SortOption = Query("trending"),
     page: int = Query(1, ge=1, le=1000),
-    lastfm: LastFMClient = Depends(get_lastfm_client),
     musicbrainz: MusicBrainzClient = Depends(get_musicbrainz_client),
 ) -> PaginatedResponse[DiscoverItem]:
-    return await _discover_albums(sort, page, lastfm, musicbrainz)
+    metadata = get_metadata_client()
+    return await _discover_albums(sort, page, metadata, musicbrainz)
 
 
 FALLBACK_PAYLOAD: dict[str, list[dict[str, Any]]] = {
@@ -152,10 +151,23 @@ async def _discover_video(
     media_type: Literal["movie", "tv"],
     sort: SortOption,
     page: int,
-    client: TMDBClient,
+    metadata,
 ) -> PaginatedResponse[DiscoverItem]:
+    path, params = _tmdb_discover_request(media_type, sort, page)
     try:
-        payload = await client.discover_media(media_type, sort=sort, page=page)
+        payload = await metadata.tmdb(path, params=params, request_id=None)
+    except MetadataProxyError as exc:
+        detail = exc.detail or "tmdb_error"
+        if (
+            exc.status_code in {502, 503}
+            and isinstance(detail, str)
+            and detail == "tmdb_not_configured"
+        ):
+            logger.warning("discover: tmdb not configured for media_type=%s", media_type)
+            payload = None
+        else:
+            logger.exception("discover: tmdb discovery failed media_type=%s", media_type)
+            raise HTTPException(status_code=502, detail=detail) from exc
     except Exception:
         logger.exception("discover: tmdb discovery failed media_type=%s", media_type)
         payload = None
@@ -179,19 +191,39 @@ async def _discover_video(
 async def _discover_albums(
     sort: SortOption,
     page: int,
-    lastfm: LastFMClient,
+    metadata,
     musicbrainz: MusicBrainzClient,
 ) -> PaginatedResponse[DiscoverItem]:
+    params = {
+        "method": "chart.gettopalbums",
+        "page": max(1, page),
+        "limit": 50,
+    }
     try:
-        listing = await lastfm.get_top_albums(page=page)
+        listing = await metadata.lastfm("chart.gettopalbums", params=params, request_id=None)
+    except MetadataProxyError as exc:
+        detail = exc.detail or "lastfm_error"
+        if (
+            exc.status_code in {502, 503}
+            and isinstance(detail, str)
+            and detail == "lastfm_not_configured"
+        ):
+            logger.warning("discover: lastfm not configured")
+            return _fallback_response("album", page)
+        logger.exception("discover: lastfm chart lookup failed page=%s", page)
+        raise HTTPException(status_code=502, detail=detail) from exc
     except Exception:
         logger.exception("discover: lastfm chart lookup failed page=%s", page)
-        listing = None
-
-    if not listing or not isinstance(listing, dict):
         return _fallback_response("album", page)
 
-    raw_items = listing.get("items") or []
+    if not isinstance(listing, dict):
+        return _fallback_response("album", page)
+
+    container = listing.get("albums") or listing.get("topalbums")
+    if not isinstance(container, dict):
+        return _fallback_response("album", page)
+
+    raw_items = container.get("album") or []
     if not isinstance(raw_items, list):
         raw_items = []
 
@@ -207,8 +239,9 @@ async def _discover_albums(
     if not items:
         return _fallback_response("album", page)
 
-    total_pages = _safe_int(listing.get("total_pages")) or 1
-    current_page = _safe_int(listing.get("page")) or page
+    attrs = container.get("@attr") if isinstance(container, dict) else {}
+    total_pages = _safe_int(attrs.get("totalPages")) or 1
+    current_page = _safe_int(attrs.get("page")) or page
 
     return PaginatedResponse[DiscoverItem](page=current_page, total_pages=total_pages, items=items)
 

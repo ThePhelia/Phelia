@@ -31,28 +31,17 @@ from app.services.metadata import (
     get_metadata_router,
 )
 from app.services.metadata.metadata_client import MetadataProxyError
+from app.services.metadata.constants import TMDB_IMAGE_BASE
 from app.services.metadata.providers.discogs import DiscogsClient
-from app.services.metadata.providers.lastfm import LastFMClient
-from app.services.metadata.providers.tmdb import TMDBClient, TMDB_IMAGE_BASE
 
 
 public_router = APIRouter(tags=["metadata"])
-
-
-def _tmdb_client() -> TMDBClient:
-    return TMDBClient(api_key=runtime_settings.key_getter("tmdb"))
+def _metadata_client():
+    return get_metadata_client()
 
 
 def _discogs_client() -> DiscogsClient:
     return DiscogsClient(token=runtime_settings.key_getter("discogs"))
-
-
-def _lastfm_client() -> LastFMClient:
-    return LastFMClient(api_key=runtime_settings.key_getter("lastfm"))
-
-
-def _metadata_client():
-    return get_metadata_client()
 
 
 def _extract_year(raw: Any) -> int | None:
@@ -179,27 +168,64 @@ async def meta_search(
     q: str = Query(..., min_length=2),
     limit: int = Query(20, ge=1, le=50),
 ) -> MetaSearchResponse:
-    tmdb = _tmdb_client()
+    metadata = _metadata_client()
     discogs = _discogs_client()
-    lastfm = _lastfm_client()
 
     async def _movies() -> list[tuple[float, MetaSearchItem]]:
-        if not tmdb.api_key:
+        params = {
+            "query": q,
+            "include_adult": False,
+            "language": "en-US",
+            "page": 1,
+        }
+        try:
+            response = await metadata.tmdb("search/movie", params=params, request_id=None)
+        except MetadataProxyError as exc:
+            detail = exc.detail or "tmdb_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "tmdb_not_configured"
+            ):
+                return []
+            raise HTTPException(status_code=502, detail=detail) from exc
+        if not isinstance(response, dict):
             return []
-        results = await tmdb.search_movies(q, limit=limit)
+        results = response.get("results")
+        if not isinstance(results, list):
+            return []
         items: list[tuple[float, MetaSearchItem]] = []
-        for result in results:
+        for result in results[:limit]:
             mapped = _tmdb_search_item(result, "movie")
             if mapped:
                 items.append(mapped)
         return items
 
     async def _tv() -> list[tuple[float, MetaSearchItem]]:
-        if not tmdb.api_key:
+        params = {
+            "query": q,
+            "include_adult": False,
+            "language": "en-US",
+            "page": 1,
+        }
+        try:
+            response = await metadata.tmdb("search/tv", params=params, request_id=None)
+        except MetadataProxyError as exc:
+            detail = exc.detail or "tmdb_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "tmdb_not_configured"
+            ):
+                return []
+            raise HTTPException(status_code=502, detail=detail) from exc
+        if not isinstance(response, dict):
             return []
-        results = await tmdb.search_tv(q, limit=limit)
+        results = response.get("results")
+        if not isinstance(results, list):
+            return []
         items: list[tuple[float, MetaSearchItem]] = []
-        for result in results:
+        for result in results[:limit]:
             mapped = _tmdb_search_item(result, "tv")
             if mapped:
                 items.append(mapped)
@@ -207,19 +233,40 @@ async def meta_search(
 
     async def _albums() -> list[tuple[float, MetaSearchItem]]:
         hits: list[tuple[float, MetaSearchItem]] = []
-        discogs_token = discogs.token
-        if discogs_token:
+        if discogs.token:
             results = await discogs.search_albums(q, limit=limit)
             for result in results:
                 mapped = _discogs_search_item(result)
                 if mapped:
                     hits.append(mapped)
-        if not hits and lastfm.api_key:
-            results = await lastfm.search_albums(q, limit=limit)
-            for result in results:
-                mapped = _lastfm_search_item(result)
-                if mapped:
-                    hits.append(mapped)
+        if hits:
+            return hits
+
+        params = {"method": "album.search", "album": q, "limit": limit}
+        try:
+            response = await metadata.lastfm("album.search", params=params, request_id=None)
+        except MetadataProxyError as exc:
+            detail = exc.detail or "lastfm_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "lastfm_not_configured"
+            ):
+                return hits
+            if exc.status_code == 404:
+                return hits
+            raise HTTPException(status_code=502, detail=detail) from exc
+        if not isinstance(response, dict):
+            return hits
+        results = response.get("results")
+        matches = results.get("albummatches") if isinstance(results, dict) else None
+        albums = matches.get("album") if isinstance(matches, dict) else []
+        if not isinstance(albums, list):
+            return hits
+        for result in albums:
+            mapped = _lastfm_search_item(result)
+            if mapped:
+                hits.append(mapped)
         return hits
 
     movie_task, tv_task, album_task = await asyncio.gather(_movies(), _tv(), _albums())
@@ -623,10 +670,10 @@ def providers_status() -> dict[str, Any]:
         ),
     }
     return {
-        "tmdb": runtime_settings.tmdb_enabled,
+        "tmdb": True,
         "omdb": runtime_settings.omdb_enabled,
         "discogs": runtime_settings.discogs_enabled,
-        "lastfm": runtime_settings.lastfm_enabled,
+        "lastfm": True,
         "musicbrainz": bool(settings.MB_USER_AGENT),
         "discovery": discovery,
     }

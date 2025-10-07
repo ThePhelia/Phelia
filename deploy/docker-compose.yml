@@ -150,14 +150,6 @@ services:
       api:
         condition: service_healthy
 
-
-volumes:
-  db_data:
-  redis_data:
-  qb_config:
-  downloads:
-  music:
-
   metadata-proxy:
     build:
       context: ../services/metadata-proxy
@@ -168,3 +160,11 @@ volumes:
       interval: 30s
       timeout: 5s
       retries: 5
+
+
+volumes:
+  db_data:
+  redis_data:
+  qb_config:
+  downloads:
+  music:

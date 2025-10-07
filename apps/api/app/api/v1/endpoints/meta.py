@@ -6,7 +6,7 @@ import asyncio
 import os
 from typing import Any, Iterable, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -25,7 +25,12 @@ from app.schemas.meta import (
     MetaTVInfo,
 )
 from app.services.meta.canonical import build_album, build_movie, build_tv
-from app.services.metadata import get_classifier, get_metadata_router
+from app.services.metadata import (
+    get_classifier,
+    get_metadata_client,
+    get_metadata_router,
+)
+from app.services.metadata.metadata_client import MetadataProxyError
 from app.services.metadata.providers.discogs import DiscogsClient
 from app.services.metadata.providers.lastfm import LastFMClient
 from app.services.metadata.providers.tmdb import TMDBClient, TMDB_IMAGE_BASE
@@ -44,6 +49,10 @@ def _discogs_client() -> DiscogsClient:
 
 def _lastfm_client() -> LastFMClient:
     return LastFMClient(api_key=runtime_settings.key_getter("lastfm"))
+
+
+def _metadata_client():
+    return get_metadata_client()
 
 
 def _extract_year(raw: Any) -> int | None:
@@ -220,18 +229,46 @@ async def meta_search(
     return MetaSearchResponse(items=limited)
 
 
-async def _tmdb_detail(item_type: Literal["movie", "tv"], provider_id: str) -> MetaDetail:
-    tmdb = _tmdb_client()
-    if not tmdb.api_key:
-        raise HTTPException(status_code=502, detail="tmdb_not_configured")
+async def _tmdb_detail(
+    request: Request, item_type: Literal["movie", "tv"], provider_id: str
+) -> MetaDetail:
+    metadata = _metadata_client()
     try:
         tmdb_id = int(provider_id)
     except (TypeError, ValueError):
         raise HTTPException(status_code=422, detail="invalid_id") from None
 
-    payload = await (tmdb.movie_details(tmdb_id) if item_type == "movie" else tmdb.tv_details(tmdb_id))
-    if not payload:
-        raise HTTPException(status_code=404, detail="not_found")
+    params = {
+        "language": "en-US",
+        "append_to_response": "external_ids,credits,recommendations,similar",
+    }
+    request_id = request.headers.get("x-request-id")
+    try:
+        payload = await (
+            metadata.tmdb(
+                f"movie/{tmdb_id}", params=params, request_id=request_id
+            )
+            if item_type == "movie"
+            else metadata.tmdb(
+                f"tv/{tmdb_id}", params=params, request_id=request_id
+            )
+        )
+    except MetadataProxyError as exc:
+        detail = exc.detail or "tmdb_error"
+        if exc.status_code == 404:
+            raise HTTPException(status_code=404, detail="not_found") from exc
+        if exc.status_code in {400, 401, 403, 422}:
+            raise HTTPException(status_code=exc.status_code, detail=detail) from exc
+        if (
+            exc.status_code in {502, 503}
+            and isinstance(detail, str)
+            and detail == "tmdb_not_configured"
+        ):
+            raise HTTPException(status_code=502, detail="tmdb_not_configured") from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="tmdb_invalid_response")
 
     title = payload.get("title") if item_type == "movie" else payload.get("name")
     if not isinstance(title, str) or not title.strip():
@@ -307,7 +344,66 @@ async def _tmdb_detail(item_type: Literal["movie", "tv"], provider_id: str) -> M
     )
 
 
-async def _discogs_detail(provider_id: str) -> MetaDetail:
+async def _fetch_lastfm_album(
+    request: Request, artist: str | None, album: str
+) -> dict[str, Any] | None:
+    metadata = _metadata_client()
+    params: dict[str, Any] = {"album": album}
+    if artist:
+        params["artist"] = artist
+    try:
+        response = await metadata.lastfm(
+            "album.getinfo",
+            params=params,
+            request_id=request.headers.get("x-request-id"),
+        )
+    except MetadataProxyError as exc:
+        detail = exc.detail or "lastfm_error"
+        if exc.status_code == 404:
+            return None
+        if (
+            exc.status_code in {502, 503}
+            and isinstance(detail, str)
+            and detail == "lastfm_not_configured"
+        ):
+            raise HTTPException(status_code=502, detail="lastfm_not_configured") from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    if not isinstance(response, dict):
+        return None
+    album_data = response.get("album")
+    if not isinstance(album_data, dict):
+        return None
+
+    tags_container = album_data.get("tags") or {}
+    tag_entries = tags_container.get("tag") if isinstance(tags_container, dict) else None
+    tag_list: list[str] = []
+    if isinstance(tag_entries, Iterable):
+        for entry in tag_entries:
+            if isinstance(entry, dict) and entry.get("name"):
+                tag_list.append(str(entry["name"]))
+
+    wiki = album_data.get("wiki")
+    if not isinstance(wiki, dict):
+        wiki = {}
+
+    def _to_int(value: Any) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "tags": tag_list,
+        "listeners": _to_int(album_data.get("listeners")),
+        "playcount": _to_int(album_data.get("playcount")),
+        "summary": wiki.get("summary"),
+        "url": album_data.get("url"),
+        "extra": album_data,
+    }
+
+
+async def _discogs_detail(request: Request, provider_id: str) -> MetaDetail:
     discogs = _discogs_client()
     if not discogs.token:
         raise HTTPException(status_code=502, detail="discogs_not_configured")
@@ -370,10 +466,15 @@ async def _discogs_detail(provider_id: str) -> MetaDetail:
                 artist_name = artist.get("name")
                 break
 
-    lastfm = _lastfm_client()
     summary = None
-    if lastfm.api_key and artist_name:
-        info = await lastfm.get_album_info(artist_name, title)
+    if artist_name:
+        try:
+            info = await _fetch_lastfm_album(request, artist_name, title)
+        except HTTPException as exc:
+            if exc.status_code == 502 and exc.detail == "lastfm_not_configured":
+                info = None
+            else:
+                raise
         if info:
             summary = info.get("summary") or summary
             tags = info.get("tags")
@@ -408,14 +509,11 @@ async def _discogs_detail(provider_id: str) -> MetaDetail:
     )
 
 
-async def _lastfm_detail(provider_id: str) -> MetaDetail:
-    lastfm = _lastfm_client()
-    if not lastfm.api_key:
-        raise HTTPException(status_code=502, detail="lastfm_not_configured")
+async def _lastfm_detail(request: Request, provider_id: str) -> MetaDetail:
     artist, _, album = provider_id.partition("|")
     if not album:
         raise HTTPException(status_code=422, detail="invalid_id")
-    info = await lastfm.get_album_info(artist or None, album)
+    info = await _fetch_lastfm_album(request, artist or None, album)
     if not info:
         raise HTTPException(status_code=404, detail="not_found")
     tracklist_raw = info.get("extra", {}).get("tracks", {}).get("track") if isinstance(info, dict) else None
@@ -470,6 +568,7 @@ async def _lastfm_detail(provider_id: str) -> MetaDetail:
 
 @public_router.get("/detail", response_model=MetaDetail)
 async def meta_detail(
+    request: Request,
     *,
     type: MetaItemType,
     id: str,
@@ -478,12 +577,12 @@ async def meta_detail(
     if type in {"movie", "tv"}:
         if provider != "tmdb":
             raise HTTPException(status_code=422, detail="unsupported_provider")
-        return await _tmdb_detail(type, id)
+        return await _tmdb_detail(request, type, id)
     if type == "album":
         if provider == "discogs":
-            return await _discogs_detail(id)
+            return await _discogs_detail(request, id)
         if provider == "lastfm":
-            return await _lastfm_detail(id)
+            return await _lastfm_detail(request, id)
         raise HTTPException(status_code=422, detail="unsupported_provider")
     raise HTTPException(status_code=422, detail="unsupported_type")
 

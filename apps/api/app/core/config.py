@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     # We ship a sensible default that complies with their etiquette.
     MB_USER_AGENT: str = "Phelia/0.1 (https://example.local)"
 
+    METADATA_BASE_URL: AnyHttpUrl | None = None
+
     class Config:
         extra = "ignore"
 
@@ -78,3 +80,6 @@ except ValidationError as e:
     raise RuntimeError(
         f"Missing required configuration variables: {missing}"
     ) from e
+
+if settings.METADATA_BASE_URL is None:
+    raise RuntimeError("METADATA_BASE_URL is required")

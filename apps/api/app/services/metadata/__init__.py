@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
 
 from .classifier import Classifier
+from .metadata_client import MetadataClient, get_metadata_client
 from .router import MetadataRouter
 from .providers.tmdb import TMDBClient
 from .providers.omdb import OMDbClient
@@ -35,4 +36,14 @@ def get_metadata_router() -> MetadataRouter:
         discogs_client=discogs_client,
         lastfm_client=lastfm_client,
     )
+
+
+__all__ = [
+    "Classifier",
+    "MetadataRouter",
+    "MetadataClient",
+    "get_classifier",
+    "get_metadata_router",
+    "get_metadata_client",
+]
 

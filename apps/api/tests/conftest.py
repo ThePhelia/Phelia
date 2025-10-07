@@ -12,6 +12,7 @@ os.environ.setdefault("QB_URL", "http://localhost:8080")
 os.environ.setdefault("QB_USER", "admin")
 os.environ.setdefault("QB_PASS", "adminadmin")
 os.environ.setdefault("ANYIO_BACKEND", "asyncio")
+os.environ.setdefault("METADATA_BASE_URL", "http://metadata-proxy:8080")
 
 # Add apps/api to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

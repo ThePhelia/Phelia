@@ -65,6 +65,16 @@ make up
 - WebUI: http://localhost:5173/
 - Default login: created on first launch
 
+### Development smoke test
+
+To verify the metadata proxy and API stack locally, run:
+
+```bash
+./scripts/dev_smoke.sh
+```
+
+The script builds the API and metadata-proxy images, brings up the minimal stack, and checks both the proxy health endpoint and a metadata-backed API route. It tears the stack down after completion.
+
 ## Plugins
 
 Plugins are distributed as .phex archives.

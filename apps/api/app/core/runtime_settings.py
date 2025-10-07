@@ -9,7 +9,6 @@ from typing import Optional
 from app.core.config import settings
 
 PROVIDER_ENV_MAP: dict[str, str] = {
-    "tmdb": "TMDB_API_KEY",
     "omdb": "OMDB_API_KEY",
     "discogs": "DISCOGS_TOKEN",
     "lastfm": "LASTFM_API_KEY",
@@ -84,10 +83,6 @@ class RuntimeProviderSettings:
 
     def supported_providers(self) -> list[str]:
         return list(SUPPORTED_PROVIDER_SLUGS)
-
-    @property
-    def tmdb_enabled(self) -> bool:
-        return self.is_configured("tmdb")
 
     @property
     def omdb_enabled(self) -> bool:

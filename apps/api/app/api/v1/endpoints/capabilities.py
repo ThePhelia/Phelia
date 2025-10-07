@@ -37,10 +37,10 @@ async def read_capabilities(request: Request) -> CapabilitiesResponse:
     services = {
         "qbittorrent": qb_ok,
         "torrent_search": search_registry.is_configured(),
-        "tmdb": runtime_settings.tmdb_enabled,
+        "tmdb": True,
         "omdb": runtime_settings.omdb_enabled,
         "discogs": runtime_settings.discogs_enabled,
-        "lastfm": runtime_settings.lastfm_enabled,
+        "lastfm": True,
     }
 
     version = getattr(request.app, "version", None) or "unknown"

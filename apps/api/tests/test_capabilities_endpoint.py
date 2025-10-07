@@ -24,7 +24,6 @@ class DummyQbClient:
 async def test_capabilities_reports_service_status(monkeypatch):
     monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient())
     monkeypatch.setattr(capabilities_router.search_registry, "is_configured", lambda: True)
-    runtime_settings.set("tmdb", "tmdb")
     runtime_settings.set("omdb", "omdb")
     runtime_settings.set("discogs", "discogs")
     runtime_settings.set("lastfm", "lastfm")

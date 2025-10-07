@@ -111,24 +111,6 @@ class LibraryPlaylist(Base):
         onupdate=datetime.utcnow,
         server_default=func.now(),
     )
-
-
-class ProviderCredential(Base):
-    __tablename__ = "provider_credentials"
-
-    provider_slug: Mapped[str] = mapped_column(
-        String(64), primary_key=True, nullable=False, index=True
-    )
-    api_key: Mapped[str] = mapped_column(String(512), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        server_default=func.now(),
-    )
-
-
 class PluginSetting(Base):
     __tablename__ = "plugin_settings"
 

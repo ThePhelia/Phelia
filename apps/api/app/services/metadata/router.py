@@ -7,9 +7,11 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from app.schemas.media import Classification, EnrichedCard, EnrichedProvider
+from app.services.metadata.constants import TMDB_IMAGE_BASE
+from app.services.metadata.metadata_client import MetadataClient, MetadataProxyError
 
 
 logger = logging.getLogger(__name__)
@@ -49,18 +51,16 @@ class MetadataRouter:
     def __init__(
         self,
         *,
-        tmdb_client: Any | None,
+        metadata_client: "MetadataClient",
         omdb_client: Any | None,
         musicbrainz_client: Any | None,
         discogs_client: Any | None,
-        lastfm_client: Any | None,
         threshold_low: float = 0.55,
     ) -> None:
-        self.tmdb = tmdb_client
+        self.metadata = metadata_client
         self.omdb = omdb_client
         self.musicbrainz = musicbrainz_client
         self.discogs = discogs_client
-        self.lastfm = lastfm_client
         self.threshold_low = threshold_low
         self.cache = TTLCache()
 
@@ -123,15 +123,31 @@ class MetadataRouter:
             if year:
                 card.parsed["year"] = year
 
-        tasks: dict[str, asyncio.Task[Any]] = {}
+        mb_data: dict[str, Any] | None = None
         if self.musicbrainz and hasattr(self.musicbrainz, "lookup_release_group"):
-            tasks["MusicBrainz"] = asyncio.create_task(
-                self.musicbrainz.lookup_release_group(artist, album, year)
-            )
-        if self.lastfm and getattr(self.lastfm, "api_key", None) and hasattr(self.lastfm, "get_album_info"):
-            tasks["Last.fm"] = asyncio.create_task(self.lastfm.get_album_info(artist, album))
+            try:
+                mb_data = await self.musicbrainz.lookup_release_group(artist, album, year)
+            except Exception as exc:
+                logger.warning("musicbrainz lookup failed for title=%s: %s", title, exc)
+                providers["MusicBrainz"].extra = {"error": str(exc)}
+            else:
+                if mb_data:
+                    providers["MusicBrainz"].used = True
         else:
-            providers["Last.fm"].extra = {"error": "not_configured"}
+            providers["MusicBrainz"].extra = {"error": "not_configured"}
+
+        lastfm_data: dict[str, Any] | None = None
+        lastfm_error: str | None = None
+        if album:
+            lastfm_data, lastfm_error = await self._lastfm_album_info(artist, album)
+        else:
+            lastfm_error = "no_album"
+
+        if lastfm_error:
+            providers["Last.fm"].extra = {"error": lastfm_error}
+        elif lastfm_data:
+            providers["Last.fm"].used = True
+
         discogs_configured = (
             self.discogs
             and getattr(self.discogs, "token", None)
@@ -140,19 +156,30 @@ class MetadataRouter:
         if not discogs_configured:
             providers["Discogs"].extra = {"error": "not_configured"}
 
-        results: dict[str, Any] = {}
-        if tasks:
-            gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
-            for name, result in zip(tasks.keys(), gathered, strict=False):
-                if isinstance(result, Exception):
-                    logger.warning("provider %s failed for title=%s: %s", name, title, result)
-                    providers[name].extra = {"error": str(result)}
-                    continue
-                results[name] = result
+        discogs_data: dict[str, Any] | None = None
+        if discogs_configured:
+            mb_release_group_id = None
+            if mb_data:
+                release_group = mb_data.get("release_group") or {}
+                mb_release_group_id = release_group.get("id")
+            try:
+                discogs_data = await self.discogs.lookup_release(
+                    artist, album, year, mb_release_group_id
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                logger.warning(
+                    "provider Discogs failed for title=%s artist=%s album=%s: %s",
+                    title,
+                    artist,
+                    album,
+                    exc,
+                )
+                providers["Discogs"].extra = {"error": str(exc)}
+            else:
+                if not discogs_data and providers["Discogs"].extra is None:
+                    providers["Discogs"].extra = {"error": "no_result"}
 
-        mb_data = results.get("MusicBrainz")
         if mb_data:
-            providers["MusicBrainz"].used = True
             providers["MusicBrainz"].extra = {"id": (mb_data.get("release_group") or {}).get("id")}
             artist_info = mb_data.get("artist") or {}
             release_group = mb_data.get("release_group") or {}
@@ -174,31 +201,6 @@ class MetadataRouter:
                 else:
                     musicbrainz_details[key] = value
 
-        if discogs_configured:
-            mb_release_group_id = None
-            if mb_data:
-                release_group = mb_data.get("release_group") or {}
-                mb_release_group_id = release_group.get("id")
-            try:
-                discogs_data = await self.discogs.lookup_release(
-                    artist, album, year, mb_release_group_id
-                )
-            except Exception as exc:  # pragma: no cover - defensive guard
-                logger.warning(
-                    "provider Discogs failed for title=%s artist=%s album=%s: %s",
-                    title,
-                    artist,
-                    album,
-                    exc,
-                )
-                providers["Discogs"].extra = {"error": str(exc)}
-                discogs_data = None
-            if discogs_data:
-                results["Discogs"] = discogs_data
-            elif providers["Discogs"].extra is None:
-                providers["Discogs"].extra = {"error": "no_result"}
-
-        discogs_data = results.get("Discogs")
         if discogs_data:
             providers["Discogs"].used = True
             providers["Discogs"].extra = {"id": discogs_data.get("id")}
@@ -206,9 +208,7 @@ class MetadataRouter:
             if discogs_data.get("cover_image"):
                 card.details.setdefault("images", {})["primary"] = discogs_data["cover_image"]
 
-        lastfm_data = results.get("Last.fm")
         if lastfm_data:
-            providers["Last.fm"].used = True
             providers["Last.fm"].extra = {"url": lastfm_data.get("url")}
             card.details.setdefault("lastfm", {}).update(lastfm_data)
             tags = lastfm_data.get("tags")
@@ -219,6 +219,162 @@ class MetadataRouter:
         if card.parsed is None and (artist or album):
             card.parsed = {"artist": artist, "album": album}
         return card
+
+    async def _lastfm_album_info(
+        self, artist: str | None, album: str
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        params: dict[str, Any] = {"album": album}
+        if artist:
+            params["artist"] = artist
+        try:
+            response = await self.metadata.lastfm(
+                "album.getinfo", params=params, request_id=None
+            )
+        except MetadataProxyError as exc:
+            detail = exc.detail or "lastfm_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "lastfm_not_configured"
+            ):
+                return None, "not_configured"
+            return None, str(detail) if isinstance(detail, str) else "lastfm_error"
+
+        if not isinstance(response, dict):
+            return None, "invalid_response"
+
+        album_data = response.get("album")
+        if not isinstance(album_data, dict):
+            return None, "no_result"
+
+        tags_container = album_data.get("tags") or {}
+        tag_entries = tags_container.get("tag") if isinstance(tags_container, dict) else None
+        tag_list: list[str] = []
+        if isinstance(tag_entries, Iterable):
+            for entry in tag_entries:
+                if isinstance(entry, dict) and entry.get("name"):
+                    tag_list.append(str(entry["name"]))
+
+        wiki = album_data.get("wiki")
+        if not isinstance(wiki, dict):
+            wiki = {}
+
+        def _to_int(value: Any) -> int | None:
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        payload = {
+            "tags": tag_list,
+            "listeners": _to_int(album_data.get("listeners")),
+            "playcount": _to_int(album_data.get("playcount")),
+            "summary": wiki.get("summary"),
+            "url": album_data.get("url"),
+            "extra": album_data,
+        }
+        images = album_data.get("image")
+        if isinstance(images, Iterable):
+            poster = None
+            for entry in images:
+                if isinstance(entry, dict) and entry.get("#text"):
+                    poster = entry.get("#text")
+            if poster:
+                payload["image"] = poster
+        return payload, None
+
+    async def _tmdb_lookup(
+        self, media_type: str, title: str, year: int | None
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        params: dict[str, Any] = {
+            "query": title,
+            "include_adult": False,
+            "language": "en-US",
+            "page": 1,
+        }
+        if year is not None:
+            key = "year" if media_type == "movie" else "first_air_date_year"
+            params[key] = year
+        try:
+            search = await self.metadata.tmdb(
+                f"search/{media_type}", params=params, request_id=None
+            )
+        except MetadataProxyError as exc:
+            detail = exc.detail or "tmdb_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "tmdb_not_configured"
+            ):
+                return None, "not_configured"
+            return None, str(detail) if isinstance(detail, str) else "tmdb_error"
+
+        if not isinstance(search, dict):
+            return None, "invalid_response"
+
+        results = search.get("results")
+        if not isinstance(results, list):
+            return None, "invalid_response"
+
+        primary: dict[str, Any] | None = None
+        for entry in results:
+            if isinstance(entry, dict):
+                primary = entry
+                break
+        if not primary:
+            return None, "no_result"
+
+        tmdb_id = primary.get("id")
+        if tmdb_id is None:
+            return None, "no_result"
+
+        try:
+            details = await self.metadata.tmdb(
+                f"{media_type}/{tmdb_id}",
+                params={
+                    "language": "en-US",
+                    "append_to_response": "external_ids,credits,recommendations,similar",
+                },
+                request_id=None,
+            )
+        except MetadataProxyError as exc:
+            detail = exc.detail or "tmdb_error"
+            return None, str(detail) if isinstance(detail, str) else "tmdb_error"
+
+        if not isinstance(details, dict):
+            return None, "invalid_response"
+
+        external = details.get("external_ids")
+        imdb_id = external.get("imdb_id") if isinstance(external, dict) else None
+        date_key = "release_date" if media_type == "movie" else "first_air_date"
+        release_date = details.get(date_key) or primary.get(date_key)
+        year_value = None
+        if isinstance(release_date, str) and len(release_date) >= 4:
+            try:
+                year_value = int(release_date[:4])
+            except ValueError:
+                year_value = None
+        poster = details.get("poster_path") or primary.get("poster_path")
+        backdrop = details.get("backdrop_path") or primary.get("backdrop_path")
+        overview = details.get("overview") or primary.get("overview")
+        title_key = "title" if media_type == "movie" else "name"
+        resolved_title = (
+            details.get(title_key)
+            or primary.get(title_key)
+            or (details.get("name") if media_type == "movie" else details.get("title"))
+            or title
+        )
+        payload = {
+            "tmdb_id": tmdb_id,
+            "title": resolved_title,
+            "year": year_value,
+            "overview": overview,
+            "poster": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
+            "backdrop": f"{TMDB_IMAGE_BASE}{backdrop}" if backdrop else None,
+            "imdb_id": imdb_id,
+            "extra": {"tmdb": details},
+        }
+        return payload, None
 
     async def _enrich_video(
         self,
@@ -265,21 +421,7 @@ class MetadataRouter:
             card.parsed = card.parsed or {}
             card.parsed.setdefault("year", year)
 
-        tmdb_lookup = None
-        if self.tmdb:
-            lookup_attr = "movie_lookup" if media_type == "movie" else "tv_lookup"
-            tmdb_lookup = getattr(self.tmdb, lookup_attr, None)
-
-        tmdb_data: Optional[dict[str, Any]] = None
-        tmdb_error: Optional[str] = None
-        if not self.tmdb or not tmdb_lookup:
-            tmdb_error = "not_configured"
-        elif not getattr(self.tmdb, "api_key", None):
-            tmdb_error = "not_configured"
-        else:
-            tmdb_data = await tmdb_lookup(title, year)
-            if not tmdb_data:
-                tmdb_error = "no_result"
+        tmdb_data, tmdb_error = await self._tmdb_lookup(media_type, title, year)
 
         if tmdb_data:
             providers["TMDb"].used = True

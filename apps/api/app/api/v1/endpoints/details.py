@@ -13,7 +13,7 @@ from app.schemas.media import Classification
 from app.schemas.ui import DetailLinks, DetailResponse, DiscoverItem, MusicBrainzInfo
 from app.services import library as library_service
 from app.services.metadata import get_metadata_router
-from app.services.metadata.providers.tmdb import TMDB_IMAGE_BASE
+from app.services.metadata.constants import TMDB_IMAGE_BASE
 
 
 logger = logging.getLogger(__name__)

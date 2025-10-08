@@ -6,7 +6,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "f35b2f12e9dc"
+revision = "f35b2f12e9dc"  # pragma: allowlist secret
 down_revision = None
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
@@ -101,7 +101,9 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("provider_slug", name="uq_trackers_provider_slug"),
     )
-    op.create_index("ix_trackers_provider_slug", "trackers", ["provider_slug"], unique=False)
+    op.create_index(
+        "ix_trackers_provider_slug", "trackers", ["provider_slug"], unique=False
+    )
 
     op.create_table(
         "library_playlists",
@@ -156,9 +158,15 @@ def upgrade() -> None:
             name="uq_library_entry",
         ),
     )
-    op.create_index("ix_library_entries_list_type", "library_entries", ["list_type"], unique=False)
-    op.create_index("ix_library_entries_item_kind", "library_entries", ["item_kind"], unique=False)
-    op.create_index("ix_library_entries_item_id", "library_entries", ["item_id"], unique=False)
+    op.create_index(
+        "ix_library_entries_list_type", "library_entries", ["list_type"], unique=False
+    )
+    op.create_index(
+        "ix_library_entries_item_kind", "library_entries", ["item_kind"], unique=False
+    )
+    op.create_index(
+        "ix_library_entries_item_id", "library_entries", ["item_id"], unique=False
+    )
     op.create_index(
         "ix_library_entries_playlist_slug",
         "library_entries",

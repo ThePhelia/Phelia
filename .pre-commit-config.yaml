@@ -21,4 +21,5 @@ repos:
     rev: v2.11
     hooks:
       - id: vulture
-        args: ["--min-confidence", "80"]
+        args: ["--min-confidence", "80", "."]
+        pass_filenames: false

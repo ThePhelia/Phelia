@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Switch } from '@/app/components/ui/switch';
 import { Label } from '@/app/components/ui/label';
+import { Input } from '@/app/components/ui/input';
 import {
   useCapabilities,
   useInstallPluginFromUrl,
@@ -313,7 +314,7 @@ function PluginSettingsCard({ plugin }: PluginSettingsCardProps) {
                       id={fieldId}
                       type={inputType}
                       value={inputValue}
-                      onChange={(event) =>
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         setFormValues((prev) => ({ ...prev, [key]: event.target.value }))
                       }
                       disabled={isSaving || isLoadingValues}

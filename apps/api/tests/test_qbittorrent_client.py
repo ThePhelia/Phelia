@@ -110,9 +110,9 @@ async def test_post_requests_include_referer(monkeypatch):
     transport = httpx.MockTransport(handler)
     original_async_client = httpx.AsyncClient
 
-    def client_factory(*args, **kwargs):
+    def client_factory(*_args, **kwargs):
         kwargs["transport"] = transport
-        return original_async_client(*args, **kwargs)
+        return original_async_client(*_args, **kwargs)
 
     monkeypatch.setattr(httpx, "AsyncClient", client_factory)
 
@@ -135,9 +135,9 @@ async def test_add_torrent_file_includes_referer(monkeypatch):
     transport = httpx.MockTransport(handler)
     original_async_client = httpx.AsyncClient
 
-    def client_factory(*args, **kwargs):
+    def client_factory(*_args, **kwargs):
         kwargs["transport"] = transport
-        return original_async_client(*args, **kwargs)
+        return original_async_client(*_args, **kwargs)
 
     monkeypatch.setattr(httpx, "AsyncClient", client_factory)
 

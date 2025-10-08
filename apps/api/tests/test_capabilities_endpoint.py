@@ -10,7 +10,7 @@ class DummyQbClient:
     async def __aenter__(self):
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - nothing to clean up
+    async def __aexit__(self, _exc_type, _exc, _tb):  # pragma: no cover - nothing to clean up
         return None
 
     async def login(self):
@@ -22,7 +22,7 @@ class DummyQbClient:
 
 @pytest.mark.anyio
 async def test_capabilities_reports_service_status(monkeypatch):
-    monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: DummyQbClient())
+    monkeypatch.setattr(capabilities_router, "QbClient", lambda *_args, **_kwargs: DummyQbClient())
     monkeypatch.setattr(capabilities_router.search_registry, "is_configured", lambda: True)
     runtime_settings.set("omdb", "omdb")
     runtime_settings.set("discogs", "discogs")
@@ -51,7 +51,7 @@ async def test_capabilities_handles_qb_failure(monkeypatch):
         async def __aenter__(self):
             return self
 
-        async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - nothing to clean up
+        async def __aexit__(self, _exc_type, _exc, _tb):  # pragma: no cover - nothing to clean up
             return None
 
         async def login(self):  # pragma: no cover - triggered via test
@@ -60,7 +60,7 @@ async def test_capabilities_handles_qb_failure(monkeypatch):
         async def list_torrents(self):  # pragma: no cover - not reached
             return []
 
-    monkeypatch.setattr(capabilities_router, "QbClient", lambda *args, **kwargs: FailingQb())
+    monkeypatch.setattr(capabilities_router, "QbClient", lambda *_args, **_kwargs: FailingQb())
 
     app = FastAPI()
     app.include_router(capabilities_router.router, prefix="/api/v1")

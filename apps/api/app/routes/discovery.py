@@ -1,10 +1,14 @@
-from collections.abc import Generator
+"""Discovery routes bridging optional providers with FastAPI."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Generator, Iterable, Sequence
 from datetime import datetime, timedelta
-from typing import Optional, Any, Dict, Callable, Iterable, Sequence
+from typing import Any, Dict, Optional
 
 import httpx
-import json
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import settings
 

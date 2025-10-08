@@ -58,6 +58,7 @@ All services are orchestrated via `docker compose`.
 ```bash
 git clone https://github .com/phelia-plugins/phelia.git
 cd phelia
+cp deploy/env/api.env.example deploy/env/api.env
 make up
 ```
 

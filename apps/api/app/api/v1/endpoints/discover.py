@@ -9,7 +9,6 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import settings
-from app.core.runtime_settings import runtime_settings
 from app.schemas.discover import DiscoverItem, PaginatedResponse
 from app.services.metadata.constants import TMDB_IMAGE_BASE
 from app.services.metadata.metadata_client import MetadataProxyError, get_metadata_client

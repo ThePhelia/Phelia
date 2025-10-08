@@ -6,7 +6,7 @@ from app.api.v1.endpoints import meta as meta_endpoints
 
 
 class DummyTMDB:
-    api_key = "token"
+    api_key = "test_token"
 
     async def search_movies(self, query: str, limit: int = 20):
         return [
@@ -62,7 +62,7 @@ class DummyTMDB:
 
 
 class DummyDiscogs:
-    token = "discogs-token"
+    token = "test_discogs_token"
     base_url = "https://api.discogs.com"
 
     async def search_albums(self, query: str, limit: int = 20):
@@ -94,7 +94,7 @@ class DummyDiscogs:
 
 
 class DummyLastFM:
-    api_key = "lastfm"
+    api_key = "test_lastfm"
 
     async def search_albums(self, query: str, limit: int = 20):
         return []

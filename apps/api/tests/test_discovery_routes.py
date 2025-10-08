@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.routes import discovery as discovery_routes
+from app.routes import discovery as discovery_routes
 from app.services import discovery_apple, discovery_mb
 
 

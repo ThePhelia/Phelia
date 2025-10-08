@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable
 
 from app.schemas.media import Classification, EnrichedCard, EnrichedProvider
 from app.services.metadata.constants import TMDB_IMAGE_BASE

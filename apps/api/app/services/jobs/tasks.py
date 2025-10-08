@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from celery import Celery
-from sqlalchemy.orm import Session
-import logging
 import asyncio
 import inspect
-from typing import Any, List, Optional
+import logging
+from typing import List, Optional
 from urllib.parse import urlparse
+
 import httpx
+from celery import Celery
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -187,7 +188,6 @@ def enqueue_download(
 @celery_app.task(name="app.services.jobs.tasks.poll_status")
 def poll_status() -> int:
     db = _db()
-    updated = 0
     try:
         active: List[Download] = (
             db.query(Download)

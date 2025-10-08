@@ -11,3 +11,4 @@ __pycache__/
 
 /apps/web/node_modules
 phelia_discovery_top_fix.patch
+deploy/env/api.env

@@ -52,7 +52,7 @@ class DummyResponse:
 @pytest.mark.anyio
 async def test_tmdb_proxy_caches(monkeypatch):
     monkeypatch.setenv("CACHE_BACKEND", "memory")
-    monkeypatch.setenv("TMDB_API_KEY", "dummy-key")
+    monkeypatch.setenv("TMDB_API_KEY", "test_key")
 
     calls = {"count": 0}
 
@@ -61,8 +61,8 @@ async def test_tmdb_proxy_caches(monkeypatch):
     import app.clients.tmdb as tmdb_module
 
     get_settings.cache_clear()
-    assert get_settings().tmdb_api_key == "dummy-key"
-    assert tmdb_module._settings.tmdb_api_key == "dummy-key"
+    assert get_settings().tmdb_api_key == "test_key"
+    assert tmdb_module._settings.tmdb_api_key == "test_key"
 
     async def fake_request_json(method, url, params=None, headers=None):
         calls["count"] += 1

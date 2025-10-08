@@ -7,7 +7,6 @@ import sqlite3
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
 
 try:  # pragma: no cover - optional dependency
     import redis.asyncio as redis

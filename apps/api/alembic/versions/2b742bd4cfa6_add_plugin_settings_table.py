@@ -1,7 +1,7 @@
 """add plugin settings table
 
-Revision ID: 2b742bd4cfa6
-Revises: f35b2f12e9dc
+Revision ID: 2b742bd4cfa6  # pragma: allowlist secret
+Revises: f35b2f12e9dc  # pragma: allowlist secret
 Create Date: 2024-07-23 00:00:00.000000
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "2b742bd4cfa6"
-down_revision = "f35b2f12e9dc"
+revision = "2b742bd4cfa6"  # pragma: allowlist secret
+down_revision = "f35b2f12e9dc"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

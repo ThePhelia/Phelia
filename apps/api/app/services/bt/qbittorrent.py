@@ -124,7 +124,7 @@ class QbClient:
     async def __aenter__(self) -> "QbClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(self, _exc_type, _exc, _tb) -> None:
         await self.close()
 
 

@@ -1,16 +1,4 @@
 import asyncio
-import os
-
-os.environ.setdefault("APP_SECRET", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
-os.environ.setdefault("QB_URL", "http://localhost")
-os.environ.setdefault("QB_USER", "user")
-os.environ.setdefault("QB_PASS", "pass")
-
-import pytest
 
 from app.schemas.media import Classification
 from app.services.metadata.router import MetadataRouter

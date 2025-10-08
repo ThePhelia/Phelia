@@ -1,24 +1,6 @@
-import os
-import sys
-import logging
 import asyncio
+import logging
 from contextlib import contextmanager
-
-import pytest
-
-# Ensure environment variables for Settings before importing the app
-os.environ.setdefault("APP_SECRET", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
-os.environ.setdefault("QB_URL", "http://localhost:8080")
-os.environ.setdefault("QB_USER", "admin")
-os.environ.setdefault("QB_PASS", "adminadmin")
-os.environ.setdefault("ANYIO_BACKEND", "asyncio")
-
-# Add apps/api to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app import main
 

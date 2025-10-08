@@ -76,10 +76,10 @@ def test_enqueue_download_url_success(monkeypatch):
         async def __aenter__(self):
             return self
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, follow_redirects=False):
+        async def get(self, url, _follow_redirects=False):
             class R:
                 is_redirect = False
                 headers = {}
@@ -128,7 +128,7 @@ def test_enqueue_download_url_magnet(monkeypatch):
         async def __aenter__(self):
             raise AssertionError("HTTP request should not be made")
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
     monkeypatch.setattr(tasks.httpx, "AsyncClient", lambda: BadAsyncClient())
@@ -172,10 +172,10 @@ def test_enqueue_download_redirect_to_magnet(monkeypatch):
         async def __aenter__(self):
             return self
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, follow_redirects=False):
+        async def get(self, url, _follow_redirects=False):
             class R:
                 is_redirect = True
                 headers = {"Location": "magnet:?xt=urn:btih:abcd"}
@@ -230,10 +230,10 @@ def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
         async def __aenter__(self):
             return self
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, follow_redirects=False):
+        async def get(self, url, _follow_redirects=False):
             self.calls += 1
             if self.calls == 1:
                 class R:

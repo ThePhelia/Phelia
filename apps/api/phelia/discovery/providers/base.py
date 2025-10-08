@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import abc
-from typing import List, Optional
+from typing import Optional
 
-from ..models import AlbumItem, DiscoveryResponse
+from ..models import DiscoveryResponse
 
 
 class Provider(abc.ABC):

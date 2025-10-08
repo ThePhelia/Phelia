@@ -14,11 +14,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 config = context.config
 
-database_url = os.environ.get("DATABASE_URL")
-if not database_url:
-    raise RuntimeError("DATABASE_URL environment variable must be set for migrations.")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set.")
 
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 from app.db.session import Base  # noqa: E402
 import app.db.models  # noqa: F401,E402

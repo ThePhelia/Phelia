@@ -1,26 +1,10 @@
-import os
-import sys
 import httpx
 import pytest
-
-# Ensure environment variables for Settings before importing the app
-os.environ.setdefault("APP_SECRET", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
-os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
-os.environ.setdefault("QB_URL", "http://localhost:8080")
-os.environ.setdefault("QB_USER", "admin")
-os.environ.setdefault("QB_PASS", "adminadmin")
-os.environ.setdefault("ANYIO_BACKEND", "asyncio")
-
-# Add apps/api to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
 from app.routers.health import router as health_router
 from app.services.bt.qbittorrent import QbClient
-from httpx import AsyncClient, ASGITransport
 
 app = FastAPI()
 app.include_router(health_router, prefix="/api/v1")

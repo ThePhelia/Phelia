@@ -8,8 +8,8 @@ from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
-revision = "4d1c4bb7f0fe" # pragma: allowlist secret
-down_revision = "2b742bd4cfa6"
+revision = "4d1c4bb7f0fe"  # pragma: allowlist secret
+down_revision = "2b742bd4cfa6"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

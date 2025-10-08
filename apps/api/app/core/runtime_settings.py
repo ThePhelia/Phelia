@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from threading import RLock
 from typing import Optional
@@ -36,10 +37,13 @@ class RuntimeProviderSettings:
         """Reset all provider keys back to environment defaults."""
 
         with self._lock:
-            self._values = {
-                slug: getattr(settings, env_name, None)
-                for slug, env_name in PROVIDER_ENV_MAP.items()
-            }
+            values: dict[str, Optional[str]] = {}
+            for slug, env_name in PROVIDER_ENV_MAP.items():
+                value = os.environ.get(env_name)
+                if value is None:
+                    value = getattr(settings, env_name, None)
+                values[slug] = value
+            self._values = values
 
     def get(self, slug: str) -> Optional[str]:
         normalized = normalize_provider(slug)

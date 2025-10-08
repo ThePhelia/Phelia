@@ -8,9 +8,9 @@ import redis.asyncio as redis
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.routers import health, auth, downloads
+from app.routes import discovery as discovery_routes
 from app.routes import market as market_routes
 from app.routes import market_text as market_text_routes
-from app.api.routes import discovery as discovery_routes
 from phelia.routers import discovery as discovery_router
 from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
@@ -53,7 +53,7 @@ app.include_router(settings_endpoints.router, prefix="/api/v1")
 async def startup_event():
     try:
         init_db()
-    except Exception as e:
+    except Exception:
         logger.exception("Error initializing database")
     try:
         await qb_health_check()

@@ -14,7 +14,6 @@ from app.core.runtime_settings import runtime_settings
 from app.schemas.media import Classification
 from app.schemas.meta import (
     CanonicalPayload,
-    CanonicalTV,
     MetaAlbumInfo,
     MetaCastMember,
     MetaDetail,

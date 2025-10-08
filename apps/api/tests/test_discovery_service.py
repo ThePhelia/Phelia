@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-import pytest
 import httpx
+import pytest
 
 from app.core.runtime_settings import runtime_settings
 
@@ -49,10 +49,10 @@ class MockAsyncClient:
     async def __aenter__(self) -> "MockAsyncClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+    async def __aexit__(self, _exc_type, _exc, _tb) -> None:  # noqa: ANN001
         return None
 
-    async def get(self, url: str, params: dict | None = None, **kwargs) -> httpx.Response:  # type: ignore[override]
+    async def get(self, url: str, params: dict | None = None, **_kwargs) -> httpx.Response:  # type: ignore[override]
         self._calls.append((url, params))
         if not self._responses:
             raise AssertionError(f"Unexpected HTTP GET to {url}")
@@ -60,7 +60,7 @@ class MockAsyncClient:
         request = httpx.Request("GET", url, params=params)
         return httpx.Response(status, json=payload, request=request)
 
-    async def post(self, url: str, data=None, headers=None, **kwargs):  # type: ignore[override]
+    async def post(self, url: str, data=None, headers=None, **_kwargs):  # type: ignore[override]
         raise AssertionError("POST not expected in tests")
 
 
@@ -88,7 +88,7 @@ async def test_get_charts_uses_cache(monkeypatch):
     monkeypatch.setattr(
         httpx,
         "AsyncClient",
-        lambda *args, **kwargs: MockAsyncClient(responses, calls),
+        lambda *_args, **_kwargs: MockAsyncClient(responses, calls),
     )
 
     first = await service.get_charts(market="US", limit=5)
@@ -141,7 +141,7 @@ async def test_get_tag_enriches_from_itunes(monkeypatch):
     monkeypatch.setattr(
         httpx,
         "AsyncClient",
-        lambda *args, **kwargs: MockAsyncClient(responses, calls),
+        lambda *_args, **_kwargs: MockAsyncClient(responses, calls),
     )
 
     items = await service.get_tag(tag="shoegaze", limit=5)

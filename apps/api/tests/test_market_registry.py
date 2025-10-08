@@ -12,10 +12,10 @@ async def test_market_registry_handles_registry_unavailable(monkeypatch):
         async def __aenter__(self):
             return self
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             return False
 
-        async def get(self, url, *args, **kwargs):
+        async def get(self, url, *_args, **_kwargs):
             request = httpx.Request("GET", url)
             response = httpx.Response(503, request=request)
             raise httpx.HTTPStatusError(
@@ -27,7 +27,7 @@ async def test_market_registry_handles_registry_unavailable(monkeypatch):
     monkeypatch.setattr(
         registry_module.httpx,
         "AsyncClient",
-        lambda *args, **kwargs: FailingAsyncClient(),
+        lambda *_args, **_kwargs: FailingAsyncClient(),
     )
 
     transport = ASGITransport(app=app)

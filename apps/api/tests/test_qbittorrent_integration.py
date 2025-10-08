@@ -85,12 +85,12 @@ async def test_file_download_status(qbittorrent, db_session, monkeypatch):
     class DummyAsyncClient:
         async def __aenter__(self):
             return self
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, _exc_type, _exc, _tb):
             return False
-        async def get(self, url, follow_redirects=False):
+        async def get(self, url, _follow_redirects=False):
             return httpx.Response(200, content=torrent_bytes)
 
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: DummyAsyncClient())
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *_args, **_kwargs: DummyAsyncClient())
 
     dl = models.Download(magnet="", save_path="/downloads", status="queued")
     db_session.add(dl)

@@ -1,11 +1,14 @@
-"""Registry for torrent/metadata search providers."""
+"""Search provider registry with graceful fallback."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Sequence
+from typing import TYPE_CHECKING, Dict, Sequence
 
 from app.ext.interfaces import ProviderDescriptor, ProviderRegistry, SearchProvider
+
+if TYPE_CHECKING:
+    from app.schemas.media import EnrichedCard
 
 
 @dataclass
@@ -32,9 +35,7 @@ class _NullSearchProvider(SearchProvider):
         *,
         limit: int,
         kind: str,
-    ) -> tuple[list["EnrichedCard"], dict[str, str]]:
-        from app.schemas.media import EnrichedCard  # local import to avoid cycle
-
+    ) -> tuple[list[EnrichedCard], dict[str, str]]:
         _ = (query, limit, kind)  # unused in the fallback provider
         return [], {"message": self.description}
 

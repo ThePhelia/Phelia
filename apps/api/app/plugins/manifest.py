@@ -28,6 +28,7 @@ class PluginManifest(BaseModel):
     license: str | None = None
     python_requirement: str | None = None
     settings_schema: dict[str, Any] | None = None
+    contributes_settings: bool | None = None
     permissions: list[str] = Field(default_factory=list)
     web_assets_path: str | None = None
     integrity_sha256: str | None = None
@@ -52,7 +53,9 @@ class PluginManifest(BaseModel):
             raise ValueError("Manifest missing backend hook definition")
 
         runtime = data.get("runtime")
-        runtime_mapping: Mapping[str, Any] = runtime if isinstance(runtime, Mapping) else {}
+        runtime_mapping: Mapping[str, Any] = (
+            runtime if isinstance(runtime, Mapping) else {}
+        )
 
         integrity_block = data.get("integrity")
         integrity_mapping: Mapping[str, Any] = (
@@ -67,6 +70,27 @@ class PluginManifest(BaseModel):
         settings_schema = runtime_mapping.get("settingsSchema")
         if settings_schema is not None and not isinstance(settings_schema, Mapping):
             raise ValueError("'runtime.settingsSchema' must be a mapping when provided")
+
+        contributes_settings_raw = runtime_mapping.get("contributesSettings")
+        contributes_settings: bool | None
+        if contributes_settings_raw is None:
+            contributes_settings = None
+        elif isinstance(contributes_settings_raw, bool):
+            contributes_settings = contributes_settings_raw
+        elif isinstance(contributes_settings_raw, str):
+            normalized = contributes_settings_raw.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                contributes_settings = True
+            elif normalized in {"false", "0", "no", "off"}:
+                contributes_settings = False
+            else:
+                raise ValueError(
+                    "'runtime.contributesSettings' must be a boolean or truthy/falsey string"
+                )
+        else:
+            raise ValueError(
+                "'runtime.contributesSettings' must be a boolean or string"
+            )
 
         python_requirement = runtime_mapping.get("python")
         if python_requirement is not None and not isinstance(python_requirement, str):
@@ -92,13 +116,27 @@ class PluginManifest(BaseModel):
             version=str(data["version"]),
             entry_point=entry_point,
             min_phelia=min_version,
-            description=str(data.get("description")) if data.get("description") is not None else None,
+            description=(
+                str(data.get("description"))
+                if data.get("description") is not None
+                else None
+            ),
             author=author_model,
-            license=str(data.get("license")) if data.get("license") is not None else None,
-            python_requirement=python_requirement if isinstance(python_requirement, str) else None,
-            settings_schema=dict(settings_schema) if isinstance(settings_schema, Mapping) else None,
+            license=(
+                str(data.get("license")) if data.get("license") is not None else None
+            ),
+            python_requirement=(
+                python_requirement if isinstance(python_requirement, str) else None
+            ),
+            settings_schema=(
+                dict(settings_schema) if isinstance(settings_schema, Mapping) else None
+            ),
+            contributes_settings=(
+                contributes_settings
+                if contributes_settings is not None
+                else bool(settings_schema)
+            ),
             permissions=permissions_list,
             web_assets_path=web_assets_path,
             integrity_sha256=integrity_sha if isinstance(integrity_sha, str) else None,
         )
-

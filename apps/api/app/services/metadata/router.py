@@ -6,7 +6,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, cast
 
 from app.schemas.media import Classification, EnrichedCard, EnrichedProvider
 from app.services.metadata.constants import TMDB_IMAGE_BASE
@@ -157,12 +157,13 @@ class MetadataRouter:
 
         discogs_data: dict[str, Any] | None = None
         if discogs_configured:
+            discogs_client = cast(Any, self.discogs)
             mb_release_group_id = None
             if mb_data:
                 release_group = mb_data.get("release_group") or {}
                 mb_release_group_id = release_group.get("id")
             try:
-                discogs_data = await self.discogs.lookup_release(
+                discogs_data = await discogs_client.lookup_release(
                     artist, album, year, mb_release_group_id
                 )
             except Exception as exc:  # pragma: no cover - defensive guard

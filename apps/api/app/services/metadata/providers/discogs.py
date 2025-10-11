@@ -46,7 +46,7 @@ class DiscogsClient:
             return []
 
         per_page = max(1, min(limit, 25))
-        params = {
+        params: dict[str, str | int] = {
             "q": query,
             "type": "master",
             "per_page": per_page,
@@ -84,7 +84,7 @@ class DiscogsClient:
         if not self.token:
             logger.debug("discogs: missing token, skipping lookup")
             return None
-        params = {"type": "master", "per_page": 5}
+        params: dict[str, str | int] = {"type": "master", "per_page": 5}
         if artist:
             params["artist"] = artist
         if album:

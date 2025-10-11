@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import _testenv as _testenv_module
+from tests import _testenv as _testenv_module
 
 ENV_BOOTSTRAP = _testenv_module
 

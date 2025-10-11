@@ -58,9 +58,10 @@ All services are orchestrated via `docker compose`.
 ```bash
 git clone https://github .com/phelia-plugins/phelia.git
 cd phelia
-cp deploy/env/api.env.example deploy/env/api.env
 make up
 ```
+
+Docker Compose loads `deploy/env/api.env.example` by default. To provide custom API settings, copy it to `deploy/env/api.env` and run `export API_ENV_FILE=./env/api.env` (or add it to `deploy/.env`) before invoking `make` commands.
 
 ### After Startup
 - WebUI: http://localhost:5173/

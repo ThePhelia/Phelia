@@ -76,7 +76,7 @@ class Settings(BaseSettings):
 try:
     settings = Settings()  # type: ignore
 except ValidationError as e:
-    missing = ", ".join(err["loc"][0] for err in e.errors())
+    missing = ", ".join(str(err["loc"][0]) for err in e.errors())
     raise RuntimeError(
         f"Missing required configuration variables: {missing}"
     ) from e

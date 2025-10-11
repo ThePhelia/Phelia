@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
 
 _DEFAULT_ENV = {
@@ -23,6 +21,3 @@ for key, value in _DEFAULT_ENV.items():
     os.environ.setdefault(key, value)
 
 
-root_dir = Path(__file__).resolve().parents[1]
-api_dir = root_dir / "apps" / "api"
-sys.path.insert(0, str(api_dir))

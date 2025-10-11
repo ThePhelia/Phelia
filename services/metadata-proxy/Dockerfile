@@ -7,6 +7,12 @@ WORKDIR /app
 
 RUN adduser --disabled-password --gecos "" appuser
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /data && chown appuser:appuser /data
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

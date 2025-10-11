@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phelia-api"
+version = "0.0.0"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+package-dir = {"" = "apps/api"}
+
+[tool.setuptools.packages.find]
+where = ["apps/api"]
+include = ["app*", "phelia*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = [
+  "tests",
+]
+asyncio_mode = "auto"
+
+[tool.ruff]
+src = ["apps/api", "tests"]
+target-version = "py310"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "apps/api"
+ignore_missing_imports = true
+pretty = true

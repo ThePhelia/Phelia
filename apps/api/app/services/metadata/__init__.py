@@ -7,12 +7,15 @@ from functools import lru_cache
 from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
 
-from .classifier import Classifier
-from .metadata_client import MetadataClient, get_metadata_client
-from .router import MetadataRouter
-from .providers.omdb import OMDbClient
-from .providers.musicbrainz import MusicBrainzClient
-from .providers.discogs import DiscogsClient
+from app.services.metadata.classifier import Classifier
+from app.services.metadata.metadata_client import (
+    MetadataClient,
+    get_metadata_client,
+)
+from app.services.metadata.providers.discogs import DiscogsClient
+from app.services.metadata.providers.musicbrainz import MusicBrainzClient
+from app.services.metadata.providers.omdb import OMDbClient
+from app.services.metadata.router import MetadataRouter
 
 
 @lru_cache

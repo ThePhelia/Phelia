@@ -34,7 +34,7 @@ class MusicBrainzClient:
             query_parts.append(f'artist:"{artist}"')
         if year:
             query_parts.append(f'firstreleasedate:{year}')
-        params = {
+        params: dict[str, str | int] = {
             "query": " AND ".join(query_parts),
             "fmt": "json",
             "limit": 5,

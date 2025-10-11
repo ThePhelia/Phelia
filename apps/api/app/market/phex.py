@@ -8,7 +8,7 @@ import tarfile
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -76,9 +76,11 @@ def safe_extract_tar_gz(archive_path: Path, dest_dir: Path) -> None:
             if not member.isfile():
                 raise PhexError(f"Unsupported archive member type for '{member.name}'")
 
-            with tar.extractfile(member) as src:  # type: ignore[arg-type]
-                if src is None:
-                    raise PhexError(f"Unable to extract member '{member.name}'")
+            extracted = tar.extractfile(member)  # type: ignore[arg-type]
+            if extracted is None:
+                raise PhexError(f"Unable to extract member '{member.name}'")
+
+            with extracted as src:
                 with target_path.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
             _ensure_within_directory(dest_dir, target_path)

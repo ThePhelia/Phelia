@@ -46,7 +46,7 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ./env/api.env
+      - ${API_ENV_FILE:-./env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -90,7 +90,7 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ./env/api.env
+      - ${API_ENV_FILE:-./env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -115,7 +115,7 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ./env/api.env
+      - ${API_ENV_FILE:-./env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0

@@ -27,7 +27,10 @@ def get_classifier() -> Classifier:
 def get_metadata_router() -> MetadataRouter:
     metadata_client = get_metadata_client()
     omdb_client = OMDbClient(api_key=runtime_settings.key_getter("omdb"))
-    mb_client = MusicBrainzClient(user_agent=settings.MB_USER_AGENT)
+    mb_client = MusicBrainzClient(
+        user_agent=settings.MB_USER_AGENT,
+        metadata_client=metadata_client,
+    )
     discogs_client = DiscogsClient(token=runtime_settings.key_getter("discogs"))
     return MetadataRouter(
         metadata_client=metadata_client,
@@ -45,4 +48,3 @@ __all__ = [
     "get_metadata_router",
     "get_metadata_client",
 ]
-

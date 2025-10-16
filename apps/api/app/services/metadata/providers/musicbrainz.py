@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.services.metadata.metadata_client import MetadataClient, MetadataProxyError
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +15,48 @@ logger = logging.getLogger(__name__)
 class MusicBrainzClient:
     base_url = "https://musicbrainz.org/ws/2"
 
-    def __init__(self, user_agent: str, timeout: float = 8.0) -> None:
+    def __init__(
+        self,
+        user_agent: str,
+        timeout: float = 8.0,
+        *,
+        metadata_client: MetadataClient | None = None,
+    ) -> None:
         self.user_agent = user_agent
         self.timeout = timeout
+        self._metadata_client = metadata_client
 
     def _headers(self) -> dict[str, str]:
         return {"Accept": "application/json", "User-Agent": self.user_agent}
+
+    async def _fetch(self, path: str, params: dict[str, str]) -> dict[str, Any] | None:
+        if self._metadata_client is not None:
+            try:
+                data = await self._metadata_client.mb(path, params=params, request_id=None)
+            except MetadataProxyError as exc:
+                logger.warning("mb proxy error path=%s status=%s", path, exc.status_code)
+                return None
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("mb proxy request error path=%s error=%s", path, exc)
+                return None
+            return data if isinstance(data, dict) else None
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(
+                    f"{self.base_url.rstrip('/')}/{path.lstrip('/')}",
+                    params=params,
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            logger.warning("mb http error path=%s status=%s", path, exc.response.status_code)
+            return None
+        except httpx.RequestError as exc:
+            logger.warning("mb request error path=%s error=%s", path, exc)
+            return None
+        return data if isinstance(data, dict) else None
 
     async def lookup_release_group(
         self,
@@ -34,24 +71,13 @@ class MusicBrainzClient:
             query_parts.append(f'artist:"{artist}"')
         if year:
             query_parts.append(f'firstreleasedate:{year}')
-        params: dict[str, str | int] = {
+        params: dict[str, str] = {
             "query": " AND ".join(query_parts),
             "fmt": "json",
-            "limit": 5,
+            "limit": "5",
         }
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(f"{self.base_url}/release-group", params=params, headers=self._headers())
-                resp.raise_for_status()
-                data = resp.json()
-        except httpx.HTTPStatusError as exc:
-            logger.warning("mb http error album=%s status=%s", album, exc.response.status_code)
-            return None
-        except httpx.RequestError as exc:
-            logger.warning("mb request error album=%s error=%s", album, exc)
-            return None
-
-        if not isinstance(data, dict):
+        data = await self._fetch("release-group", params)
+        if not data:
             return None
         groups = data.get("release-groups") or []
         if not groups:
@@ -75,4 +101,3 @@ class MusicBrainzClient:
 
 
 __all__ = ["MusicBrainzClient"]
-

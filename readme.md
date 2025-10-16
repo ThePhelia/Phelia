@@ -77,6 +77,21 @@ To verify the metadata proxy and API stack locally, run:
 
 The script builds the API and metadata-proxy images, brings up the minimal stack, and checks both the proxy health endpoint and a metadata-backed API route. It tears the stack down after completion.
 
+## Metadata Proxy
+
+MusicBrainz support is now available through the metadata proxy with caching, rate limiting, and the required MusicBrainz user agent etiquette.
+
+- Configure the proxy via `deploy/env/metadata.env.example` (copy to `deploy/env/metadata.env` when customising). Set `MB_USER_AGENT` to your contact string before production use. Values in `deploy/.env` continue to apply, so existing TMDB/Fanart credentials keep working.
+- The proxy exposes MusicBrainz under `/mb`, e.g.:
+
+  ```bash
+  curl 'http://localhost:8080/mb/artist' \
+    --get --data-urlencode 'query=artist:Radiohead' \
+    -H 'User-Agent: test'
+  ```
+
+- The API service consumes the proxy internally at `http://metadata-proxy:8080`.
+
 ## Plugins
 
 Plugins are distributed as .phex archives.

@@ -154,7 +154,13 @@ services:
     build:
       context: ../services/metadata-proxy
     env_file:
+      - ${METADATA_ENV_FILE:-./env/metadata.env.example}
       - ./.env
+    expose:
+      - "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         [

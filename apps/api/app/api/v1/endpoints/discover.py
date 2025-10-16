@@ -24,7 +24,11 @@ SortOption = Literal["trending", "popular", "new", "az"]
 
 @lru_cache
 def _musicbrainz_client() -> MusicBrainzClient:
-    return MusicBrainzClient(user_agent=settings.MB_USER_AGENT)
+    metadata = get_metadata_client()
+    return MusicBrainzClient(
+        user_agent=settings.MB_USER_AGENT,
+        metadata_client=metadata,
+    )
 
 
 def get_musicbrainz_client() -> MusicBrainzClient:
@@ -461,4 +465,3 @@ def _slug_fragment(value: Any) -> str:
     if not isinstance(value, str):
         return ""
     return value.lower()
-

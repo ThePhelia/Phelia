@@ -460,7 +460,10 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
         def json(self) -> dict[str, Any]:
             return self._payload
 
+    captured: dict[str, object] = {}
+
     def fake_get(url: str, timeout: int = 10):  # noqa: ARG001 - signature compatibility
+        captured["url"] = url
         return DummyResponse(
             {
                 "feed": {
@@ -481,6 +484,9 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discovery_apple.httpx, "get", fake_get)
 
     items = discovery_apple.apple_feed("us", 21)
+    assert captured["url"] == (
+        "https://rss.applemarketingtools.com/api/v2/us/music/most-recent/albums/50/genre=21/json"
+    )
     assert items == [
         {
             "id": "123",
@@ -491,3 +497,29 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
             "releaseDate": "2024-03-01",
         }
     ]
+
+
+def test_apple_feed_uses_all_genre_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResponse:
+        status_code = 200
+        headers: dict[str, str] = {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"feed": {"results": []}}
+
+    captured: dict[str, object] = {}
+
+    def fake_get(url: str, timeout: int = 10):  # noqa: ARG001
+        captured["url"] = url
+        return DummyResponse()
+
+    monkeypatch.setattr(discovery_apple.httpx, "get", fake_get)
+
+    items = discovery_apple.apple_feed("us", 0)
+    assert items == []
+    assert captured["url"] == (
+        "https://rss.applemarketingtools.com/api/v2/us/music/most-recent/albums/50/genre=all/json"
+    )

@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     )
     fanart_base_url: AnyHttpUrl = Field("https://webservice.fanart.tv/v3/", env="FANART_BASE_URL")
 
-    mb_user_agent: str = Field("Phelia-Metadata-Proxy/1.0", env="MB_USER_AGENT")
+    mb_user_agent: str = Field(
+        "Phelia-Metadata-Proxy/1.0 (+https://example.local)", env="MB_USER_AGENT"
+    )
 
     class Config:
         env_file = ".env"

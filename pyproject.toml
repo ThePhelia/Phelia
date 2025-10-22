@@ -18,11 +18,12 @@ include = ["app*", "phelia*"]
 addopts = "-q"
 testpaths = [
   "tests",
+  "plugins/jackett_integrator/tests",
 ]
 asyncio_mode = "auto"
 
 [tool.ruff]
-src = ["apps/api", "tests"]
+src = ["apps/api", "tests", "plugins/jackett_integrator/src"]
 target-version = "py310"
 line-length = 100
 

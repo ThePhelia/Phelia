@@ -1,0 +1,10 @@
+{
+  "status": "installed",
+  "integrity": "unsigned",
+  "sha256": "c18ca7775e6b2c025ea679ba2c73ab7c732df683bcbea0aa0e60fe6345cb335e",
+  "source": "upload",
+  "permissions": [],
+  "last_error": null,
+  "current_version": "0.2.1",
+  "updated_at": "2025-10-22T07:56:16.516057+00:00"
+}

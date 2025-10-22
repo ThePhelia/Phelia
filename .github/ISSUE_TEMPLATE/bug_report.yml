@@ -1,0 +1,27 @@
+name: Bug Report
+description: Report a reproducible defect
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Include commands, environment, and data needed to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: Attach relevant excerpts (redact secrets)
+  - type: input
+    id: version
+    attributes:
+      label: Affected Version / Commit

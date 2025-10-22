@@ -43,10 +43,10 @@ services:
 
   api:
     build:
-      context: ../apps/api
+      context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-./env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -65,7 +65,7 @@ services:
       metadata-proxy:
         condition: service_healthy
     volumes:
-      - ../apps/api:/app
+      - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
     ports:
@@ -87,10 +87,10 @@ services:
 
   worker:
     build:
-      context: ../apps/api
+      context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-./env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -106,16 +106,16 @@ services:
       api:
         condition: service_started
     volumes:
-      - ../apps/api:/app
+      - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
 
   beat:
     build:
-      context: ../apps/api
+      context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-./env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env.example}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -130,17 +130,17 @@ services:
       api:
         condition: service_started
     volumes:
-      - ../apps/api:/app
+      - ../../apps/api:/app
 
   web:
     build:
-      context: ../apps/web
+      context: ../../apps/web
       dockerfile: Dockerfile
       args:
         VITE_API_BASE: ${VITE_API_BASE}
         VITE_WS_BASE: ${VITE_WS_BASE}
     env_file:
-      - ./env/web.env
+      - ../env/web.env
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-http://localhost:${API_PORT:-8000}/api/v1}
       VITE_WS_BASE: ${VITE_WS_BASE:-ws://localhost:${API_PORT:-8000}}
@@ -152,10 +152,10 @@ services:
 
   metadata-proxy:
     build:
-      context: ../services/metadata-proxy
+      context: ../../services/metadata-proxy
     env_file:
-      - ${METADATA_ENV_FILE:-./env/metadata.env.example}
-      - ./.env
+      - ${METADATA_ENV_FILE:-../env/metadata.env.example}
+      - ${STACK_ENV_FILE:-../../deploy/.env}
     expose:
       - "8080"
     depends_on:

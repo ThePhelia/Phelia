@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/deploy/docker-compose.yml"
+COMPOSE_FILE="$ROOT_DIR/infrastructure/compose/docker-compose.yml"
 PROXY_URL="http://localhost:8080/health"
 API_HEALTH="http://localhost:8000/api/v1/healthz"
 API_CHECK="http://localhost:8000/api/v1/discover/movie"

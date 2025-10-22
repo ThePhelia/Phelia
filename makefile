@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-COMPOSE_DIR := deploy
+COMPOSE_DIR := infrastructure/compose
 COMPOSE := cd $(COMPOSE_DIR) && docker compose
 
 up:

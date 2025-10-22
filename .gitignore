@@ -7,8 +7,28 @@ build/
 
 # Python caches
 __pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+
+# OS junk
+.DS_Store
+
+# Coverage / reports
+coverage.xml
+
+# Environment files
+.env
+*.env
+*.env.*
+!*/env/*.env.example
+!infrastructure/env/web.env
+deploy/.env
 
 /apps/web/node_modules
 phelia_discovery_top_fix.patch
-deploy/env/api.env

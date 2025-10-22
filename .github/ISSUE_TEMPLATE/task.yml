@@ -1,0 +1,21 @@
+name: Task
+description: Track a maintenance or feature task
+labels: [task]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What outcome should be achieved?
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Proposed Plan
+      description: Outline the rough approach or checklist
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, screenshots, or notes to aid implementation

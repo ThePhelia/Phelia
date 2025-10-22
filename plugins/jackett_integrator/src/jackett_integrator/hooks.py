@@ -36,11 +36,14 @@ def _detect_base_compose(root: Path) -> Path:
         if candidate.exists():
             return candidate
     for candidate in root.parents:
-        compose_path = candidate / "deploy" / "docker-compose.yml"
-        if compose_path.exists():
-            return compose_path
+        infra_path = candidate / "infrastructure" / "compose" / "docker-compose.yml"
+        if infra_path.exists():
+            return infra_path
+        legacy_path = candidate / "deploy" / "docker-compose.yml"
+        if legacy_path.exists():
+            return legacy_path
     # Fallback to default container path used by bundled images.
-    return Path("/app/deploy/docker-compose.yml")
+    return Path("/app/infrastructure/compose/docker-compose.yml")
 
 
 def compose_files(root: Path) -> tuple[Path, Path]:

@@ -1,9 +1,18 @@
 # app/db/init_db.py
 
+import os
+import logging
+
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
+
 from app.core.config import settings
+from app.core.security import hash_password
 from app.db.session import SessionLocal, Base, engine  # noqa: F401
 # Keep Base/engine for rare dev scripts
 from app.db import models
+
+logger = logging.getLogger(__name__)
 
 
 def init_db() -> None:
@@ -19,20 +28,19 @@ def init_db() -> None:
     # from sqlalchemy import inspect
     # if not inspect(engine).has_table("users"): Base.metadata.create_all(bind=engine)
 
-    from passlib.context import CryptContext
+    admin_email = os.getenv("ADMIN_EMAIL", "dev@example.com")
+    admin_password = os.getenv("ADMIN_PASSWORD", "dev")
 
-    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
     with SessionLocal() as db:
         # ---- Seed admin user (idempotent by email) ----
-        dev_email = "dev@example.com"
-        user = db.query(models.User).filter(models.User.email == dev_email).one_or_none()
-        if user is None:
-            user = models.User(
-                email=dev_email,
-                hashed_password=pwd.hash("dev"),
-                role="admin",
-            )
-            db.add(user)
+        stmt = insert(models.User).values(
+            email=admin_email,
+            hashed_password=hash_password(admin_password),
+            role="admin",
+        )
+        # Ensure duplicate emails do not raise while keeping existing constraint naming intact.
+        stmt = stmt.on_conflict_do_nothing(index_elements=[models.User.email])
+        db.execute(stmt)
 
         # ---- Seed example tracker (idempotent by slug) ----
         tracker_slug = "example"
@@ -51,6 +59,10 @@ def init_db() -> None:
                 requires_auth=False,
             )
             db.add(tracker)
-
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # A concurrent seed may win the race; rollback so the session stays usable.
+            db.rollback()
+            logger.warning("Database seed skipped due to existing records")
 

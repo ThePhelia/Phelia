@@ -18,13 +18,10 @@ def test_init_db_exception_logged(monkeypatch, caplog):
         raise RuntimeError("init failure")
 
     monkeypatch.setattr(main, "init_db", bad_init)
-    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
-    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope(), raising=False)
+    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None, raising=False)
 
-    async def noop_qb_health_check():
-        return None
-
-    monkeypatch.setattr(main, "qb_health_check", noop_qb_health_check)
+    monkeypatch.setattr(main, "qb_login_ok", lambda: True)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         asyncio.run(main.startup_event())
@@ -38,13 +35,10 @@ def test_provider_credential_exception_logged(monkeypatch, caplog):
     def bad_loader(_db):
         raise RuntimeError("load failure")
 
-    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
-    monkeypatch.setattr(main, "load_provider_credentials", bad_loader)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope(), raising=False)
+    monkeypatch.setattr(main, "load_provider_credentials", bad_loader, raising=False)
 
-    async def noop_qb_health_check():
-        return None
-
-    monkeypatch.setattr(main, "qb_health_check", noop_qb_health_check)
+    monkeypatch.setattr(main, "qb_login_ok", lambda: True)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         asyncio.run(main.startup_event())
@@ -54,13 +48,13 @@ def test_provider_credential_exception_logged(monkeypatch, caplog):
 
 def test_qb_health_check_exception_logged(monkeypatch, caplog):
     monkeypatch.setattr(main, "init_db", lambda: None)
-    monkeypatch.setattr(main, "session_scope", _stub_session_scope())
-    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None)
+    monkeypatch.setattr(main, "session_scope", _stub_session_scope(), raising=False)
+    monkeypatch.setattr(main, "load_provider_credentials", lambda db: None, raising=False)
 
-    async def bad_qb_health_check():
+    def bad_qb_login_ok():
         raise RuntimeError("qb failure")
 
-    monkeypatch.setattr(main, "qb_health_check", bad_qb_health_check)
+    monkeypatch.setattr(main, "qb_login_ok", bad_qb_login_ok)
 
     with caplog.at_level(logging.ERROR, logger=main.logger.name):
         asyncio.run(main.startup_event())

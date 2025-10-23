@@ -2,11 +2,14 @@ from __future__ import annotations
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+import asyncio
 import logging
 import redis.asyncio as redis
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.db.init_db import init_db
+from app.db.session import session_scope
 from app.routers import health, auth, downloads
 from app.routes import discovery as discovery_routes
 from app.routes import market as market_routes
@@ -19,9 +22,14 @@ from app.api.v1.endpoints import capabilities as capabilities_endpoints
 from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
-from app.services.bt.qbittorrent import health_check as qb_health_check
+from app.services.qbittorrent.health import qb_login_ok
 
 logger = logging.getLogger(__name__)
+
+
+def load_provider_credentials(_db) -> None:
+    """Placeholder hook to preload provider credentials at startup."""
+    return None
 
 app = FastAPI(title="Phelia", version="0.1.0")
 
@@ -53,10 +61,21 @@ app.include_router(settings_endpoints.router, prefix="/api/v1")
 async def startup_event():
     try:
         init_db()
+    except IntegrityError:
+        logger.warning("Database already seeded; skipping admin bootstrap")
     except Exception:
         logger.exception("Error initializing database")
+
     try:
-        await qb_health_check()
+        with session_scope() as db:
+            load_provider_credentials(db)
+    except Exception:
+        logger.exception("Error loading provider credentials")
+
+    try:
+        login_ok = await asyncio.to_thread(qb_login_ok)
+        if not login_ok:
+            logger.error("Error checking qBittorrent connectivity")
     except Exception:
         logger.exception("Error checking qBittorrent connectivity")
 

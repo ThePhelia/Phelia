@@ -12,12 +12,23 @@ codebase.
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, ValidationError
+import logging
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyHttpUrl, ValidationError, Field, AliasChoices, parse_obj_as
+
+
+log = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    APP_ENV: str = "dev"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    APP_ENV: str = Field(default="dev", validation_alias=AliasChoices("ENV", "APP_ENV"))
     APP_SECRET: str
 
     API_HOST: str = "0.0.0.0"
@@ -30,9 +41,12 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str
 
     BT_CLIENT: str = "qb"
-    QB_URL: AnyHttpUrl
-    QB_USER: str
-    QB_PASS: str
+    QB_URL: AnyHttpUrl = Field(
+        default="http://qbittorrent:8080",
+        validation_alias=AliasChoices("QBIT_URL", "QB_URL"),
+    )
+    QB_USER: str = Field(default="admin", validation_alias=AliasChoices("QBIT_USERNAME", "QB_USER"))
+    QB_PASS: str = Field(default="", validation_alias=AliasChoices("QBIT_PASSWORD", "QB_PASS"))
 
     ALLOWED_SAVE_DIRS: str = "/downloads,/music"
     DEFAULT_SAVE_DIR: str = "/downloads"
@@ -70,8 +84,17 @@ class Settings(BaseSettings):
 
     METADATA_BASE_URL: AnyHttpUrl | None = None
 
-    class Config:
-        extra = "ignore"
+    def finalize(self) -> None:
+        env = (self.APP_ENV or "").lower()
+        if not self.METADATA_BASE_URL:
+            if env in {"prod", "production"}:
+                raise RuntimeError("METADATA_BASE_URL is required in production")
+            default_url = "http://metadata-proxy:8000"
+            self.METADATA_BASE_URL = parse_obj_as(AnyHttpUrl, default_url)
+            log.warning(
+                "METADATA_BASE_URL not set; using dev default: %s",
+                self.METADATA_BASE_URL,
+            )
 
 try:
     settings = Settings()  # type: ignore
@@ -81,5 +104,4 @@ except ValidationError as e:
         f"Missing required configuration variables: {missing}"
     ) from e
 
-if settings.METADATA_BASE_URL is None:
-    raise RuntimeError("METADATA_BASE_URL is required")
+settings.finalize()

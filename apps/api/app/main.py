@@ -74,8 +74,10 @@ async def startup_event():
 
     try:
         login_ok = await asyncio.to_thread(qb_login_ok)
-        if not login_ok:
+        if login_ok is False:
             logger.error("Error checking qBittorrent connectivity")
+        elif login_ok is None:
+            logger.info("qBittorrent health-check skipped during startup")
     except Exception:
         logger.exception("Error checking qBittorrent connectivity")
 

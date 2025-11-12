@@ -9,9 +9,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    tmdb_api_key: str | None = Field(default=None, env="TMDB_API_KEY")
+    tmdb_api_key: str | None = Field(default="71654942f10fb51fe2d66a1f756b4311", env="TMDB_API_KEY")
     lastfm_api_key: str | None = Field(default=None, env="LASTFM_API_KEY")
-    fanart_api_key: str | None = Field(default=None, env="FANART_API_KEY")
+    fanart_api_key: str | None = Field(default="ab2903405543c654c66638b790fad420", env="FANART_API_KEY")
 
     cache_backend: str = Field(default="sqlite", env="CACHE_BACKEND")
     sqlite_cache_path: str = Field(default="/data/cache.db", env="SQLITE_CACHE_PATH")

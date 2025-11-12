@@ -33,3 +33,7 @@ deploy/.env
 
 /apps/web/node_modules
 phelia_discovery_top_fix.patch
+
+# Log files and test databases
+*.log
+test.db

@@ -10,7 +10,6 @@ import {
   useInstallPluginFromUrl,
   usePluginSettings,
   usePluginSettingsList,
-  useUpdateApiKey,
   useUpdatePluginSettings,
   useUploadPlugin,
 } from '@/app/lib/api';

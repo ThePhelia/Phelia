@@ -16,6 +16,8 @@ PROVIDER_ENV_MAP: dict[str, str] = {
     "listenbrainz": "LISTENBRAINZ_TOKEN",
     "spotify_client_id": "SPOTIFY_CLIENT_ID",
     "spotify_client_secret": "SPOTIFY_CLIENT_SECRET",
+    "fanart": "FANART_API_KEY",
+    "deezer": "DEEZER_API_KEY",
 }
 
 SUPPORTED_PROVIDER_SLUGS = tuple(PROVIDER_ENV_MAP.keys())

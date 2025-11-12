@@ -10,7 +10,6 @@ import {
   useInstallPluginFromUrl,
   usePluginSettings,
   usePluginSettingsList,
-  useUpdateApiKey,
   useUpdatePluginSettings,
   useUploadPlugin,
 } from '@/app/lib/api';
@@ -272,6 +271,8 @@ function ApiKeyManagement() {
               {provider === 'listenbrainz' && 'ListenBrainz token for music listening data'}
               {provider === 'spotify_client_id' && 'Spotify Client ID for music metadata'}
               {provider === 'spotify_client_secret' && 'Spotify Client Secret for music metadata'}
+              {provider === 'fanart' && 'Fanart.tv API key for additional artwork and images'}
+              {provider === 'deezer' && 'Deezer API key for music discovery and metadata'}
             </p>
           </div>
         );

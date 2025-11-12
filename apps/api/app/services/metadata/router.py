@@ -254,6 +254,12 @@ class MetadataRouter:
             ):
                 return None, "not_configured"
             return None, str(detail) if isinstance(detail, str) else "lastfm_error"
+        except Exception as exc:
+            # Handle connection errors when metadata-proxy is not available
+            error_msg = str(exc)
+            if "Name or service not known" in error_msg or "Connection refused" in error_msg:
+                return None, "metadata_service_unavailable"
+            return None, f"connection_error: {error_msg}"
 
         if not isinstance(response, dict):
             return None, "invalid_response"
@@ -325,6 +331,12 @@ class MetadataRouter:
             ):
                 return None, "not_configured"
             return None, str(detail) if isinstance(detail, str) else "tmdb_error"
+        except Exception as exc:
+            # Handle connection errors when metadata-proxy is not available
+            error_msg = str(exc)
+            if "Name or service not known" in error_msg or "Connection refused" in error_msg:
+                return None, "metadata_service_unavailable"
+            return None, f"connection_error: {error_msg}"
 
         if not isinstance(search, dict):
             return None, "invalid_response"
@@ -357,6 +369,12 @@ class MetadataRouter:
         except MetadataProxyError as exc:
             detail = exc.detail or "tmdb_error"
             return None, str(detail) if isinstance(detail, str) else "tmdb_error"
+        except Exception as exc:
+            # Handle connection errors when metadata-proxy is not available
+            error_msg = str(exc)
+            if "Name or service not known" in error_msg or "Connection refused" in error_msg:
+                return None, "metadata_service_unavailable"
+            return None, f"connection_error: {error_msg}"
 
         if not isinstance(details, dict):
             return None, "invalid_response"

@@ -2,59 +2,57 @@
 
 from __future__ import annotations
 
-import importlib.util
+import os
 import sys
-import types
 from pathlib import Path
 
-import fastapi
-
+# Add the metadata-proxy source to Python path
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE_DIR = ROOT / "services" / "metadata-proxy" / "app"
-MAIN_PATH = PACKAGE_DIR / "main.py"
-PACKAGE_NAME = "metadata_proxy_app"
+METADATA_SRC = ROOT / "services" / "metadata-proxy"
+if str(METADATA_SRC) not in sys.path:
+    sys.path.insert(0, str(METADATA_SRC))
+
+# Set required environment variables for the test
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 
-def _load_metadata_module():
+def test_metadata_proxy_can_be_imported() -> None:
+    """Test that the metadata proxy app can be imported successfully."""
     try:
-        package = sys.modules.get(PACKAGE_NAME)
-        if package is None:
-            package = types.ModuleType(PACKAGE_NAME)
-            package.__path__ = [str(PACKAGE_DIR)]
-            sys.modules[PACKAGE_NAME] = package
-        spec = importlib.util.spec_from_file_location(
-            f"{PACKAGE_NAME}.main",
-            MAIN_PATH,
-            submodule_search_locations=[str(PACKAGE_DIR)],
-        )
-        if spec is None or spec.loader is None:
-            raise RuntimeError("Failed to load metadata proxy main module")
-        module = importlib.util.module_from_spec(spec)
-        module.__package__ = PACKAGE_NAME
-        sys.modules[f"{PACKAGE_NAME}.main"] = module
-        spec.loader.exec_module(module)
-        return module
-    except Exception as e:
-        # If loading fails, try to provide more context
-        import os
-        print(f"Module loading failed: {e}")
+        # Import FastAPI first to ensure it's available
+        import fastapi
+        
+        # Try to import the main module
+        from app import main
+        
+        # Check that create_app function exists and returns a FastAPI instance
+        assert hasattr(main, 'create_app'), "main module should have a 'create_app' function"
+        app = main.create_app()
+        assert isinstance(app, fastapi.FastAPI), "create_app should return a FastAPI instance"
+        
+    except ImportError as e:
+        # If import fails, provide debugging information
+        print(f"Import failed: {e}")
         print(f"Current working directory: {os.getcwd()}")
-        print(f"ROOT: {ROOT}")
-        print(f"PACKAGE_DIR exists: {PACKAGE_DIR.exists()}")
-        print(f"MAIN_PATH exists: {MAIN_PATH.exists()}")
-        if PACKAGE_DIR.exists():
-            print(f"PACKAGE_DIR contents: {list(PACKAGE_DIR.iterdir())}")
+        print(f"Python path: {sys.path[:5]}")
+        print(f"METADATA_SRC: {METADATA_SRC}")
+        print(f"METADATA_SRC exists: {METADATA_SRC.exists()}")
+        if METADATA_SRC.exists():
+            print(f"METADATA_SRC contents: {list(METADATA_SRC.iterdir())}")
+            app_dir = METADATA_SRC / "app"
+            if app_dir.exists():
+                print(f"app directory contents: {list(app_dir.iterdir())}")
         raise
 
 
-def test_metadata_proxy_factory_returns_fastapi_app() -> None:
-    module = _load_metadata_module()
-    app = module.create_app()
-    assert isinstance(app, fastapi.FastAPI)
-
-
 def test_metadata_proxy_health_route_present() -> None:
-    module = _load_metadata_module()
-    app = module.create_app()
-    routes = {route.path for route in app.routes}
-    assert "/health" in routes
+    """Test that the metadata proxy has a health route."""
+    try:
+        from app import main
+        app = main.create_app()
+        routes = {route.path for route in app.routes}
+        assert "/health" in routes, f"Health route not found. Available routes: {routes}"
+        
+    except ImportError as e:
+        print(f"Import failed: {e}")
+        raise

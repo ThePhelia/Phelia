@@ -116,7 +116,9 @@ async def test_meta_search_returns_mixed_items(monkeypatch):
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get("/meta/search", params={"q": "blade"})
 
     assert response.status_code == 200
@@ -132,8 +134,12 @@ async def test_meta_detail_movie_builds_canonical(monkeypatch):
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"})
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"}
+        )
 
     assert response.status_code == 200
     detail = response.json()
@@ -151,8 +157,13 @@ async def test_meta_detail_album_includes_tracks(monkeypatch):
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/meta/detail", params={"type": "album", "id": "master:303", "provider": "discogs"})
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/meta/detail",
+            params={"type": "album", "id": "master:303", "provider": "discogs"},
+        )
 
     assert response.status_code == 200
     detail = response.json()

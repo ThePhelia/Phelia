@@ -19,7 +19,9 @@ def _clean(value: str | None) -> str:
     return " ".join(value.split()).strip()
 
 
-def build_movie(title: str | None, year: int | None, fallback: str) -> Tuple[str, CanonicalMovie]:
+def build_movie(
+    title: str | None, year: int | None, fallback: str
+) -> Tuple[str, CanonicalMovie]:
     """Return the canonical query + payload for a movie."""
 
     base_title = _clean(title) or _clean(fallback)
@@ -48,7 +50,9 @@ def build_tv(
     elif episode is not None:
         parts.append(f"E{episode:02d}")
     query = " ".join(parts)
-    tv_payload = CanonicalTV(title=base_title or fallback.strip(), season=season, episode=episode)
+    tv_payload = CanonicalTV(
+        title=base_title or fallback.strip(), season=season, episode=episode
+    )
     return query.strip(), tv_payload
 
 

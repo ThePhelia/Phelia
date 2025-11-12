@@ -115,7 +115,9 @@ async def test_musicbrainz_proxy_caches(monkeypatch):
     assert mb_module._settings.mb_user_agent == "UnitTest/1.0 (+https://example.test)"
 
     async def fake_request_json(method, url, params=None, headers=None):
-        calls.append({"method": method, "url": url, "params": params, "headers": headers})
+        calls.append(
+            {"method": method, "url": url, "params": params, "headers": headers}
+        )
         return DummyResponse(200, {"id": "123", "name": "Radiohead"})
 
     monkeypatch.setattr("app.http.request_json", fake_request_json)
@@ -134,7 +136,9 @@ async def test_musicbrainz_proxy_caches(monkeypatch):
             assert first_payload["cached"] is False
             assert "fetched_at" in first_payload
 
-            second = await client.get("/mb/artist", params={"query": "artist:Radiohead"})
+            second = await client.get(
+                "/mb/artist", params={"query": "artist:Radiohead"}
+            )
             assert second.status_code == 200
             second_payload = second.json()
             assert second_payload["cached"] is True

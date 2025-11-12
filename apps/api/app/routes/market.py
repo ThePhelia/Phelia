@@ -111,7 +111,9 @@ async def install_plugin_from_url(payload: UrlInstallRequest) -> dict[str, Any]:
 async def enable(plugin_id: str) -> dict[str, Any]:
     runtime = loader.get_runtime(plugin_id)
     if runtime is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed"
+        )
     loader.enable_plugin(plugin_id, {})
     _append_audit_log(plugin_id, runtime.manifest.version, "enable")
     return _runtime_summary(loader.get_runtime(plugin_id) or runtime)
@@ -121,7 +123,9 @@ async def enable(plugin_id: str) -> dict[str, Any]:
 async def disable(plugin_id: str) -> dict[str, Any]:
     runtime = loader.get_runtime(plugin_id)
     if runtime is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed"
+        )
     loader.disable_plugin(plugin_id, {})
     _append_audit_log(plugin_id, runtime.manifest.version, "disable")
     updated = loader.get_runtime(plugin_id) or runtime
@@ -132,8 +136,9 @@ async def disable(plugin_id: str) -> dict[str, Any]:
 async def uninstall(plugin_id: str) -> dict[str, Any]:
     runtime = loader.get_runtime(plugin_id)
     if runtime is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Plugin not installed"
+        )
     uninstall_plugin(plugin_id)
     _append_audit_log(plugin_id, runtime.manifest.version, "uninstall")
     return {"id": plugin_id, "uninstalled": True}
-

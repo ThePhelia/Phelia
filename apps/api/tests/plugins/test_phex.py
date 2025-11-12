@@ -9,11 +9,18 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from app.market.phex import PhexError, load_phelia_manifest, safe_extract_tar_gz, verify_integrity
+from app.market.phex import (
+    PhexError,
+    load_phelia_manifest,
+    safe_extract_tar_gz,
+    verify_integrity,
+)
 from app.plugins.manifest import PluginManifest
 
 
-def _create_tar_with_member(path: Path, member: tarfile.TarInfo, data: bytes | None = None) -> None:
+def _create_tar_with_member(
+    path: Path, member: tarfile.TarInfo, data: bytes | None = None
+) -> None:
     with tarfile.open(path, "w:gz") as tar:
         if data is None:
             tar.addfile(member)
@@ -142,4 +149,3 @@ def test_phex_signature_valid_and_invalid(tmp_path: Path) -> None:
         )
         == "invalid"
     )
-

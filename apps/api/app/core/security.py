@@ -16,7 +16,11 @@ auth_scheme = HTTPBearer()
 
 def create_token(subject: str, secret: str, expires_minutes: int = 60) -> str:
     now = datetime.utcnow()
-    payload = {"sub": subject, "iat": now, "exp": now + timedelta(minutes=expires_minutes)}
+    payload = {
+        "sub": subject,
+        "iat": now,
+        "exp": now + timedelta(minutes=expires_minutes),
+    }
     return jwt.encode(payload, secret, algorithm=ALGO)
 
 

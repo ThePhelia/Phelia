@@ -66,9 +66,13 @@ class _FakeClient:
 
 
 @pytest.mark.anyio
-async def test_jackett_search_returns_enriched_cards(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_jackett_search_returns_enriched_cards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_client = _FakeClient(expected_text=TORZNAB_SAMPLE)
-    monkeypatch.setattr("jackett_integrator.provider.httpx.AsyncClient", lambda **_: fake_client)
+    monkeypatch.setattr(
+        "jackett_integrator.provider.httpx.AsyncClient", lambda **_: fake_client
+    )
 
     settings = PluginSettings.from_mapping(
         {
@@ -108,7 +112,10 @@ async def test_send_to_qbittorrent_with_magnet(monkeypatch: pytest.MonkeyPatch) 
         }
     )
     provider = JackettProvider(settings=settings, logger=logging.getLogger("tests"))
-    monkeypatch.setattr("jackett_integrator.provider.httpx.AsyncClient", lambda **_: _FakeClient(expected_text=""))
+    monkeypatch.setattr(
+        "jackett_integrator.provider.httpx.AsyncClient",
+        lambda **_: _FakeClient(expected_text=""),
+    )
 
     added: list[str] = []
 
@@ -118,7 +125,9 @@ async def test_send_to_qbittorrent_with_magnet(monkeypatch: pytest.MonkeyPatch) 
             async def add_magnet(self, magnet: str) -> None:
                 added.append(magnet)
 
-            async def add_torrent_file(self, data: bytes) -> None:  # pragma: no cover - unused
+            async def add_torrent_file(
+                self, data: bytes
+            ) -> None:  # pragma: no cover - unused
                 raise AssertionError("Should not fetch torrent file for magnet entries")
 
         yield Dummy()

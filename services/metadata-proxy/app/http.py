@@ -94,7 +94,9 @@ async def request_json(
         reraise=True,
         stop=stop_after_attempt(settings.retry_attempts),
         wait=wait_exponential(multiplier=settings.retry_backoff_base, min=0.3, max=5),
-        retry=retry_if_exception_type((httpx.RequestError, UpstreamRetryError, httpx.HTTPStatusError)),
+        retry=retry_if_exception_type(
+            (httpx.RequestError, UpstreamRetryError, httpx.HTTPStatusError)
+        ),
     )
 
     try:
@@ -103,7 +105,9 @@ async def request_json(
                 response = await _send()
     except RetryError as exc:  # pragma: no cover - defensive
         last_attempt = exc.last_attempt
-        if last_attempt and isinstance(last_attempt.outcome.exception(), UpstreamRetryError):
+        if last_attempt and isinstance(
+            last_attempt.outcome.exception(), UpstreamRetryError
+        ):
             return last_attempt.outcome.exception().response  # type: ignore[return-value]
         raise
     except UpstreamRetryError as exc:

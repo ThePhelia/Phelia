@@ -47,4 +47,3 @@ class SearchResponse(PaginatedResponse[DiscoverItem]):
     model_config = {
         "extra": "allow",
     }
-

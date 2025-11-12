@@ -17,7 +17,9 @@ router = APIRouter()
 
 
 @router.get("/charts", response_model=List[AlbumItem])
-async def charts(market: Optional[str] = Query(default=None), limit: int = 50) -> List[AlbumItem]:
+async def charts(
+    market: Optional[str] = Query(default=None), limit: int = 50
+) -> List[AlbumItem]:
     return await get_charts(market=market, limit=limit)
 
 
@@ -27,7 +29,9 @@ async def tags(tag: str, limit: int = 50) -> List[AlbumItem]:
 
 
 @router.get("/new", response_model=List[AlbumItem])
-async def new(market: Optional[str] = Query(default=None), limit: int = 50) -> List[AlbumItem]:
+async def new(
+    market: Optional[str] = Query(default=None), limit: int = 50
+) -> List[AlbumItem]:
     return await get_new_releases(market=market, limit=limit)
 
 

@@ -117,7 +117,9 @@ def parse_torznab(xml_payload: str | bytes) -> list[NormalizedResult]:
         enclosure_length = None
         if enclosure is not None:
             torrent_url = enclosure.attrib.get("url") or None
-            enclosure_length = _parse_int(enclosure.attrib.get("length"), default=0) or None
+            enclosure_length = (
+                _parse_int(enclosure.attrib.get("length"), default=0) or None
+            )
 
         size = _parse_int(attr_map.get("size") or item.findtext("size"), 0)
         seeders = _parse_int(attr_map.get("seeders"), 0)

@@ -85,7 +85,9 @@ def build_archive(output: Path) -> Path:
 def main() -> int:
     manifest = _read_manifest()
     default_name = f"{manifest['id']}-{manifest['version']}.phex"
-    parser = argparse.ArgumentParser(description="Build Jackett Integrator .phex archive")
+    parser = argparse.ArgumentParser(
+        description="Build Jackett Integrator .phex archive"
+    )
     parser.add_argument("--output", type=Path, help="Path for the generated archive")
     args = parser.parse_args()
 

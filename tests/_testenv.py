@@ -19,5 +19,3 @@ _DEFAULT_ENV = {
 
 for key, value in _DEFAULT_ENV.items():
     os.environ.setdefault(key, value)
-
-

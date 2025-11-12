@@ -42,7 +42,9 @@ class DiscogsClient:
 
         token = self.token
         if not query or not token:
-            logger.debug("discogs: skipping search query=%s token_present=%s", query, bool(token))
+            logger.debug(
+                "discogs: skipping search query=%s token_present=%s", query, bool(token)
+            )
             return []
 
         per_page = max(1, min(limit, 25))
@@ -61,7 +63,11 @@ class DiscogsClient:
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("discogs http error search=%s status=%s", query, exc.response.status_code)
+            logger.warning(
+                "discogs http error search=%s status=%s",
+                query,
+                exc.response.status_code,
+            )
             return []
         except httpx.RequestError as exc:
             logger.warning("discogs request error search=%s error=%s", query, exc)
@@ -95,11 +101,17 @@ class DiscogsClient:
             params["mbid"] = mb_release_group_id
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(f"{self.base_url}/database/search", params=params, headers=self._headers())
+                resp = await client.get(
+                    f"{self.base_url}/database/search",
+                    params=params,
+                    headers=self._headers(),
+                )
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("discogs http error album=%s status=%s", album, exc.response.status_code)
+            logger.warning(
+                "discogs http error album=%s status=%s", album, exc.response.status_code
+            )
             return None
         except httpx.RequestError as exc:
             logger.warning("discogs request error album=%s error=%s", album, exc)
@@ -113,14 +125,20 @@ class DiscogsClient:
         best = results[0]
         formats = best.get("format") or best.get("formats") or []
         if isinstance(formats, list):
-            format_names = [f.get("name") if isinstance(f, dict) else f for f in formats]
+            format_names = [
+                f.get("name") if isinstance(f, dict) else f for f in formats
+            ]
         else:
             format_names = [str(formats)]
         return {
             "id": best.get("id"),
             "title": best.get("title"),
             "year": best.get("year"),
-            "label": (best.get("label") or [None])[0] if isinstance(best.get("label"), list) else best.get("label"),
+            "label": (
+                (best.get("label") or [None])[0]
+                if isinstance(best.get("label"), list)
+                else best.get("label")
+            ),
             "catalog_number": best.get("catno"),
             "thumb": best.get("thumb"),
             "cover_image": best.get("cover_image"),
@@ -139,9 +157,15 @@ class DiscogsClient:
                 resp.raise_for_status()
                 return resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("discogs http error resource=%s status=%s", resource_url, exc.response.status_code)
+            logger.warning(
+                "discogs http error resource=%s status=%s",
+                resource_url,
+                exc.response.status_code,
+            )
         except httpx.RequestError as exc:
-            logger.warning("discogs request error resource=%s error=%s", resource_url, exc)
+            logger.warning(
+                "discogs request error resource=%s error=%s", resource_url, exc
+            )
         return None
 
     @property
@@ -150,4 +174,3 @@ class DiscogsClient:
 
 
 __all__ = ["DiscogsClient"]
-

@@ -42,7 +42,9 @@ async def reset_cache(monkeypatch):
 
 
 class MockAsyncClient:
-    def __init__(self, responses: List[Tuple[int, dict]], calls: List[Tuple[str, dict | None]]):
+    def __init__(
+        self, responses: List[Tuple[int, dict]], calls: List[Tuple[str, dict | None]]
+    ):
         self._responses = responses
         self._calls = calls
 

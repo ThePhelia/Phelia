@@ -66,7 +66,9 @@ def _validate_field(field: str, field_schema: Mapping[str, Any], raw: Any) -> An
                 return None
             raise PluginSettingsValidationError("Value is required", field=field)
         if raw not in allowed:
-            raise PluginSettingsValidationError("Value must match one of the allowed options", field=field)
+            raise PluginSettingsValidationError(
+                "Value must match one of the allowed options", field=field
+            )
         return raw
 
     if raw is None:
@@ -139,7 +141,9 @@ def validate_against_schema(
     return sanitized, allowed_keys
 
 
-def apply_defaults(schema: Mapping[str, Any] | None, values: Mapping[str, Any]) -> dict[str, Any]:
+def apply_defaults(
+    schema: Mapping[str, Any] | None, values: Mapping[str, Any]
+) -> dict[str, Any]:
     """Merge schema defaults with stored values without mutating the originals."""
 
     merged = {str(key): value for key, value in values.items()}

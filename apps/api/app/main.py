@@ -31,6 +31,7 @@ def load_provider_credentials(_db) -> None:
     """Placeholder hook to preload provider credentials at startup."""
     return None
 
+
 app = FastAPI(title="Phelia", version="0.1.0")
 
 app.add_middleware(
@@ -116,4 +117,3 @@ async def download_ws(websocket: WebSocket, download_id: int):
         await pubsub.unsubscribe(channel)
         await pubsub.close()
         await r.close()
-

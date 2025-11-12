@@ -52,7 +52,11 @@ class Classifier:
             (re.compile(r"\b16bit\b", re.I), 0.3, "16bit token"),
             (re.compile(r"\bCUE\b", re.I), 0.3, "CUE token"),
             (re.compile(r"\bLOG\b", re.I), 0.3, "LOG token"),
-            (re.compile(r"^[\w .'-]+ - [\w .'-]+ \((19|20)\d{2}\)", re.I), 0.55, "Artist - Album pattern"),
+            (
+                re.compile(r"^[\w .'-]+ - [\w .'-]+ \((19|20)\d{2}\)", re.I),
+                0.55,
+                "Artist - Album pattern",
+            ),
         ]
         self.tv_tokens = [
             (re.compile(r"S\d{1,2}E\d{1,2}", re.I), 0.45, "SxxEyy pattern"),
@@ -92,7 +96,7 @@ class Classifier:
         if isinstance(indexer_name, dict):
             indexer = indexer or indexer_name
             indexer_name = indexer_name.get("name") or indexer_name.get("id") or ""
-        indexer_name = (indexer_name or "")
+        indexer_name = indexer_name or ""
 
         def _normalise_indexer(value: Optional[str | dict[str, object]]) -> str:
             if not value:
@@ -127,7 +131,10 @@ class Classifier:
             total_weight += weight
             reasons.append(f"indexer_prior:{indexer_slug}")
 
-        def _apply(patterns: Iterable[tuple[re.Pattern[str], float, str]], media_type: MediaType) -> None:
+        def _apply(
+            patterns: Iterable[tuple[re.Pattern[str], float, str]],
+            media_type: MediaType,
+        ) -> None:
             nonlocal total_weight
             for regex, weight, label in patterns:
                 if regex.search(normalized_title):
@@ -153,5 +160,3 @@ class Classifier:
                 confidence = max(0.0, min(best_score / total_weight, 1.0))
 
         return Classification(type=best_type, confidence=confidence, reasons=reasons)
-       
-

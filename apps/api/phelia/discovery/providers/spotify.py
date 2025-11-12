@@ -60,7 +60,9 @@ class SpotifyProvider(Provider):
         _token_cache[client_id] = (token, time.time() + expires_in - 60, client_secret)
         return token
 
-    async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _get(
+        self, path: str, params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         token = await self._get_token()
         retries = 2
         delay = 0.5
@@ -91,13 +93,20 @@ class SpotifyProvider(Provider):
     async def tags(self, *, tag: str, limit: int) -> DiscoveryResponse:
         raise NotImplementedError
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
-        params = {"country": (market or os.getenv("DISCOVERY_DEFAULT_MARKET", "US")), "limit": limit}
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
+        params = {
+            "country": (market or os.getenv("DISCOVERY_DEFAULT_MARKET", "US")),
+            "limit": limit,
+        }
         payload = await self._get("/browse/new-releases", params=params)
         albums = (payload.get("albums") or {}).get("items", [])
         items: List[AlbumItem] = []
         for album in albums[:limit]:
-            artist_names = ", ".join(artist.get("name") for artist in album.get("artists", []))
+            artist_names = ", ".join(
+                artist.get("name") for artist in album.get("artists", [])
+            )
             title = album.get("name") or ""
             if not artist_names or not title:
                 continue

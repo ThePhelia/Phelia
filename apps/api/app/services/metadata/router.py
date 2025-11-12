@@ -86,7 +86,9 @@ class MetadataRouter:
         self.cache.set(cache_key, card.model_copy(deep=True))
         return card
 
-    def _build_base_card(self, classification: Classification, title: str) -> EnrichedCard:
+    def _build_base_card(
+        self, classification: Classification, title: str
+    ) -> EnrichedCard:
         return EnrichedCard(
             media_type=classification.type,
             confidence=classification.confidence,
@@ -98,7 +100,9 @@ class MetadataRouter:
             needs_confirmation=classification.confidence < self.threshold_low,
         )
 
-    async def _enrich_music(self, classification: Classification, title: str) -> EnrichedCard:
+    async def _enrich_music(
+        self, classification: Classification, title: str
+    ) -> EnrichedCard:
         card = self._build_base_card(classification, title)
         providers = {
             "MusicBrainz": EnrichedProvider(name="MusicBrainz", used=False),
@@ -109,7 +113,10 @@ class MetadataRouter:
         artist = None
         album = title
         year = None
-        match = re.search(r"^(?P<artist>.+?)\s+-\s+(?P<album>.+?)(?:\s*\((?P<year>\d{4})\))?(?:\s|$)", title)
+        match = re.search(
+            r"^(?P<artist>.+?)\s+-\s+(?P<album>.+?)(?:\s*\((?P<year>\d{4})\))?(?:\s|$)",
+            title,
+        )
         if match:
             artist = match.group("artist").strip()
             album = match.group("album").strip()
@@ -125,7 +132,9 @@ class MetadataRouter:
         mb_data: dict[str, Any] | None = None
         if self.musicbrainz and hasattr(self.musicbrainz, "lookup_release_group"):
             try:
-                mb_data = await self.musicbrainz.lookup_release_group(artist, album, year)
+                mb_data = await self.musicbrainz.lookup_release_group(
+                    artist, album, year
+                )
             except Exception as exc:
                 logger.warning("musicbrainz lookup failed for title=%s: %s", title, exc)
                 providers["MusicBrainz"].extra = {"error": str(exc)}
@@ -180,14 +189,18 @@ class MetadataRouter:
                     providers["Discogs"].extra = {"error": "no_result"}
 
         if mb_data:
-            providers["MusicBrainz"].extra = {"id": (mb_data.get("release_group") or {}).get("id")}
+            providers["MusicBrainz"].extra = {
+                "id": (mb_data.get("release_group") or {}).get("id")
+            }
             artist_info = mb_data.get("artist") or {}
             release_group = mb_data.get("release_group") or {}
             if artist_info.get("id"):
                 card.ids["mb_artist_id"] = artist_info.get("id")
             if release_group.get("id"):
                 card.ids["mb_release_group_id"] = release_group.get("id")
-            if release_group.get("first_release_date") and "year" not in (card.parsed or {}):
+            if release_group.get("first_release_date") and "year" not in (
+                card.parsed or {}
+            ):
                 try:
                     card.parsed = card.parsed or {}
                     card.parsed["year"] = int(release_group["first_release_date"][:4])
@@ -206,7 +219,9 @@ class MetadataRouter:
             providers["Discogs"].extra = {"id": discogs_data.get("id")}
             card.details.setdefault("discogs", {}).update(discogs_data)
             if discogs_data.get("cover_image"):
-                card.details.setdefault("images", {})["primary"] = discogs_data["cover_image"]
+                card.details.setdefault("images", {})["primary"] = discogs_data[
+                    "cover_image"
+                ]
 
         if lastfm_data:
             providers["Last.fm"].extra = {"url": lastfm_data.get("url")}
@@ -248,7 +263,9 @@ class MetadataRouter:
             return None, "no_result"
 
         tags_container = album_data.get("tags") or {}
-        tag_entries = tags_container.get("tag") if isinstance(tags_container, dict) else None
+        tag_entries = (
+            tags_container.get("tag") if isinstance(tags_container, dict) else None
+        )
         tag_list: list[str] = []
         if isinstance(tag_entries, Iterable):
             for entry in tag_entries:
@@ -398,7 +415,9 @@ class MetadataRouter:
                 year = None
         season = None
         episode = None
-        season_match = re.search(r"S(?P<season>\d{1,2})E(?P<episode>\d{1,2})", title, re.I)
+        season_match = re.search(
+            r"S(?P<season>\d{1,2})E(?P<episode>\d{1,2})", title, re.I
+        )
         if season_match:
             try:
                 season = int(season_match.group("season"))
@@ -432,7 +451,9 @@ class MetadataRouter:
             if tmdb_data.get("poster"):
                 card.details.setdefault("images", {})["poster"] = tmdb_data["poster"]
             if tmdb_data.get("backdrop"):
-                card.details.setdefault("images", {})["backdrop"] = tmdb_data["backdrop"]
+                card.details.setdefault("images", {})["backdrop"] = tmdb_data[
+                    "backdrop"
+                ]
             card.title = tmdb_data.get("title") or card.title
             card.parsed = card.parsed or {}
             if tmdb_data.get("year"):
@@ -465,4 +486,3 @@ class MetadataRouter:
 
 
 __all__ = ["MetadataRouter"]
-

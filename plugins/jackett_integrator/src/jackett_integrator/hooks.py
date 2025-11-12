@@ -62,7 +62,9 @@ def ensure_config_dir(root: Path) -> Path:
 
 def run_compose(root: Path, args: Sequence[str]) -> None:
     if _docker_disabled():
-        LOGGER.info("Skipping docker compose %s because docker integration is disabled", args)
+        LOGGER.info(
+            "Skipping docker compose %s because docker integration is disabled", args
+        )
         return
     base, override = compose_files(root)
     command = ["docker", "compose", "-f", str(base), "-f", str(override), *args]
@@ -89,7 +91,9 @@ def _server_config_path(config_dir: Path) -> Path:
     return config_dir / "Jackett" / "ServerConfig.json"
 
 
-def wait_for_api_key(config_dir: Path, timeout: float = 120.0, interval: float = 2.0) -> str | None:
+def wait_for_api_key(
+    config_dir: Path, timeout: float = 120.0, interval: float = 2.0
+) -> str | None:
     """Poll Jackett's ServerConfig until the API key becomes available."""
 
     deadline = time.time() + timeout

@@ -28,7 +28,9 @@ class ListenBrainzProvider(Provider):
     async def tags(self, *, tag: str, limit: int) -> DiscoveryResponse:
         raise NotImplementedError
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         raise NotImplementedError
 
     async def search_albums(self, *, query: str, limit: int) -> DiscoveryResponse:

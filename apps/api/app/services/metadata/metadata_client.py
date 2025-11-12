@@ -38,7 +38,9 @@ class MetadataClient:
         headers = {"accept": "application/json"}
         if request_id:
             headers["x-request-id"] = request_id
-        async with httpx.AsyncClient(timeout=self._timeout, limits=self._limits) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, limits=self._limits
+        ) as client:
             response = await client.get(url, params=params or {}, headers=headers)
         if response.status_code >= 400:
             detail = self._extract_error(response)
@@ -55,16 +57,40 @@ class MetadataClient:
             return payload["detail"]
         return payload
 
-    async def tmdb(self, path: str, params: dict[str, Any] | None = None, *, request_id: str | None = None) -> Any:
+    async def tmdb(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        request_id: str | None = None,
+    ) -> Any:
         return await self._get("tmdb", path, params, request_id)
 
-    async def lastfm(self, path: str, params: dict[str, Any] | None = None, *, request_id: str | None = None) -> Any:
+    async def lastfm(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        request_id: str | None = None,
+    ) -> Any:
         return await self._get("lastfm", path, params, request_id)
 
-    async def mb(self, path: str, params: dict[str, Any] | None = None, *, request_id: str | None = None) -> Any:
+    async def mb(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        request_id: str | None = None,
+    ) -> Any:
         return await self._get("mb", path, params, request_id)
 
-    async def fanart(self, path: str, params: dict[str, Any] | None = None, *, request_id: str | None = None) -> Any:
+    async def fanart(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        request_id: str | None = None,
+    ) -> Any:
         return await self._get("fanart", path, params, request_id)
 
 

@@ -128,7 +128,9 @@ def load_phelia_manifest(staging_dir: Path) -> dict[str, Any]:
     if author is not None:
         normalized["author"] = {
             key: str(value)
-            for key, value in _require_mapping(author, "Author must be a mapping").items()
+            for key, value in _require_mapping(
+                author, "Author must be a mapping"
+            ).items()
             if value is not None
         }
 
@@ -169,7 +171,10 @@ def load_phelia_manifest(staging_dir: Path) -> dict[str, Any]:
         normalized["runtime"] = {}
         if "python" in runtime_mapping and runtime_mapping["python"] is not None:
             normalized["runtime"]["python"] = str(runtime_mapping["python"]).strip()
-        if "settingsSchema" in runtime_mapping and runtime_mapping["settingsSchema"] is not None:
+        if (
+            "settingsSchema" in runtime_mapping
+            and runtime_mapping["settingsSchema"] is not None
+        ):
             settings_schema = runtime_mapping["settingsSchema"]
             if not isinstance(settings_schema, Mapping):
                 raise PhexError("'runtime.settingsSchema' must be a mapping")
@@ -179,7 +184,9 @@ def load_phelia_manifest(staging_dir: Path) -> dict[str, Any]:
 
     integrity_block = manifest.get("integrity")
     if integrity_block is not None:
-        integrity_mapping = _require_mapping(integrity_block, "'integrity' must be a mapping")
+        integrity_mapping = _require_mapping(
+            integrity_block, "'integrity' must be a mapping"
+        )
         normalized["integrity"] = {
             key: str(value)
             for key, value in integrity_mapping.items()
@@ -231,4 +238,3 @@ def verify_integrity(
         return "verified"
 
     return "unsigned"
-

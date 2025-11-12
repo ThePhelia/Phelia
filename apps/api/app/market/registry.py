@@ -40,9 +40,7 @@ class RegistryIndex(BaseModel):
     plugins: list[PluginIndexItem]
 
 
-REGISTRY_URL = (
-    "https://phelia-plugins.github.io/plugins-index/index.json"
-)
+REGISTRY_URL = "https://phelia-plugins.github.io/plugins-index/index.json"
 
 
 async def fetch_registry() -> RegistryIndex:

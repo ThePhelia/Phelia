@@ -45,7 +45,9 @@ def _entry_to_discover(entry: models.LibraryEntry) -> DiscoverItem:
     return DiscoverItem.model_validate(snapshot)
 
 
-def _ensure_playlist(db: Session, slug: str, title: str | None = None) -> models.LibraryPlaylist:
+def _ensure_playlist(
+    db: Session, slug: str, title: str | None = None
+) -> models.LibraryPlaylist:
     playlist = (
         db.query(models.LibraryPlaylist)
         .filter(models.LibraryPlaylist.slug == slug)
@@ -143,7 +145,9 @@ def apply_mutation(db: Session, mutation: ListMutationInput) -> None:
     if mutation.action == "add":
         _upsert_entry(db, list_type=list_type, item=item, playlist_slug=playlist_slug)
     elif mutation.action == "remove":
-        _delete_entry(db, list_type=list_type, item=mutation.item, playlist_slug=playlist_slug)
+        _delete_entry(
+            db, list_type=list_type, item=mutation.item, playlist_slug=playlist_slug
+        )
     else:
         raise UnknownListError(mutation.action)
 
@@ -169,7 +173,11 @@ def build_summary(db: Session) -> LibrarySummary:
     )
 
     playlists: list[LibraryPlaylist] = []
-    for playlist in db.query(models.LibraryPlaylist).order_by(models.LibraryPlaylist.created_at.asc()).all():
+    for playlist in (
+        db.query(models.LibraryPlaylist)
+        .order_by(models.LibraryPlaylist.created_at.asc())
+        .all()
+    ):
         items = (
             db.query(models.LibraryEntry)
             .filter(models.LibraryEntry.list_type == "playlist")

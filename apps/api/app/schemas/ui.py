@@ -75,7 +75,9 @@ class ListMutationInput(BaseModel):
     action: Literal["add", "remove"]
     list: Literal["watchlist", "favorites", "playlist"]
     item: ListMutationItem
-    playlist_id: str | None = Field(default=None, description="Target playlist identifier")
+    playlist_id: str | None = Field(
+        default=None, description="Target playlist identifier"
+    )
     playlist_title: str | None = Field(
         default=None, description="Optional title when creating a new playlist"
     )
@@ -170,4 +172,3 @@ class CapabilitiesResponse(BaseModel):
     version: str
     links: dict[str, str | None] | None = None
     plugins: PluginCapabilities | None = None
-

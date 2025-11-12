@@ -13,7 +13,9 @@ class DummyRouter:
     def __init__(self, card: EnrichedCard):
         self._card = card
 
-    async def enrich(self, classification, title):  # pragma: no cover - simple passthrough
+    async def enrich(
+        self, classification, title
+    ):  # pragma: no cover - simple passthrough
         return self._card
 
 
@@ -26,7 +28,9 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
     mutation = ListMutationInput(
         action="add",
         list="watchlist",
-        item=ListMutationItem(kind="movie", id="blade-runner-2049", title="Blade Runner 2049", year=2017),
+        item=ListMutationItem(
+            kind="movie", id="blade-runner-2049", title="Blade Runner 2049", year=2017
+        ),
     )
     library_service.apply_mutation(db_session, mutation)
 
@@ -59,7 +63,11 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
                         },
                         "similar": {
                             "results": [
-                                {"id": 102, "title": "Arrival", "poster_path": "/arrival.jpg"}
+                                {
+                                    "id": 102,
+                                    "title": "Arrival",
+                                    "poster_path": "/arrival.jpg",
+                                }
                             ]
                         },
                         "recommendations": {
@@ -83,7 +91,9 @@ async def test_details_returns_enriched_card(monkeypatch, db_session):
         needs_confirmation=False,
     )
 
-    monkeypatch.setattr(details_router, "get_metadata_router", lambda: DummyRouter(card))
+    monkeypatch.setattr(
+        details_router, "get_metadata_router", lambda: DummyRouter(card)
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -136,7 +146,9 @@ async def test_details_returns_when_tmdb_missing(monkeypatch, db_session):
         needs_confirmation=False,
     )
 
-    monkeypatch.setattr(details_router, "get_metadata_router", lambda: DummyRouter(card))
+    monkeypatch.setattr(
+        details_router, "get_metadata_router", lambda: DummyRouter(card)
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -204,7 +216,9 @@ async def test_details_includes_musicbrainz_ids(
         needs_confirmation=False,
     )
 
-    monkeypatch.setattr(details_router, "get_metadata_router", lambda: DummyRouter(card))
+    monkeypatch.setattr(
+        details_router, "get_metadata_router", lambda: DummyRouter(card)
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -232,7 +246,9 @@ async def test_details_handles_metadata_failure(monkeypatch, db_session):
     library_service.apply_mutation(db_session, mutation)
 
     class FailingRouter:
-        async def enrich(self, classification, title):  # pragma: no cover - exercised via test
+        async def enrich(
+            self, classification, title
+        ):  # pragma: no cover - exercised via test
             raise RuntimeError("boom")
 
     monkeypatch.setattr(details_router, "get_metadata_router", lambda: FailingRouter())

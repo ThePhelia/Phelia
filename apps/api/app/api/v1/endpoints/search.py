@@ -161,9 +161,7 @@ def _select_identifier(card: EnrichedCard, kind: str, details: dict[str, Any]) -
         if candidate:
             return candidate
 
-    fallback_source = "||".join(
-        value for value in [kind, card.title] if value
-    )
+    fallback_source = "||".join(value for value in [kind, card.title] if value)
     if not fallback_source:
         fallback_source = f"{kind}:{card.title or 'unknown'}"
     digest = hashlib.sha1(fallback_source.encode("utf-8"), usedforsecurity=False)
@@ -181,19 +179,28 @@ def _card_to_discover_item(card: EnrichedCard) -> DiscoverItem | None:
     images = details.get("images") if isinstance(details.get("images"), dict) else {}
     tmdb = details.get("tmdb") if isinstance(details.get("tmdb"), dict) else {}
     discogs = details.get("discogs") if isinstance(details.get("discogs"), dict) else {}
-    musicbrainz = details.get("musicbrainz") if isinstance(details.get("musicbrainz"), dict) else {}
-    title = _first_str(
-        tmdb.get("title"),
-        tmdb.get("name"),
-        discogs.get("title"),
-        musicbrainz.get("title"),
-        parsed.get("album"),
-        card.title,
-    ) or "Untitled"
+    musicbrainz = (
+        details.get("musicbrainz")
+        if isinstance(details.get("musicbrainz"), dict)
+        else {}
+    )
+    title = (
+        _first_str(
+            tmdb.get("title"),
+            tmdb.get("name"),
+            discogs.get("title"),
+            musicbrainz.get("title"),
+            parsed.get("album"),
+            card.title,
+        )
+        or "Untitled"
+    )
 
     subtitle: str | None = None
     if kind == "album":
-        subtitle = _first_str(parsed.get("artist"), musicbrainz.get("artist"), details.get("artist"))
+        subtitle = _first_str(
+            parsed.get("artist"), musicbrainz.get("artist"), details.get("artist")
+        )
     elif kind == "tv":
         season = _ensure_int(parsed.get("season"))
         episode = _ensure_int(parsed.get("episode"))
@@ -283,4 +290,3 @@ async def search(
     response_kwargs = {"page": page, "total_pages": page, "items": page_items}
     response_kwargs.update(meta)
     return SearchResponse(**response_kwargs)
-

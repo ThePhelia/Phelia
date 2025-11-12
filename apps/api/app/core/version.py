@@ -12,4 +12,3 @@ def get_version() -> str:
     """Return the declared backend version for compatibility checks."""
 
     return os.getenv("PHELIA_VERSION", DEFAULT_VERSION)
-

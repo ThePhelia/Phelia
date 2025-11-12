@@ -35,4 +35,3 @@ class EnrichedCard(BaseModel):
     providers: list[EnrichedProvider] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     needs_confirmation: bool = False
-

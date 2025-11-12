@@ -27,7 +27,11 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.create_table(
         _TABLE_NAME,
-        sa.Column("provider_slug", sa.String(length=64), primary_key=True, nullable=False),
+        sa.Column(
+            "provider_slug", sa.String(length=64), primary_key=True, nullable=False
+        ),
         sa.Column("api_key", sa.String(length=512), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
     )

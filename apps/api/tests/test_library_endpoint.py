@@ -57,7 +57,11 @@ async def test_library_playlist_requires_id(db_session):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post(
             "/api/v1/library/list",
-            json={"action": "add", "list": "playlist", "item": {"kind": "movie", "id": "x"}},
+            json={
+                "action": "add",
+                "list": "playlist",
+                "item": {"kind": "movie", "id": "x"},
+            },
         )
 
     assert resp.status_code == 400

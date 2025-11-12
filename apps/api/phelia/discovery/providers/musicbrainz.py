@@ -59,7 +59,9 @@ class MusicBrainzProvider(Provider):
     async def tags(self, *, tag: str, limit: int) -> DiscoveryResponse:
         raise NotImplementedError
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         raise NotImplementedError
 
     async def search_albums(self, *, query: str, limit: int) -> DiscoveryResponse:
@@ -89,13 +91,19 @@ class MusicBrainzProvider(Provider):
                     title=title,
                     artist=artist,
                     release_date=release_date,
-                    tags=[tag.get("name") for tag in entry.get("tags", []) if tag.get("name")],
+                    tags=[
+                        tag.get("name")
+                        for tag in entry.get("tags", [])
+                        if tag.get("name")
+                    ],
                     source_url=f"https://musicbrainz.org/release-group/{entry.get('id')}",
                 )
             )
         return DiscoveryResponse(provider="musicbrainz", items=items)
 
-    async def enrich(self, artist: str, title: str) -> Optional[dict[str, Optional[str]]]:
+    async def enrich(
+        self, artist: str, title: str
+    ) -> Optional[dict[str, Optional[str]]]:
         params = {
             "query": f"artist:{artist} AND release:{title}",
             "fmt": "json",
@@ -115,7 +123,9 @@ class MusicBrainzProvider(Provider):
         return {
             "release_date": release_date,
             "cover_url": cover_url,
-            "source_url": f"https://musicbrainz.org/release-group/{mbid}" if mbid else None,
+            "source_url": (
+                f"https://musicbrainz.org/release-group/{mbid}" if mbid else None
+            ),
         }
 
 

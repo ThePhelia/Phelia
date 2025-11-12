@@ -9,9 +9,13 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    tmdb_api_key: str | None = Field(default=None, env="TMDB_API_KEY")
+    tmdb_api_key: str | None = Field(
+        default="71654942f10fb51fe2d66a1f756b4311", env="TMDB_API_KEY"
+    )
     lastfm_api_key: str | None = Field(default=None, env="LASTFM_API_KEY")
-    fanart_api_key: str | None = Field(default=None, env="FANART_API_KEY")
+    fanart_api_key: str | None = Field(
+        default="ab2903405543c654c66638b790fad420", env="FANART_API_KEY"
+    )
 
     cache_backend: str = Field(default="sqlite", env="CACHE_BACKEND")
     sqlite_cache_path: str = Field(default="/data/cache.db", env="SQLITE_CACHE_PATH")
@@ -21,12 +25,18 @@ class Settings(BaseSettings):
     retry_attempts: int = Field(default=3, env="RETRY_ATTEMPTS")
     retry_backoff_base: float = Field(default=0.3, env="RETRY_BACKOFF_BASE")
 
-    tmdb_base_url: AnyHttpUrl = Field("https://api.themoviedb.org/3/", env="TMDB_BASE_URL")
-    lastfm_base_url: AnyHttpUrl = Field("https://ws.audioscrobbler.com/2.0/", env="LASTFM_BASE_URL")
+    tmdb_base_url: AnyHttpUrl = Field(
+        "https://api.themoviedb.org/3/", env="TMDB_BASE_URL"
+    )
+    lastfm_base_url: AnyHttpUrl = Field(
+        "https://ws.audioscrobbler.com/2.0/", env="LASTFM_BASE_URL"
+    )
     musicbrainz_base_url: AnyHttpUrl = Field(
         "https://musicbrainz.org/ws/2/", env="MUSICBRAINZ_BASE_URL"
     )
-    fanart_base_url: AnyHttpUrl = Field("https://webservice.fanart.tv/v3/", env="FANART_BASE_URL")
+    fanart_base_url: AnyHttpUrl = Field(
+        "https://webservice.fanart.tv/v3/", env="FANART_BASE_URL"
+    )
 
     mb_user_agent: str = Field(
         "Phelia-Metadata-Proxy/1.0 (+https://example.local)", env="MB_USER_AGENT"

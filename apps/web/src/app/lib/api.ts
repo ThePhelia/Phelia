@@ -371,3 +371,41 @@ export function useMutateList() {
     },
   });
 }
+
+// API Key Management
+export function useApiKeys() {
+  return useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => http<{ api_keys: Array<{ provider: string; configured: boolean; value?: string }> }>('settings/api-keys'),
+  });
+}
+
+export function useUpdateApiKey(provider: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { provider: string; configured: boolean; value?: string },
+    Error,
+    { value: string | null }
+  >({
+    mutationFn: (data) => http(`settings/api-keys/${provider}`, { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+}
+
+export function useUpdateApiKeys() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { api_keys: Array<{ provider: string; configured: boolean; value?: string }> },
+    Error,
+    { api_keys: Record<string, string | null> }
+  >({
+    mutationFn: (data) => http('settings/api-keys', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+}

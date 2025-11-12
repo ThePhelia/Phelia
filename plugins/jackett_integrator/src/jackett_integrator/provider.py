@@ -117,7 +117,9 @@ class JackettProvider(SearchProvider):
         }
         return cards, meta
 
-    def _filter_results(self, results: Sequence[NormalizedResult]) -> list[NormalizedResult]:
+    def _filter_results(
+        self, results: Sequence[NormalizedResult]
+    ) -> list[NormalizedResult]:
         allow = {
             entry.lower()
             for entry in (self._settings.allowlist or [])
@@ -190,7 +192,9 @@ class JackettProvider(SearchProvider):
         )
         return card
 
-    async def send_to_qbittorrent(self, results: Iterable[NormalizedResult]) -> list[str]:
+    async def send_to_qbittorrent(
+        self, results: Iterable[NormalizedResult]
+    ) -> list[str]:
         created: list[str] = []
 
         async with self._torrent_client.session() as client:
@@ -202,7 +206,9 @@ class JackettProvider(SearchProvider):
                         continue
                     torrent_url = result.torrent_url or result.link
                     if not torrent_url:
-                        self._logger.warning("Skipping %s: no magnet or torrent URL", result.title)
+                        self._logger.warning(
+                            "Skipping %s: no magnet or torrent URL", result.title
+                        )
                         continue
                     try:
                         resp = await downloader.get(torrent_url)
@@ -210,7 +216,9 @@ class JackettProvider(SearchProvider):
                         await client.add_torrent_file(resp.content)
                         created.append(result.title)
                     except httpx.HTTPError as exc:
-                        self._logger.error("Failed to download torrent for %s: %s", result.title, exc)
+                        self._logger.error(
+                            "Failed to download torrent for %s: %s", result.title, exc
+                        )
         return created
 
 

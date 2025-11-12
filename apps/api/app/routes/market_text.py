@@ -20,4 +20,3 @@ async def preinstall_warning() -> dict[str, object]:
         "confirm_button": "Install plugin",
         "cancel_button": "Cancel",
     }
-

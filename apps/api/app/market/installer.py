@@ -58,7 +58,9 @@ class InstallerError(RuntimeError):
 
 def _ensure_size_limit(size: int) -> None:
     if size > MAX_ARCHIVE_BYTES:
-        raise InstallerError("archive_too_large", "Archive exceeds the maximum allowed size")
+        raise InstallerError(
+            "archive_too_large", "Archive exceeds the maximum allowed size"
+        )
 
 
 def _staging_dir() -> Path:
@@ -145,7 +147,9 @@ def _select_web_assets(manifest_data: dict[str, Any]) -> str | None:
     return None
 
 
-def _parse_manifest(plugin_root: Path) -> tuple[dict[str, Any], PluginManifest, list[str]]:
+def _parse_manifest(
+    plugin_root: Path,
+) -> tuple[dict[str, Any], PluginManifest, list[str]]:
     manifest_data = load_phelia_manifest(plugin_root)
     permissions = read_permissions(plugin_root)
     web_assets = _select_web_assets(manifest_data)
@@ -163,7 +167,9 @@ def _validate_version_compatibility(manifest: PluginManifest) -> None:
         current = Version(current_version)
         minimum = Version(manifest.min_phelia)
     except InvalidVersion as exc:  # pragma: no cover - defensive guard
-        raise InstallerError("invalid_version", "Invalid semantic version encountered") from exc
+        raise InstallerError(
+            "invalid_version", "Invalid semantic version encountered"
+        ) from exc
 
     if current < minimum:
         raise InstallerError(
@@ -172,7 +178,9 @@ def _validate_version_compatibility(manifest: PluginManifest) -> None:
         )
 
 
-def _enforce_permissions_gate(existing: PluginRuntime | None, permissions: list[str]) -> None:
+def _enforce_permissions_gate(
+    existing: PluginRuntime | None, permissions: list[str]
+) -> None:
     if existing is None:
         return
     old = set(existing.permissions or [])
@@ -195,7 +203,9 @@ async def install_phex_from_file(
         digest = _compute_sha256(archive_path)
         digest_lower = digest.lower()
         if normalized_expected and digest_lower != normalized_expected:
-            raise InstallerError("sha256_mismatch", "Uploaded archive SHA-256 does not match")
+            raise InstallerError(
+                "sha256_mismatch", "Uploaded archive SHA-256 does not match"
+            )
         return await _install_from_archive(archive_path, digest, source="upload")
     finally:
         if archive_path.exists():
@@ -217,14 +227,18 @@ async def install_phex_from_url(
         digest = _compute_sha256(archive_path)
         digest_lower = digest.lower()
         if normalized_expected and digest_lower != normalized_expected:
-            raise InstallerError("sha256_mismatch", "Downloaded archive SHA-256 does not match")
+            raise InstallerError(
+                "sha256_mismatch", "Downloaded archive SHA-256 does not match"
+            )
         return await _install_from_archive(archive_path, digest, source="url")
     finally:
         if archive_path.exists():
             archive_path.unlink()
 
 
-async def _install_from_archive(archive_path: Path, digest: str, source: str) -> dict[str, Any]:
+async def _install_from_archive(
+    archive_path: Path, digest: str, source: str
+) -> dict[str, Any]:
     staging_root = _staging_dir()
     staging_path = Path(tempfile.mkdtemp(dir=staging_root))
     cleanup_candidate = staging_path
@@ -248,7 +262,9 @@ async def _install_from_archive(archive_path: Path, digest: str, source: str) ->
             pubkey_path if pubkey_path.exists() else None,
         )
         if integrity_status == "invalid":
-            raise InstallerError("invalid_integrity", "Archive integrity verification failed")
+            raise InstallerError(
+                "invalid_integrity", "Archive integrity verification failed"
+            )
 
         existing_runtime = get_runtime(manifest_model.id)
         if existing_runtime:
@@ -341,4 +357,3 @@ def uninstall(plugin_id: str) -> None:
     plugin_dir = plugin_root_dir(plugin_id)
     if plugin_dir.exists():
         shutil.rmtree(plugin_dir)
-

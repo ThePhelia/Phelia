@@ -35,7 +35,9 @@ def register(payload: Credentials):
         existing = db.query(User).filter_by(email=payload.email).first()
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
-        user = User(email=payload.email, hashed_password=hash_password(payload.password))
+        user = User(
+            email=payload.email, hashed_password=hash_password(payload.password)
+        )
         db.add(user)
         db.flush()
         token = create_token(str(user.id), settings.APP_SECRET)
@@ -44,4 +46,8 @@ def register(payload: Credentials):
 
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)):
-    return {"id": current_user.id, "email": current_user.email, "role": current_user.role}
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+    }

@@ -7,7 +7,9 @@ from app.core.config import settings
 
 
 class QbClient:
-    def __init__(self, base_url: str, username: str, password: str, timeout: float = 15.0):
+    def __init__(
+        self, base_url: str, username: str, password: str, timeout: float = 15.0
+    ):
         self.base_url = str(base_url).rstrip("/")
         self.username = username
         self.password = password
@@ -22,6 +24,7 @@ class QbClient:
                 follow_redirects=True,
             )
         return self._client
+
     def _is_success(self, response: httpx.Response) -> bool:
         """Return ``True`` if the response body indicates success."""
 
@@ -30,21 +33,28 @@ class QbClient:
 
     async def login(self) -> None:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/auth/login", data={"username": self.username, "password": self.password},
+            f"{self.base_url}/api/v2/auth/login",
+            data={"username": self.username, "password": self.password},
             headers=self._headers,
         )
         r.raise_for_status()
         if not self._is_success(r):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
 
-    async def add_magnet(self, magnet: str, save_path: Optional[str] = None, category: Optional[str] = None) -> Dict:
+    async def add_magnet(
+        self,
+        magnet: str,
+        save_path: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> Dict:
         data = {"urls": magnet}
         if save_path:
             data["savepath"] = save_path
         if category:
             data["category"] = category
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/add", data=data,
+            f"{self.base_url}/api/v2/torrents/add",
+            data=data,
             headers=self._headers,
         )
         r.raise_for_status()
@@ -73,21 +83,26 @@ class QbClient:
         r.raise_for_status()
         return {}
 
-    async def list_torrents(self, filter: Optional[str] = None, category: Optional[str] = None) -> List[Dict]:
+    async def list_torrents(
+        self, filter: Optional[str] = None, category: Optional[str] = None
+    ) -> List[Dict]:
         params = {}
         if filter:
             params["filter"] = filter
         if category:
             params["category"] = category
         r = await self._c().get(
-            f"{self.base_url}/api/v2/torrents/info", params=params, headers=self._headers
+            f"{self.base_url}/api/v2/torrents/info",
+            params=params,
+            headers=self._headers,
         )
         r.raise_for_status()
         return r.json()
 
     async def pause_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/pause", data={"hashes": torrent_hash},
+            f"{self.base_url}/api/v2/torrents/pause",
+            data={"hashes": torrent_hash},
             headers=self._headers,
         )
         r.raise_for_status()
@@ -97,7 +112,8 @@ class QbClient:
 
     async def resume_torrent(self, torrent_hash: str) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/resume", data={"hashes": torrent_hash},
+            f"{self.base_url}/api/v2/torrents/resume",
+            data={"hashes": torrent_hash},
             headers=self._headers,
         )
         r.raise_for_status()
@@ -105,9 +121,15 @@ class QbClient:
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
         return {}
 
-    async def delete_torrent(self, torrent_hash: str, delete_files: bool = False) -> Dict:
+    async def delete_torrent(
+        self, torrent_hash: str, delete_files: bool = False
+    ) -> Dict:
         r = await self._c().post(
-            f"{self.base_url}/api/v2/torrents/delete", data={"hashes": torrent_hash, "deleteFiles": "true" if delete_files else "false"},
+            f"{self.base_url}/api/v2/torrents/delete",
+            data={
+                "hashes": torrent_hash,
+                "deleteFiles": "true" if delete_files else "false",
+            },
             headers=self._headers,
         )
         r.raise_for_status()
@@ -134,9 +156,7 @@ logger = logging.getLogger(__name__)
 
 
 async def health_check() -> None:
-    client = QbClient(
-        settings.QB_URL, settings.QB_USER, settings.QB_PASS, timeout=5.0
-    )
+    client = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS, timeout=5.0)
     try:
         async with client:
             await client.login()
@@ -144,4 +164,3 @@ async def health_check() -> None:
         logger.info("qBittorrent reachable at %s", settings.QB_URL)
     except Exception as e:
         logger.error("qBittorrent health check failed: %s", e)
-

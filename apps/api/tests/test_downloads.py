@@ -90,7 +90,9 @@ async def test_download_lookup(db_session):
     assert resp_nf.status_code == 404
 
     # Create download without hash
-    dl = models.Download(magnet="magnet:?xt=urn:btih:abcd", save_path="/downloads", status="queued")
+    dl = models.Download(
+        magnet="magnet:?xt=urn:btih:abcd", save_path="/downloads", status="queued"
+    )
     db_session.add(dl)
     db_session.commit()
     db_session.refresh(dl)

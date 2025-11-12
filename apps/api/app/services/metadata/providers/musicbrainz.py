@@ -32,9 +32,13 @@ class MusicBrainzClient:
     async def _fetch(self, path: str, params: dict[str, str]) -> dict[str, Any] | None:
         if self._metadata_client is not None:
             try:
-                data = await self._metadata_client.mb(path, params=params, request_id=None)
+                data = await self._metadata_client.mb(
+                    path, params=params, request_id=None
+                )
             except MetadataProxyError as exc:
-                logger.warning("mb proxy error path=%s status=%s", path, exc.status_code)
+                logger.warning(
+                    "mb proxy error path=%s status=%s", path, exc.status_code
+                )
                 return None
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("mb proxy request error path=%s error=%s", path, exc)
@@ -51,7 +55,9 @@ class MusicBrainzClient:
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("mb http error path=%s status=%s", path, exc.response.status_code)
+            logger.warning(
+                "mb http error path=%s status=%s", path, exc.response.status_code
+            )
             return None
         except httpx.RequestError as exc:
             logger.warning("mb request error path=%s error=%s", path, exc)
@@ -70,7 +76,7 @@ class MusicBrainzClient:
         if artist:
             query_parts.append(f'artist:"{artist}"')
         if year:
-            query_parts.append(f'firstreleasedate:{year}')
+            query_parts.append(f"firstreleasedate:{year}")
         params: dict[str, str] = {
             "query": " AND ".join(query_parts),
             "fmt": "json",

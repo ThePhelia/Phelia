@@ -14,6 +14,7 @@ from app.db import models
 
 DATA_DIR = Path(__file__).parent / "data"
 
+
 @pytest.fixture(scope="session")
 def qbittorrent_container(tmp_path_factory):
     """Start a qBittorrent container for tests."""
@@ -21,13 +22,22 @@ def qbittorrent_container(tmp_path_factory):
         pytest.skip("docker not available")
     downloads = tmp_path_factory.mktemp("qb-dl")
     cmd = [
-        "docker","run","-d",
-        "-p","8080:8080",
-        "-p","8999:8999",
-        "-e","WEBUI_PORT=8080",
-        "-e","PUID=0","-e","PGID=0",
-        "-v",f"{downloads}:/downloads",
-        "lscr.io/linuxserver/qbittorrent:latest"
+        "docker",
+        "run",
+        "-d",
+        "-p",
+        "8080:8080",
+        "-p",
+        "8999:8999",
+        "-e",
+        "WEBUI_PORT=8080",
+        "-e",
+        "PUID=0",
+        "-e",
+        "PGID=0",
+        "-v",
+        f"{downloads}:/downloads",
+        "lscr.io/linuxserver/qbittorrent:latest",
     ]
     cid = subprocess.check_output(cmd).decode().strip()
     # wait for API
@@ -41,16 +51,19 @@ def qbittorrent_container(tmp_path_factory):
             pass
         time.sleep(1)
     else:
-        subprocess.run(["docker","logs",cid], check=False)
-        subprocess.run(["docker","rm","-f",cid], check=False)
+        subprocess.run(["docker", "logs", cid], check=False)
+        subprocess.run(["docker", "rm", "-f", cid], check=False)
         raise RuntimeError("qBittorrent failed to start")
     yield downloads
-    subprocess.run(["docker","rm","-f",cid], check=False)
+    subprocess.run(["docker", "rm", "-f", cid], check=False)
+
 
 @pytest.fixture
 def qbittorrent(qbittorrent_container):
     downloads = qbittorrent_container
-    client = QbClient(os.environ["QB_URL"], os.environ["QB_USER"], os.environ["QB_PASS"])
+    client = QbClient(
+        os.environ["QB_URL"], os.environ["QB_USER"], os.environ["QB_PASS"]
+    )
     asyncio.run(client.login())
     try:
         yield client, downloads
@@ -62,6 +75,7 @@ def qbittorrent(qbittorrent_container):
                 asyncio.run(client.delete_torrent(t["hash"], True))
         finally:
             asyncio.run(client.close())
+
 
 @pytest.mark.anyio
 async def test_magnet_download_status(qbittorrent, db_session):
@@ -75,6 +89,7 @@ async def test_magnet_download_status(qbittorrent, db_session):
     db_session.refresh(dl)
     assert dl.status in {"metaDL", "downloading"}
 
+
 @pytest.mark.anyio
 async def test_file_download_status(qbittorrent, db_session, monkeypatch):
     qb, downloads = qbittorrent
@@ -85,12 +100,16 @@ async def test_file_download_status(qbittorrent, db_session, monkeypatch):
     class DummyAsyncClient:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, _exc_type, _exc, _tb):
             return False
+
         async def get(self, url, _follow_redirects=False):
             return httpx.Response(200, content=torrent_bytes)
 
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *_args, **_kwargs: DummyAsyncClient())
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda *_args, **_kwargs: DummyAsyncClient()
+    )
 
     dl = models.Download(magnet="", save_path="/downloads", status="queued")
     db_session.add(dl)

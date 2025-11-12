@@ -289,10 +289,16 @@ def _load_manifest_from_path(plugin_dir: Path) -> Mapping[str, Any]:
     return load_phelia_manifest(plugin_dir)
 
 
-def _build_runtime(plugin_id: str, version: str, state: Mapping[str, Any]) -> PluginRuntime:
+def _build_runtime(
+    plugin_id: str, version: str, state: Mapping[str, Any]
+) -> PluginRuntime:
     install_dir = plugin_version_dir(plugin_id, version)
     manifest_data = _load_manifest_from_path(install_dir)
-    hooks = manifest_data.get("phelia", {}).get("hooks", {}) if isinstance(manifest_data, Mapping) else {}
+    hooks = (
+        manifest_data.get("phelia", {}).get("hooks", {})
+        if isinstance(manifest_data, Mapping)
+        else {}
+    )
     web_assets = None
     if isinstance(hooks, Mapping):
         web_block = hooks.get("web")
@@ -485,4 +491,3 @@ def get_runtime(plugin_id: str) -> PluginRuntime | None:
         return _get_runtime(plugin_id)
     except KeyError:
         return None
-

@@ -2,6 +2,7 @@ import pytest
 
 from ._testenv import Base, SessionLocal, engine, runtime_settings
 
+
 @pytest.fixture(autouse=True)
 def setup_db():
     """Create a clean database for each test."""
@@ -17,6 +18,7 @@ def reset_runtime_settings_state():
     yield
     runtime_settings.reset_to_env()
 
+
 @pytest.fixture
 def db_session():
     session = SessionLocal()
@@ -24,6 +26,7 @@ def db_session():
         yield session
     finally:
         session.close()
+
 
 @pytest.fixture
 def anyio_backend():

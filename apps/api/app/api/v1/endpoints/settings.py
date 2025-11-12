@@ -116,7 +116,7 @@ def get_api_keys() -> ApiKeysResponse:
             ApiKeyResponse(
                 provider=provider,
                 configured=configured,
-                value=None  # Never expose actual API keys
+                value=None,  # Never expose actual API keys
             )
         )
     return ApiKeysResponse(api_keys=api_keys)
@@ -128,14 +128,14 @@ def get_api_key(provider: str) -> ApiKeyResponse:
     if provider not in runtime_settings.supported_providers():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "provider_not_found", "provider": provider}
+            detail={"error": "provider_not_found", "provider": provider},
         )
-    
+
     configured = runtime_settings.is_configured(provider)
     return ApiKeyResponse(
         provider=provider,
         configured=configured,
-        value=None  # Never expose actual API keys
+        value=None,  # Never expose actual API keys
     )
 
 
@@ -145,16 +145,16 @@ def update_api_key(provider: str, request: ApiKeyUpdateRequest) -> ApiKeyRespons
     if provider not in runtime_settings.supported_providers():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "provider_not_found", "provider": provider}
+            detail={"error": "provider_not_found", "provider": provider},
         )
-    
+
     runtime_settings.set(provider, request.value)
     configured = runtime_settings.is_configured(provider)
-    
+
     return ApiKeyResponse(
         provider=provider,
         configured=configured,
-        value=None  # Never expose actual API keys
+        value=None,  # Never expose actual API keys
     )
 
 
@@ -166,12 +166,12 @@ def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysResponse:
         if provider not in runtime_settings.supported_providers():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "provider_not_found", "provider": provider}
+                detail={"error": "provider_not_found", "provider": provider},
             )
-    
+
     # Update all keys
     runtime_settings.update_many(request.api_keys)
-    
+
     # Return updated status
     api_keys = []
     for provider in runtime_settings.supported_providers():
@@ -180,7 +180,7 @@ def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysResponse:
             ApiKeyResponse(
                 provider=provider,
                 configured=configured,
-                value=None  # Never expose actual API keys
+                value=None,  # Never expose actual API keys
             )
         )
     return ApiKeysResponse(api_keys=api_keys)

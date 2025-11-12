@@ -31,7 +31,10 @@ async def test_health_ok(monkeypatch):
         resp = await ac.get("/api/v1/health")
 
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "details": {"qbittorrent": {"ok": True, "count": 2}}}
+    assert resp.json() == {
+        "ok": True,
+        "details": {"qbittorrent": {"ok": True, "count": 2}},
+    }
 
 
 @pytest.mark.anyio

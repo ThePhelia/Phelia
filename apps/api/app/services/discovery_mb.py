@@ -27,7 +27,9 @@ def _get(path: str, params: Dict[str, str], timeout: int = 12) -> dict:
     response.raise_for_status()
 
 
-def new_releases_by_genre(genre: str, days: int = 30, limit: int = 50) -> List[Dict[str, object]]:
+def new_releases_by_genre(
+    genre: str, days: int = 30, limit: int = 50
+) -> List[Dict[str, object]]:
     end = dt.date.today()
     start = end - dt.timedelta(days=days)
     query = (
@@ -36,7 +38,9 @@ def new_releases_by_genre(genre: str, days: int = 30, limit: int = 50) -> List[D
         f'AND tag:"{genre}"'
     )
     try:
-        data = _get("release-group", {"query": query, "fmt": "json", "limit": str(limit)})
+        data = _get(
+            "release-group", {"query": query, "fmt": "json", "limit": str(limit)}
+        )
     except httpx.HTTPError as exc:
         logger.warning(
             "musicbrainz new releases request failed genre=%s days=%s limit=%s error=%s",

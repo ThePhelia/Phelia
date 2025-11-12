@@ -20,7 +20,9 @@ class DeezerProvider(Provider):
     def __init__(self) -> None:
         self.timeout = float(os.getenv("DISCOVERY_HTTP_TIMEOUT", "8"))
 
-    async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _get(
+        self, path: str, params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         retries = 2
         delay = 0.5
         last_error: Exception | None = None
@@ -49,7 +51,9 @@ class DeezerProvider(Provider):
     async def charts(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
         market = (market or os.getenv("DISCOVERY_DEFAULT_MARKET", "US")).upper()
         country_id = COUNTRY_MAP.get(market)
-        path = f"/chart/{country_id}/albums" if country_id is not None else "/chart/albums"
+        path = (
+            f"/chart/{country_id}/albums" if country_id is not None else "/chart/albums"
+        )
         payload = await self._get(path, params={"limit": limit})
         data = payload.get("data", [])
         items: List[AlbumItem] = []
@@ -61,7 +65,9 @@ class DeezerProvider(Provider):
             items.append(
                 AlbumItem(
                     id=str(entry.get("id")),
-                    canonical_key=self._canonical_key(artist, title, entry.get("release_date")),
+                    canonical_key=self._canonical_key(
+                        artist, title, entry.get("release_date")
+                    ),
                     source="deezer",
                     title=title,
                     artist=artist,
@@ -69,7 +75,9 @@ class DeezerProvider(Provider):
                     cover_url=entry.get("cover_medium") or entry.get("cover"),
                     source_url=entry.get("link"),
                     market=market,
-                    score=float(entry.get("position")) if entry.get("position") else None,
+                    score=(
+                        float(entry.get("position")) if entry.get("position") else None
+                    ),
                     preview_url=entry.get("preview"),
                 )
             )
@@ -78,7 +86,9 @@ class DeezerProvider(Provider):
     async def tags(self, *, tag: str, limit: int) -> DiscoveryResponse:
         raise NotImplementedError
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         # Deezer does not expose a dedicated new releases endpoint; reuse charts
         return await self.charts(market=market, limit=limit)
 
@@ -94,7 +104,9 @@ class DeezerProvider(Provider):
             items.append(
                 AlbumItem(
                     id=str(entry.get("id")),
-                    canonical_key=self._canonical_key(artist, title, entry.get("release_date")),
+                    canonical_key=self._canonical_key(
+                        artist, title, entry.get("release_date")
+                    ),
                     source="deezer",
                     title=title,
                     artist=artist,

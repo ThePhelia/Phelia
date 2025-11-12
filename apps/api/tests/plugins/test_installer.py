@@ -182,10 +182,14 @@ async def test_install_from_url_route(
 
 
 @pytest.mark.anyio
-async def test_install_phex_from_file_happy_path(plugin_env: tuple[Path, list[str]], tmp_path: Path) -> None:
+async def test_install_phex_from_file_happy_path(
+    plugin_env: tuple[Path, list[str]], tmp_path: Path
+) -> None:
     _, modules = plugin_env
     archive_path, plugin_id, module_name = _build_plugin_archive(tmp_path)
-    result = await install_phex_from_file(archive_path.read_bytes(), expected_sha256=None)
+    result = await install_phex_from_file(
+        archive_path.read_bytes(), expected_sha256=None
+    )
 
     assert result["status"] == "enabled"
     runtime = loader.get_runtime(plugin_id)
@@ -245,7 +249,9 @@ async def test_install_phex_from_url_with_expected_sha256(
 
 
 @pytest.mark.anyio
-async def test_install_failure_rolls_back_and_cleans_staging(plugin_env: tuple[Path, list[str]], tmp_path: Path) -> None:
+async def test_install_failure_rolls_back_and_cleans_staging(
+    plugin_env: tuple[Path, list[str]], tmp_path: Path
+) -> None:
     plugins_dir, _ = plugin_env
     bad_root = tmp_path / "bad"
     bad_root.mkdir()
@@ -286,4 +292,3 @@ async def test_enable_disable_uninstall_lifecycle_hooks(
     assert module.CALLS[-1] == "uninstall"
     assert loader.get_runtime(plugin_id) is None
     assert not loader.plugin_root_dir(plugin_id).exists()
-

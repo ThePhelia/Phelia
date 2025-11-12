@@ -8,7 +8,14 @@ from typing import Any, Iterable
 from app.services.search.registry import search_registry
 
 from . import __version__
-from .hooks import compose_remove, compose_stop, compose_up, ensure_config_dir, find_plugin_root, wait_for_api_key
+from .hooks import (
+    compose_remove,
+    compose_stop,
+    compose_up,
+    ensure_config_dir,
+    find_plugin_root,
+    wait_for_api_key,
+)
 from .normalizer import NormalizedResult
 from .provider import JackettProvider
 from .settings import PluginSettings, load_settings, persist_settings, schema_definition
@@ -110,4 +117,3 @@ class JackettPlugin:
             raise RuntimeError("Search provider has not been initialised")
         self._provider.settings.validate()
         return await self._provider.send_to_qbittorrent(items)
-

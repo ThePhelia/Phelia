@@ -65,7 +65,9 @@ def _parse_genres(extra: dict | None) -> list[str] | None:
     return None
 
 
-def _collect_people(credits: dict | None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _collect_people(
+    credits: dict | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not credits:
         return [], []
     cast_items = []
@@ -79,9 +81,11 @@ def _collect_people(credits: dict | None) -> tuple[list[dict[str, Any]], list[di
                 {
                     "name": person.get("name") or person.get("original_name") or "",
                     "role": person.get("character"),
-                    "photo": f"{TMDB_IMAGE_BASE}{person['profile_path']}"
-                    if person.get("profile_path")
-                    else None,
+                    "photo": (
+                        f"{TMDB_IMAGE_BASE}{person['profile_path']}"
+                        if person.get("profile_path")
+                        else None
+                    ),
                 }
             )
     crew = credits.get("crew") if isinstance(credits, dict) else None
@@ -162,7 +166,9 @@ def _extract_tracks(discogs: dict | None) -> list[dict[str, Any]] | None:
     return tracks or None
 
 
-def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None) -> DetailResponse:
+def _build_detail(
+    card, response_kind: str, item_id: str, snapshot: dict | None
+) -> DetailResponse:
     parsed = card.parsed if isinstance(card.parsed, dict) else {}
     snapshot_data = snapshot if isinstance(snapshot, dict) else {}
     details = card.details if isinstance(card.details, dict) else {}
@@ -180,7 +186,11 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
 
     artist_info = _ensure_dict(musicbrainz_data.get("artist"))
     release_group_info = _ensure_dict(musicbrainz_data.get("release_group"))
-    if not release_group_info and musicbrainz_data and "release_group" not in musicbrainz_data:
+    if (
+        not release_group_info
+        and musicbrainz_data
+        and "release_group" not in musicbrainz_data
+    ):
         release_group_info = _ensure_dict(musicbrainz_data)
 
     release_group_id = release_group_info.get("id") or musicbrainz_data.get("id")
@@ -189,9 +199,7 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
         id=item_id,
         kind=response_kind,
         title=tmdb_data.get("title") or card.title,
-        year=tmdb_data.get("year")
-        or parsed.get("year")
-        or snapshot_data.get("year"),
+        year=tmdb_data.get("year") or parsed.get("year") or snapshot_data.get("year"),
         tagline=tmdb_extra.get("tagline"),
         overview=tmdb_data.get("overview")
         or lastfm_data.get("summary")
@@ -215,7 +223,11 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
         ]
         or None,
         tracks=[
-            {"index": track["index"], "title": track["title"], "length": track.get("length")}
+            {
+                "index": track["index"],
+                "title": track["title"],
+                "length": track.get("length"),
+            }
             for track in (_extract_tracks(discogs_data) or [])
         ]
         or None,
@@ -262,7 +274,9 @@ def _build_detail(card, response_kind: str, item_id: str, snapshot: dict | None)
 
 
 @router.get("/{kind}/{item_id}", response_model=DetailResponse)
-async def read_detail(kind: str, item_id: str, db: Session = Depends(get_db)) -> DetailResponse:
+async def read_detail(
+    kind: str, item_id: str, db: Session = Depends(get_db)
+) -> DetailResponse:
     response_kind, classification_kind = _normalise_kind(kind)
 
     entry = library_service.get_entry(db, response_kind, item_id)

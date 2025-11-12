@@ -76,7 +76,10 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
         logger.info("Celery task %s dispatched for download %s", task_id, dl.id)
         if res.failed():
             logger.error(
-                "Celery task %s failed for magnet %s url %s", task_id, body.magnet, body.url
+                "Celery task %s failed for magnet %s url %s",
+                task_id,
+                body.magnet,
+                body.url,
             )
             dl.status = "error"
             db.commit()
@@ -137,7 +140,9 @@ async def resume_download(download_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{download_id}", status_code=204)
-async def delete_download(download_id: int, withFiles: bool = False, db: Session = Depends(get_db)):
+async def delete_download(
+    download_id: int, withFiles: bool = False, db: Session = Depends(get_db)
+):
     dl = db.get(models.Download, download_id)
     if not dl:
         raise HTTPException(404, "Not found")
@@ -150,4 +155,3 @@ async def delete_download(download_id: int, withFiles: bool = False, db: Session
     db.delete(dl)
     db.commit()
     return JSONResponse(status_code=204, content={})
-

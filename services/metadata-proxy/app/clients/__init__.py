@@ -148,10 +148,14 @@ async def proxy_request(
         )
     )
 
-    return ProxyPayload(provider=config.name, cached=False, fetched_at=fetched_at, data=body)
+    return ProxyPayload(
+        provider=config.name, cached=False, fetched_at=fetched_at, data=body
+    )
 
 
-def _attach_metadata(data: object, provider: str, cached: bool, fetched_at: datetime) -> object:
+def _attach_metadata(
+    data: object, provider: str, cached: bool, fetched_at: datetime
+) -> object:
     if isinstance(data, dict):
         data = dict(data)
         data.setdefault("provider", provider)

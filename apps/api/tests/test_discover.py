@@ -11,11 +11,15 @@ class FakeMetadataClient:
         self.payloads = payloads
         self.calls: list[tuple[str, dict]] = []
 
-    async def tmdb(self, path: str, params: dict | None = None, request_id: str | None = None):
+    async def tmdb(
+        self, path: str, params: dict | None = None, request_id: str | None = None
+    ):
         self.calls.append((path, params or {}))
         return self.payloads.get(path, {})
 
-    async def lastfm(self, method: str, params: dict | None = None, request_id: str | None = None):
+    async def lastfm(
+        self, method: str, params: dict | None = None, request_id: str | None = None
+    ):
         self.calls.append((method, params or {}))
         return self.payloads.get(method, {})
 
@@ -92,7 +96,9 @@ async def test_discover_tv_happy_path(monkeypatch):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get("/api/v1/discover/tv", params={"sort": "popular", "page": 2})
+        resp = await ac.get(
+            "/api/v1/discover/tv", params={"sort": "popular", "page": 2}
+        )
 
     assert resp.status_code == 200
     data = resp.json()

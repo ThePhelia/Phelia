@@ -40,6 +40,7 @@ def _qb() -> QbClient:
         password=settings.QB_PASS,
     )
 
+
 def _db() -> Session:
     return SessionLocal()
 
@@ -79,7 +80,9 @@ def enqueue_download(
                     scheme = urlparse(url).scheme
                     if scheme and scheme not in ("http", "https"):
                         logger.error(
-                            "Unrecognized URL scheme for download %s: %s", download_id, url
+                            "Unrecognized URL scheme for download %s: %s",
+                            download_id,
+                            url,
                         )
                         return False
 
@@ -114,8 +117,8 @@ def enqueue_download(
                                     resp.raise_for_status()
                                     content = resp.content
                         except httpx.HTTPError as e:
-                            logger.error('Failed to fetch %s: %s', url, e)
-                            dl.status = 'error'
+                            logger.error("Failed to fetch %s: %s", url, e)
+                            dl.status = "error"
                             db.commit()
                             broadcast_download(dl)
                             raise
@@ -191,8 +194,10 @@ def poll_status() -> int:
     try:
         active: List[Download] = (
             db.query(Download)
-              .filter(Download.status.in_(("queued","downloading","stalled","checking")))
-              .all()
+            .filter(
+                Download.status.in_(("queued", "downloading", "stalled", "checking"))
+            )
+            .all()
         )
         if not active:
             return 0
@@ -276,4 +281,3 @@ def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
         if cands:
             return cands[0]
     return None
-

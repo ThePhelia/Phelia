@@ -46,7 +46,9 @@ async def test_musicbrainz_client_uses_metadata_proxy() -> None:
         "provider": "musicbrainz",
     }
     metadata_client = DummyMetadataClient(payload)
-    client = MusicBrainzClient(user_agent="TestAgent/1.0", metadata_client=metadata_client)
+    client = MusicBrainzClient(
+        user_agent="TestAgent/1.0", metadata_client=metadata_client
+    )
 
     result = await client.lookup_release_group(artist="Radiohead", album="In Rainbows")
 

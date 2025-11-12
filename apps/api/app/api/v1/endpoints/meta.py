@@ -35,6 +35,8 @@ from app.services.metadata.providers.discogs import DiscogsClient
 
 
 public_router = APIRouter(tags=["metadata"])
+
+
 def _metadata_client():
     return get_metadata_client()
 
@@ -54,7 +56,9 @@ def _extract_year(raw: Any) -> int | None:
     return None
 
 
-def _tmdb_search_item(result: dict[str, Any], media_type: Literal["movie", "tv"]) -> tuple[float, MetaSearchItem] | None:
+def _tmdb_search_item(
+    result: dict[str, Any], media_type: Literal["movie", "tv"]
+) -> tuple[float, MetaSearchItem] | None:
     tmdb_id = result.get("id")
     if tmdb_id is None:
         return None
@@ -150,7 +154,9 @@ def _lastfm_search_item(result: dict[str, Any]) -> tuple[float, MetaSearchItem] 
     return score, item
 
 
-def _dedupe(items: list[tuple[float, MetaSearchItem]]) -> list[tuple[float, MetaSearchItem]]:
+def _dedupe(
+    items: list[tuple[float, MetaSearchItem]],
+) -> list[tuple[float, MetaSearchItem]]:
     seen: set[tuple[str, str]] = set()
     unique: list[tuple[float, MetaSearchItem]] = []
     for score, item in items:
@@ -178,7 +184,9 @@ async def meta_search(
             "page": 1,
         }
         try:
-            response = await metadata.tmdb("search/movie", params=params, request_id=None)
+            response = await metadata.tmdb(
+                "search/movie", params=params, request_id=None
+            )
         except MetadataProxyError as exc:
             detail = exc.detail or "tmdb_error"
             if (
@@ -243,7 +251,9 @@ async def meta_search(
 
         params = {"method": "album.search", "album": q, "limit": limit}
         try:
-            response = await metadata.lastfm("album.search", params=params, request_id=None)
+            response = await metadata.lastfm(
+                "album.search", params=params, request_id=None
+            )
         except MetadataProxyError as exc:
             detail = exc.detail or "lastfm_error"
             if (
@@ -291,13 +301,9 @@ async def _tmdb_detail(
     request_id = request.headers.get("x-request-id")
     try:
         payload = await (
-            metadata.tmdb(
-                f"movie/{tmdb_id}", params=params, request_id=request_id
-            )
+            metadata.tmdb(f"movie/{tmdb_id}", params=params, request_id=request_id)
             if item_type == "movie"
-            else metadata.tmdb(
-                f"tv/{tmdb_id}", params=params, request_id=request_id
-            )
+            else metadata.tmdb(f"tv/{tmdb_id}", params=params, request_id=request_id)
         )
     except MetadataProxyError as exc:
         detail = exc.detail or "tmdb_error"
@@ -356,7 +362,9 @@ async def _tmdb_detail(
             name = member.get("name") or member.get("original_name")
             if not name:
                 continue
-            cast_members.append(MetaCastMember(name=name, character=member.get("character")))
+            cast_members.append(
+                MetaCastMember(name=name, character=member.get("character"))
+            )
 
     fallback = title
     if item_type == "movie":
@@ -412,7 +420,9 @@ async def _fetch_lastfm_album(
             and isinstance(detail, str)
             and detail == "lastfm_not_configured"
         ):
-            raise HTTPException(status_code=502, detail="lastfm_not_configured") from exc
+            raise HTTPException(
+                status_code=502, detail="lastfm_not_configured"
+            ) from exc
         raise HTTPException(status_code=502, detail=detail) from exc
 
     if not isinstance(response, dict):
@@ -422,7 +432,9 @@ async def _fetch_lastfm_album(
         return None
 
     tags_container = album_data.get("tags") or {}
-    tag_entries = tags_container.get("tag") if isinstance(tags_container, dict) else None
+    tag_entries = (
+        tags_container.get("tag") if isinstance(tags_container, dict) else None
+    )
     tag_list: list[str] = []
     if isinstance(tag_entries, Iterable):
         for entry in tag_entries:
@@ -476,7 +488,7 @@ async def _discogs_detail(request: Request, provider_id: str) -> MetaDetail:
     poster = None
     if isinstance(images, Iterable):
         for image in images:
-            if isinstance(image, dict) and image.get("uri" ):
+            if isinstance(image, dict) and image.get("uri"):
                 poster = image.get("uri")
                 break
     genres = []
@@ -562,7 +574,11 @@ async def _lastfm_detail(request: Request, provider_id: str) -> MetaDetail:
     info = await _fetch_lastfm_album(request, artist or None, album)
     if not info:
         raise HTTPException(status_code=404, detail="not_found")
-    tracklist_raw = info.get("extra", {}).get("tracks", {}).get("track") if isinstance(info, dict) else None
+    tracklist_raw = (
+        info.get("extra", {}).get("tracks", {}).get("track")
+        if isinstance(info, dict)
+        else None
+    )
     tracks: list[MetaTrack] = []
     if isinstance(tracklist_raw, Iterable):
         for entry in tracklist_raw:
@@ -573,9 +589,15 @@ async def _lastfm_detail(request: Request, provider_id: str) -> MetaDetail:
                 continue
             tracks.append(
                 MetaTrack(
-                    position=str(entry.get("@attr", {}).get("rank")) if isinstance(entry.get("@attr"), dict) else None,
+                    position=(
+                        str(entry.get("@attr", {}).get("rank"))
+                        if isinstance(entry.get("@attr"), dict)
+                        else None
+                    ),
                     title=name,
-                    duration=str(entry.get("duration")) if entry.get("duration") else None,
+                    duration=(
+                        str(entry.get("duration")) if entry.get("duration") else None
+                    ),
                 )
             )
     styles = []
@@ -591,7 +613,9 @@ async def _lastfm_detail(request: Request, provider_id: str) -> MetaDetail:
             if isinstance(entry, dict) and entry.get("#text"):
                 poster = entry.get("#text")
     query, canonical_album = build_album(artist, album, None, f"{artist} - {album}")
-    canonical = CanonicalPayload(query=query or f"{artist} - {album}", album=canonical_album)
+    canonical = CanonicalPayload(
+        query=query or f"{artist} - {album}", album=canonical_album
+    )
     album_payload = MetaAlbumInfo(
         artist=artist or "",
         album=album,
@@ -681,4 +705,3 @@ def providers_status() -> dict[str, Any]:
 router = APIRouter(tags=["metadata"])
 router.include_router(public_router, prefix="/meta")
 router.include_router(public_router)
-

@@ -83,7 +83,9 @@ class LastFMProvider(Provider):
             items.append(
                 AlbumItem(
                     id=str(mbid),
-                    canonical_key=self._canonical_key(artist, title, album.get("releasedate")),
+                    canonical_key=self._canonical_key(
+                        artist, title, album.get("releasedate")
+                    ),
                     source="lastfm",
                     title=title,
                     artist=artist,
@@ -91,12 +93,18 @@ class LastFMProvider(Provider):
                     cover_url=cover,
                     source_url=album.get("url"),
                     tags=[tag],
-                    score=float(album.get("playcount")) if album.get("playcount") else None,
+                    score=(
+                        float(album.get("playcount"))
+                        if album.get("playcount")
+                        else None
+                    ),
                 )
             )
         return DiscoveryResponse(provider="lastfm", items=items)
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         raise NotImplementedError
 
     async def search_albums(self, *, query: str, limit: int) -> DiscoveryResponse:
@@ -122,7 +130,11 @@ class LastFMProvider(Provider):
                     title=title,
                     artist=artist,
                     source_url=album.get("url"),
-                    cover_url=album.get("image", [{}])[-1].get("#text") if album.get("image") else None,
+                    cover_url=(
+                        album.get("image", [{}])[-1].get("#text")
+                        if album.get("image")
+                        else None
+                    ),
                 )
             )
         return DiscoveryResponse(provider="lastfm", items=items)

@@ -11,7 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.config import settings
 from app.schemas.discover import DiscoverItem, PaginatedResponse
 from app.services.metadata.constants import TMDB_IMAGE_BASE
-from app.services.metadata.metadata_client import MetadataProxyError, get_metadata_client
+from app.services.metadata.metadata_client import (
+    MetadataProxyError,
+    get_metadata_client,
+)
 from app.services.metadata.providers.musicbrainz import MusicBrainzClient
 
 
@@ -166,10 +169,14 @@ async def _discover_video(
             and isinstance(detail, str)
             and detail == "tmdb_not_configured"
         ):
-            logger.warning("discover: tmdb not configured for media_type=%s", media_type)
+            logger.warning(
+                "discover: tmdb not configured for media_type=%s", media_type
+            )
             payload = None
         else:
-            logger.exception("discover: tmdb discovery failed media_type=%s", media_type)
+            logger.exception(
+                "discover: tmdb discovery failed media_type=%s", media_type
+            )
             raise HTTPException(status_code=502, detail=detail) from exc
     except Exception:
         logger.exception("discover: tmdb discovery failed media_type=%s", media_type)
@@ -188,7 +195,9 @@ async def _discover_video(
     total_pages = _safe_int(payload.get("total_pages")) or 1
     current_page = _safe_int(payload.get("page")) or page
 
-    return PaginatedResponse[DiscoverItem](page=current_page, total_pages=total_pages, items=filtered)
+    return PaginatedResponse[DiscoverItem](
+        page=current_page, total_pages=total_pages, items=filtered
+    )
 
 
 async def _discover_albums(
@@ -203,7 +212,9 @@ async def _discover_albums(
         "limit": 50,
     }
     try:
-        listing = await metadata.lastfm("chart.gettopalbums", params=params, request_id=None)
+        listing = await metadata.lastfm(
+            "chart.gettopalbums", params=params, request_id=None
+        )
     except MetadataProxyError as exc:
         detail = exc.detail or "lastfm_error"
         if (
@@ -246,10 +257,14 @@ async def _discover_albums(
     total_pages = _safe_int(attrs.get("totalPages")) or 1
     current_page = _safe_int(attrs.get("page")) or page
 
-    return PaginatedResponse[DiscoverItem](page=current_page, total_pages=total_pages, items=items)
+    return PaginatedResponse[DiscoverItem](
+        page=current_page, total_pages=total_pages, items=items
+    )
 
 
-def _fallback_response(kind: Literal["movie", "tv", "album"], page: int) -> PaginatedResponse[DiscoverItem]:
+def _fallback_response(
+    kind: Literal["movie", "tv", "album"], page: int
+) -> PaginatedResponse[DiscoverItem]:
     base = FALLBACK_PAYLOAD.get(kind, []) if page == 1 else []
     items = [DiscoverItem(**item) for item in base]
     return PaginatedResponse[DiscoverItem](page=page, total_pages=1, items=items)
@@ -315,7 +330,9 @@ def _map_tmdb_item(
     )
 
 
-async def _map_album_item(raw: Any, musicbrainz: MusicBrainzClient) -> DiscoverItem | None:
+async def _map_album_item(
+    raw: Any, musicbrainz: MusicBrainzClient
+) -> DiscoverItem | None:
     if not isinstance(raw, dict):
         return None
     title = raw.get("name")
@@ -346,7 +363,9 @@ async def _map_album_item(raw: Any, musicbrainz: MusicBrainzClient) -> DiscoverI
     mb_meta: dict[str, Any] | None = None
     if musicbrainz is not None:
         try:
-            mb_data = await musicbrainz.lookup_release_group(artist=artist_name, album=title)
+            mb_data = await musicbrainz.lookup_release_group(
+                artist=artist_name, album=title
+            )
         except Exception:
             logger.exception("discover: musicbrainz lookup failed album=%s", title)
             mb_data = None
@@ -424,7 +443,11 @@ def _select_lastfm_image(images: Any) -> str | None:
         seen.add(url)
         size = image.get("size")
         try:
-            weight = preferred_order.index(size) if isinstance(size, str) else len(preferred_order)
+            weight = (
+                preferred_order.index(size)
+                if isinstance(size, str)
+                else len(preferred_order)
+            )
         except ValueError:
             weight = len(preferred_order)
         ranked.append((weight, url))

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal, Base, engine  # noqa: F401
+
 # Keep Base/engine for rare dev scripts
 from app.db import models
 
@@ -65,4 +66,3 @@ def init_db() -> None:
             # A concurrent seed may win the race; rollback so the session stays usable.
             db.rollback()
             logger.warning("Database seed skipped due to existing records")
-

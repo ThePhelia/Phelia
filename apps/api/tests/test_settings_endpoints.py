@@ -35,7 +35,9 @@ def plugin_runtime(tmp_path):
 
 @pytest.mark.anyio
 async def test_list_plugin_settings_returns_runtime(plugin_runtime, monkeypatch):
-    monkeypatch.setattr(settings_router.loader, "list_plugins", lambda: [plugin_runtime])
+    monkeypatch.setattr(
+        settings_router.loader, "list_plugins", lambda: [plugin_runtime]
+    )
 
     app = FastAPI()
     app.include_router(settings_router.router, prefix="/api/v1")
@@ -57,7 +59,9 @@ async def test_list_plugin_settings_returns_runtime(plugin_runtime, monkeypatch)
 
 @pytest.mark.anyio
 async def test_plugin_settings_roundtrip(db_session, plugin_runtime, monkeypatch):
-    monkeypatch.setattr(settings_router.loader, "list_plugins", lambda: [plugin_runtime])
+    monkeypatch.setattr(
+        settings_router.loader, "list_plugins", lambda: [plugin_runtime]
+    )
     monkeypatch.setattr(settings_router.loader, "get_runtime", lambda _: plugin_runtime)
 
     app = FastAPI()
@@ -66,7 +70,9 @@ async def test_plugin_settings_roundtrip(db_session, plugin_runtime, monkeypatch
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        initial = await client.get(f"/api/v1/settings/plugins/{plugin_runtime.manifest.id}")
+        initial = await client.get(
+            f"/api/v1/settings/plugins/{plugin_runtime.manifest.id}"
+        )
         assert initial.status_code == 200
         assert initial.json()["values"] == {
             "token": "abc123",
@@ -80,6 +86,8 @@ async def test_plugin_settings_roundtrip(db_session, plugin_runtime, monkeypatch
         assert update.status_code == 200
         assert update.json()["values"] == {"token": "updated", "enabled": False}
 
-        reread = await client.get(f"/api/v1/settings/plugins/{plugin_runtime.manifest.id}")
+        reread = await client.get(
+            f"/api/v1/settings/plugins/{plugin_runtime.manifest.id}"
+        )
         assert reread.status_code == 200
         assert reread.json()["values"] == {"token": "updated", "enabled": False}

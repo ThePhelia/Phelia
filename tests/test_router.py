@@ -40,7 +40,9 @@ class DummyOMDb:
 
 
 class DummyMusicBrainz:
-    async def lookup_release_group(self, artist: str | None, album: str, year: int | None = None):
+    async def lookup_release_group(
+        self, artist: str | None, album: str, year: int | None = None
+    ):
         return {
             "artist": {"id": "artist-1", "name": artist},
             "release_group": {
@@ -54,7 +56,13 @@ class DummyMusicBrainz:
 class DummyDiscogs:
     token = "token"
 
-    async def lookup_release(self, artist: str | None, album: str, year: int | None, mb_release_group_id: str | None):
+    async def lookup_release(
+        self,
+        artist: str | None,
+        album: str,
+        year: int | None,
+        mb_release_group_id: str | None,
+    ):
         return {
             "id": 55,
             "title": album,
@@ -87,7 +95,9 @@ def test_movie_enrichment_merges_providers():
         discogs_client=None,
         lastfm_client=None,
     )
-    classification = Classification(type="movie", confidence=0.8, reasons=["category:movies"])
+    classification = Classification(
+        type="movie", confidence=0.8, reasons=["category:movies"]
+    )
     card = asyncio.run(router.enrich(classification, "Blade Runner 2049 2160p"))
 
     assert card.ids["tmdb_id"] == 101
@@ -104,7 +114,9 @@ def test_music_pipeline_collects_multiple_sources():
         discogs_client=DummyDiscogs(),
         lastfm_client=DummyLastFM(),
     )
-    classification = Classification(type="music", confidence=0.75, reasons=["title:Artist - Album pattern"])
+    classification = Classification(
+        type="music", confidence=0.75, reasons=["title:Artist - Album pattern"]
+    )
     card = asyncio.run(router.enrich(classification, "Radiohead - In Rainbows (2007)"))
 
     assert card.ids["mb_release_group_id"] == "rg-1"
@@ -124,7 +136,9 @@ def test_omdb_reports_missing_imdb_id_when_available():
         discogs_client=None,
         lastfm_client=None,
     )
-    classification = Classification(type="movie", confidence=0.8, reasons=["category:movies"])
+    classification = Classification(
+        type="movie", confidence=0.8, reasons=["category:movies"]
+    )
     card = asyncio.run(router.enrich(classification, "Blade Runner 2049 2160p"))
 
     provider_errors = {p.name: (p.extra or {}).get("error") for p in card.providers}
@@ -140,7 +154,9 @@ def test_tmdb_without_credentials_reports_not_configured():
         discogs_client=None,
         lastfm_client=None,
     )
-    classification = Classification(type="movie", confidence=0.8, reasons=["category:movies"])
+    classification = Classification(
+        type="movie", confidence=0.8, reasons=["category:movies"]
+    )
     card = asyncio.run(router.enrich(classification, "Some Movie"))
 
     providers = {p.name: p for p in card.providers}

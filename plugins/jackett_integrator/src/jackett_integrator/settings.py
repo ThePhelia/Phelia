@@ -47,7 +47,9 @@ def _ensure_non_negative_int(value: Any, fallback: int = 0) -> int:
 class PluginSettings:
     jackett_url: str = field(default_factory=lambda: str(DEFAULTS["JACKETT_URL"]))
     jackett_api_key: str | None = None
-    qbittorrent_url: str = field(default_factory=lambda: str(DEFAULTS["QBITTORRENT_URL"]))
+    qbittorrent_url: str = field(
+        default_factory=lambda: str(DEFAULTS["QBITTORRENT_URL"])
+    )
     qbittorrent_username: str = ""
     qbittorrent_password: str = ""
     allowlist: list[str] = field(default_factory=list)
@@ -100,7 +102,9 @@ class PluginSettings:
             elif normalized == "JACKETT_API_KEY":
                 self.jackett_api_key = str(value).strip() or None
             elif normalized == "QBITTORRENT_URL":
-                self.qbittorrent_url = str(value).strip().rstrip("/") or self.qbittorrent_url
+                self.qbittorrent_url = (
+                    str(value).strip().rstrip("/") or self.qbittorrent_url
+                )
             elif normalized == "QBITTORRENT_USERNAME":
                 self.qbittorrent_username = str(value).strip()
             elif normalized == "QBITTORRENT_PASSWORD":
@@ -112,7 +116,9 @@ class PluginSettings:
             elif normalized == "CATEGORY_FILTERS":
                 self.category_filters = _as_list(value)
             elif normalized == "MINIMUM_SEEDERS":
-                self.minimum_seeders = _ensure_non_negative_int(value, self.minimum_seeders)
+                self.minimum_seeders = _ensure_non_negative_int(
+                    value, self.minimum_seeders
+                )
 
     def to_store_mapping(self) -> dict[str, Any]:
         return {
@@ -128,7 +134,9 @@ class PluginSettings:
         }
 
 
-def load_settings(store: Any, overrides: Mapping[str, Any] | None = None) -> PluginSettings:
+def load_settings(
+    store: Any, overrides: Mapping[str, Any] | None = None
+) -> PluginSettings:
     values: dict[str, Any] = {}
     if store is not None:
         try:
@@ -143,7 +151,9 @@ def load_settings(store: Any, overrides: Mapping[str, Any] | None = None) -> Plu
     return settings
 
 
-def persist_settings(store: Any, settings: PluginSettings, *, validate: bool = True) -> None:
+def persist_settings(
+    store: Any, settings: PluginSettings, *, validate: bool = True
+) -> None:
     if validate:
         settings.validate()
     payload = settings.to_store_mapping()

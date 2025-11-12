@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 class ProxyPayload(BaseModel):
     provider: str = Field(..., description="Upstream provider name")
-    cached: bool = Field(False, description="Whether the response originated from cache")
+    cached: bool = Field(
+        False, description="Whether the response originated from cache"
+    )
     fetched_at: datetime = Field(..., description="Timestamp the payload was fetched")
     data: Any = Field(..., description="Raw upstream JSON payload")
 

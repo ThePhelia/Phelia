@@ -42,7 +42,11 @@ class OMDbClient:
                     return None
                 return data
         except httpx.HTTPStatusError as exc:
-            logger.warning("omdb http error imdb_id=%s status=%s", imdb_id, exc.response.status_code)
+            logger.warning(
+                "omdb http error imdb_id=%s status=%s",
+                imdb_id,
+                exc.response.status_code,
+            )
         except httpx.RequestError as exc:
             logger.warning("omdb request error imdb_id=%s error=%s", imdb_id, exc)
         return None
@@ -53,4 +57,3 @@ class OMDbClient:
 
 
 __all__ = ["OMDbClient"]
-

@@ -26,9 +26,11 @@ async def test_list_torrents_returns_json():
     assert items == [{"name": "a"}]
     assert client.is_closed
 
+
 @pytest.mark.anyio
 async def test_pause_torrent_posts_hash():
     recorded = {}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
@@ -49,6 +51,7 @@ async def test_pause_torrent_posts_hash():
 @pytest.mark.anyio
 async def test_resume_torrent_posts_hash():
     recorded = {}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
@@ -69,6 +72,7 @@ async def test_resume_torrent_posts_hash():
 @pytest.mark.anyio
 async def test_delete_torrent_posts_hash_and_flag():
     recorded = {}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         recorded["url"] = str(request.url)
         recorded["data"] = dict(parse_qsl(request.content.decode()))
@@ -101,6 +105,7 @@ async def test_delete_torrent_allows_blank_response():
 @pytest.mark.anyio
 async def test_post_requests_include_referer(monkeypatch):
     recorded = {}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.headers.get("referer") != "http://qb/":
             return httpx.Response(403)

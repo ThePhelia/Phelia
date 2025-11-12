@@ -19,7 +19,9 @@ def read_library(db: Session = Depends(get_db)) -> LibrarySummary:
 
 
 @router.post("/list")
-def mutate_list(payload: ListMutationInput, db: Session = Depends(get_db)) -> dict[str, bool]:
+def mutate_list(
+    payload: ListMutationInput, db: Session = Depends(get_db)
+) -> dict[str, bool]:
     try:
         library_service.apply_mutation(db, payload)
     except library_service.PlaylistRequiredError as exc:

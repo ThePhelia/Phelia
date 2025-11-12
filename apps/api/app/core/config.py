@@ -45,8 +45,12 @@ class Settings(BaseSettings):
         default="http://qbittorrent:8080",
         validation_alias=AliasChoices("QBIT_URL", "QB_URL"),
     )
-    QB_USER: str = Field(default="admin", validation_alias=AliasChoices("QBIT_USERNAME", "QB_USER"))
-    QB_PASS: str = Field(default="", validation_alias=AliasChoices("QBIT_PASSWORD", "QB_PASS"))
+    QB_USER: str = Field(
+        default="admin", validation_alias=AliasChoices("QBIT_USERNAME", "QB_USER")
+    )
+    QB_PASS: str = Field(
+        default="", validation_alias=AliasChoices("QBIT_PASSWORD", "QB_PASS")
+    )
 
     ALLOWED_SAVE_DIRS: str = "/downloads,/music"
     DEFAULT_SAVE_DIR: str = "/downloads"
@@ -96,12 +100,11 @@ class Settings(BaseSettings):
                 self.METADATA_BASE_URL,
             )
 
+
 try:
     settings = Settings()  # type: ignore
 except ValidationError as e:
     missing = ", ".join(str(err["loc"][0]) for err in e.errors())
-    raise RuntimeError(
-        f"Missing required configuration variables: {missing}"
-    ) from e
+    raise RuntimeError(f"Missing required configuration variables: {missing}") from e
 
 settings.finalize()

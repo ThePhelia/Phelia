@@ -71,7 +71,9 @@ class SQLiteCache(CacheBackend):
             )
             """
         )
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_exp ON cache (expires_at)")
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_exp ON cache (expires_at)"
+        )
         self._conn.commit()
         self._lock = asyncio.Lock()
 

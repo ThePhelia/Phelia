@@ -18,7 +18,9 @@ class Provider(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         raise NotImplementedError
 
     @abc.abstractmethod

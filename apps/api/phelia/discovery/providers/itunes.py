@@ -45,7 +45,9 @@ class ITunesProvider(Provider):
     async def tags(self, *, tag: str, limit: int) -> DiscoveryResponse:
         raise NotImplementedError
 
-    async def new_releases(self, *, market: Optional[str], limit: int) -> DiscoveryResponse:
+    async def new_releases(
+        self, *, market: Optional[str], limit: int
+    ) -> DiscoveryResponse:
         raise NotImplementedError
 
     async def search_albums(self, *, query: str, limit: int) -> DiscoveryResponse:
@@ -68,12 +70,20 @@ class ITunesProvider(Provider):
             release_date = entry.get("releaseDate")
             items.append(
                 AlbumItem(
-                    id=str(entry.get("collectionId") or entry.get("collectionViewUrl") or f"{artist}-{title}"),
+                    id=str(
+                        entry.get("collectionId")
+                        or entry.get("collectionViewUrl")
+                        or f"{artist}-{title}"
+                    ),
                     canonical_key=_canonical_key(artist, title, release_date),
                     source="itunes",
                     title=title,
                     artist=artist,
-                    release_date=release_date[:10] if isinstance(release_date, str) else release_date,
+                    release_date=(
+                        release_date[:10]
+                        if isinstance(release_date, str)
+                        else release_date
+                    ),
                     cover_url=entry.get("artworkUrl100"),
                     source_url=entry.get("collectionViewUrl"),
                     market=entry.get("country"),
@@ -82,7 +92,9 @@ class ITunesProvider(Provider):
             )
         return DiscoveryResponse(provider="itunes", items=items)
 
-    async def lookup_album(self, artist: str, title: str, limit: int = 5) -> List[AlbumItem]:
+    async def lookup_album(
+        self, artist: str, title: str, limit: int = 5
+    ) -> List[AlbumItem]:
         query = f"{artist} {title}".strip()
         response = await self.search_albums(query=query, limit=limit)
         return response.items

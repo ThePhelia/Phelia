@@ -64,9 +64,9 @@ def _provider_enabled(name: str) -> bool:
     if name == "listenbrainz":
         return runtime_settings.is_configured("listenbrainz")
     if name == "spotify":
-        return runtime_settings.is_configured("spotify_client_id") and runtime_settings.is_configured(
-            "spotify_client_secret"
-        )
+        return runtime_settings.is_configured(
+            "spotify_client_id"
+        ) and runtime_settings.is_configured("spotify_client_secret")
     return False
 
 
@@ -89,7 +89,9 @@ def _get_provider(name: str) -> Optional[Provider]:
         elif name == "spotify":
             provider = SpotifyProvider(
                 client_id_getter=runtime_settings.key_getter("spotify_client_id"),
-                client_secret_getter=runtime_settings.key_getter("spotify_client_secret"),
+                client_secret_getter=runtime_settings.key_getter(
+                    "spotify_client_secret"
+                ),
             )
         else:
             return None
@@ -99,12 +101,17 @@ def _get_provider(name: str) -> Optional[Provider]:
     return provider
 
 
-async def _call_provider(provider: Provider, method: str, kwargs: Dict[str, object]) -> List[AlbumItem]:
+async def _call_provider(
+    provider: Provider, method: str, kwargs: Dict[str, object]
+) -> List[AlbumItem]:
     cache_key = build_cache_key(provider.name, method, kwargs)
     cached = await cache_get_json(cache_key)
     if cached:
         response = DiscoveryResponse(**cached)
-        return [AlbumItem(**item) if not isinstance(item, AlbumItem) else item for item in response.items]
+        return [
+            AlbumItem(**item) if not isinstance(item, AlbumItem) else item
+            for item in response.items
+        ]
     try:
         fn = getattr(provider, method)
         response: DiscoveryResponse = await fn(**kwargs)  # type: ignore[misc]
@@ -130,10 +137,17 @@ def _merge_items(responses: Iterable[AlbumItem]) -> List[AlbumItem]:
 
 def _prefer_item(current: AlbumItem, candidate: AlbumItem) -> AlbumItem:
     chosen = current
-    if (not current.cover_url and candidate.cover_url) or (
-        (current.release_date or "") < (candidate.release_date or "") and candidate.release_date
-    ) or ((current.score or 0.0) < (candidate.score or 0.0)) or (
-        SOURCE_PRIORITY.get(candidate.source, 99) < SOURCE_PRIORITY.get(current.source, 99)
+    if (
+        (not current.cover_url and candidate.cover_url)
+        or (
+            (current.release_date or "") < (candidate.release_date or "")
+            and candidate.release_date
+        )
+        or ((current.score or 0.0) < (candidate.score or 0.0))
+        or (
+            SOURCE_PRIORITY.get(candidate.source, 99)
+            < SOURCE_PRIORITY.get(current.source, 99)
+        )
     ):
         chosen = candidate
     base = AlbumItem(**chosen.model_dump())
@@ -201,7 +215,11 @@ async def get_charts(*, market: Optional[str], limit: int) -> List[AlbumItem]:
         provider = _get_provider(name)
         if not provider:
             continue
-        tasks.append(asyncio.create_task(_call_provider(provider, "charts", {"market": market, "limit": limit})))
+        tasks.append(
+            asyncio.create_task(
+                _call_provider(provider, "charts", {"market": market, "limit": limit})
+            )
+        )
     results = await asyncio.gather(*tasks) if tasks else []
     merged = _merge_items(item for group in results for item in group)
     await _enrich_items(merged)
@@ -215,7 +233,11 @@ async def get_tag(*, tag: str, limit: int) -> List[AlbumItem]:
         provider = _get_provider(name)
         if not provider:
             continue
-        tasks.append(asyncio.create_task(_call_provider(provider, "tags", {"tag": tag, "limit": limit})))
+        tasks.append(
+            asyncio.create_task(
+                _call_provider(provider, "tags", {"tag": tag, "limit": limit})
+            )
+        )
     results = await asyncio.gather(*tasks) if tasks else []
     merged = _merge_items(item for group in results for item in group)
     await _enrich_items(merged)
@@ -230,7 +252,13 @@ async def get_new_releases(*, market: Optional[str], limit: int) -> List[AlbumIt
         provider = _get_provider(name)
         if not provider:
             continue
-        tasks.append(asyncio.create_task(_call_provider(provider, "new_releases", {"market": market, "limit": limit})))
+        tasks.append(
+            asyncio.create_task(
+                _call_provider(
+                    provider, "new_releases", {"market": market, "limit": limit}
+                )
+            )
+        )
     results = await asyncio.gather(*tasks) if tasks else []
     merged = _merge_items(item for group in results for item in group)
     await _enrich_items(merged)
@@ -244,7 +272,13 @@ async def quick_search(*, query: str, limit: int) -> List[AlbumItem]:
         provider = _get_provider(name)
         if not provider:
             continue
-        tasks.append(asyncio.create_task(_call_provider(provider, "search_albums", {"query": query, "limit": limit})))
+        tasks.append(
+            asyncio.create_task(
+                _call_provider(
+                    provider, "search_albums", {"query": query, "limit": limit}
+                )
+            )
+        )
     results = await asyncio.gather(*tasks) if tasks else []
     merged = _merge_items(item for group in results for item in group)
     await _enrich_items(merged)

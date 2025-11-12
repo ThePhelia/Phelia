@@ -1,4 +1,9 @@
-from app.schemas.meta import CanonicalAlbum, CanonicalMovie, CanonicalTV, StartIndexingPayload
+from app.schemas.meta import (
+    CanonicalAlbum,
+    CanonicalMovie,
+    CanonicalTV,
+    StartIndexingPayload,
+)
 from app.services.meta import canonical
 
 

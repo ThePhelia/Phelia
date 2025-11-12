@@ -236,6 +236,7 @@ def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
         async def get(self, url, _follow_redirects=False):
             self.calls += 1
             if self.calls == 1:
+
                 class R:
                     is_redirect = True
                     headers = {"Location": "ftp://example.com/file.torrent"}
@@ -257,9 +258,7 @@ def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
         dl_id = dl.id
 
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
-        assert (
-            enqueue_download(dl_id, url="http://example.com/redirect") is False
-        )
+        assert enqueue_download(dl_id, url="http://example.com/redirect") is False
     assert any("redirect with unexpected scheme" in r.message for r in caplog.records)
     assert calls["magnet"] == 0
     assert calls["torrent"] == 0
@@ -289,9 +288,7 @@ def test_poll_status_handles_http_error(monkeypatch, caplog):
 
     with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
         assert tasks.poll_status() == 0
-    assert any(
-        "HTTP error talking to qBittorrent" in r.message for r in caplog.records
-    )
+    assert any("HTTP error talking to qBittorrent" in r.message for r in caplog.records)
 
 
 def test_poll_status_prunes_missing_download(monkeypatch):
@@ -331,4 +328,3 @@ def test_pick_candidate_prefers_hash():
     )
     cand = tasks._pick_candidate(stats, d)
     assert cand["hash"].lower() == "bbb222"
-

@@ -17,12 +17,16 @@ class FakeRedis:
     def get(self, key: str) -> str | None:
         return self.store.get(key)
 
-    def set(self, key: str, value: str, ex: int | None = None) -> None:  # noqa: ARG002 - ttl unused
+    def set(
+        self, key: str, value: str, ex: int | None = None
+    ) -> None:  # noqa: ARG002 - ttl unused
         self.store[key] = value
 
 
 @pytest.mark.anyio
-async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_new_releases_by_genre_query_and_normalisation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeDt:
         class date:
             @staticmethod
@@ -33,7 +37,9 @@ async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest
 
     captured: dict[str, Any] = {}
 
-    def fake_get(path: str, params: dict[str, str], timeout: int = 12) -> dict[str, Any]:  # noqa: ARG001
+    def fake_get(
+        path: str, params: dict[str, str], timeout: int = 12
+    ) -> dict[str, Any]:  # noqa: ARG001
         captured["path"] = path
         captured["params"] = params
         return {
@@ -56,7 +62,7 @@ async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest
 
     assert captured["path"] == "release-group"
     query = captured["params"]["query"]
-    assert "tag:\"techno\"" in query
+    assert 'tag:"techno"' in query
     assert "firstreleasedate:[2024-05-10 TO 2024-05-20]" in query
     assert captured["params"]["limit"] == "5"
 
@@ -65,12 +71,18 @@ async def test_new_releases_by_genre_query_and_normalisation(monkeypatch: pytest
     assert items[0]["secondaryTypes"] == ["Live"]
 
 
-def test_new_releases_by_genre_handles_http_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_new_releases_by_genre_handles_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     request = httpx.Request("GET", "https://musicbrainz.org/ws/2/release-group")
 
-    def failing_get(path: str, params: dict[str, str], timeout: int = 12) -> dict[str, object]:  # noqa: ARG001
+    def failing_get(
+        path: str, params: dict[str, str], timeout: int = 12
+    ) -> dict[str, object]:  # noqa: ARG001
         response = httpx.Response(status_code=503, request=request)
-        raise httpx.HTTPStatusError("service unavailable", request=request, response=response)
+        raise httpx.HTTPStatusError(
+            "service unavailable", request=request, response=response
+        )
 
     monkeypatch.setattr(discovery_mb, "_get", failing_get)
 
@@ -80,7 +92,9 @@ def test_new_releases_by_genre_handles_http_errors(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.anyio
-async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_new_endpoint_uses_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_redis = FakeRedis()
 
     calls: list[tuple[str, int, int]] = []
@@ -95,8 +109,12 @@ async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch
             }
         ]
 
-    monkeypatch.setattr(discovery_routes, "new_releases_by_genre", fake_service, raising=False)
-    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "new_releases_by_genre", fake_service, raising=False
+    )
+    monkeypatch.setattr(
+        discovery_routes, "get_redis", lambda: fake_redis, raising=False
+    )
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -104,8 +122,12 @@ async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp1 = await client.get("/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20})
-        resp2 = await client.get("/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20})
+        resp1 = await client.get(
+            "/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20}
+        )
+        resp2 = await client.get(
+            "/api/v1/discovery/new", params={"genre": "house", "days": 30, "limit": 20}
+        )
 
     assert resp1.status_code == 200
     assert resp1.json()["items"][0]["title"] == "Cached Album"
@@ -114,8 +136,12 @@ async def test_discovery_new_endpoint_uses_cache(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.anyio
-async def test_discovery_new_endpoint_wraps_mb_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+async def test_discovery_new_endpoint_wraps_mb_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_mb_get_json(
+        url: str, params: dict[str, str]
+    ) -> dict[str, Any]:  # noqa: ARG001
         return {
             "release-groups": [
                 {
@@ -134,7 +160,9 @@ async def test_discovery_new_endpoint_wraps_mb_results(monkeypatch: pytest.Monke
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/discovery/new", params={"genre": "techno", "limit": 5})
+        resp = await client.get(
+            "/api/v1/discovery/new", params={"genre": "techno", "limit": 5}
+        )
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -144,12 +172,16 @@ async def test_discovery_new_endpoint_wraps_mb_results(monkeypatch: pytest.Monke
 
 
 @pytest.mark.anyio
-async def test_discovery_new_endpoint_wraps_provider_results(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_new_endpoint_wraps_provider_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeDiscoveryService:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str, int]] = []
 
-        async def fetch_new_albums(self, tag: str, since: str, limit: int) -> list[dict[str, Any]]:
+        async def fetch_new_albums(
+            self, tag: str, since: str, limit: int
+        ) -> list[dict[str, Any]]:
             self.calls.append((tag, since, limit))
             return [
                 {
@@ -160,7 +192,9 @@ async def test_discovery_new_endpoint_wraps_provider_results(monkeypatch: pytest
 
     svc = FakeDiscoveryService()
 
-    async def fail_mb_get_json(*args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG001
+    async def fail_mb_get_json(
+        *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:  # noqa: ARG001
         raise AssertionError("MusicBrainz fallback should not be called")
 
     monkeypatch.setattr(discovery_routes, "discovery_service", svc, raising=False)
@@ -171,7 +205,9 @@ async def test_discovery_new_endpoint_wraps_provider_results(monkeypatch: pytest
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/discovery/new", params={"genre": "techno", "limit": 5})
+        resp = await client.get(
+            "/api/v1/discovery/new", params={"genre": "techno", "limit": 5}
+        )
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -182,14 +218,20 @@ async def test_discovery_new_endpoint_wraps_provider_results(monkeypatch: pytest
 
 
 @pytest.mark.anyio
-async def test_discovery_top_endpoint_handles_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_top_endpoint_handles_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_redis = FakeRedis()
 
-    def failing_service(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:  # noqa: ARG001 - we only raise
+    def failing_service(
+        *args: Any, **kwargs: Any
+    ) -> list[dict[str, Any]]:  # noqa: ARG001 - we only raise
         raise RuntimeError("upstream failure")
 
     monkeypatch.setattr(discovery_routes, "apple_feed", failing_service, raising=False)
-    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "get_redis", lambda: fake_redis, raising=False
+    )
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -199,7 +241,12 @@ async def test_discovery_top_endpoint_handles_errors(monkeypatch: pytest.MonkeyP
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get(
             "/api/v1/discovery/top",
-            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+            params={
+                "genre_id": 21,
+                "feed": "most-recent",
+                "kind": "albums",
+                "limit": 10,
+            },
         )
 
     assert resp.status_code == 502
@@ -211,7 +258,9 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
     fake_redis = FakeRedis()
     calls: list[tuple[int, str, str, int, str]] = []
 
-    def fake_service(storefront: str, genre_id: int, feed: str, kind: str, limit: int) -> list[dict[str, Any]]:
+    def fake_service(
+        storefront: str, genre_id: int, feed: str, kind: str, limit: int
+    ) -> list[dict[str, Any]]:
         calls.append((genre_id, feed, kind, limit, storefront))
         return [
             {
@@ -222,7 +271,9 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
         ]
 
     monkeypatch.setattr(discovery_routes, "apple_feed", fake_service, raising=False)
-    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "get_redis", lambda: fake_redis, raising=False
+    )
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -232,11 +283,21 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp1 = await client.get(
             "/api/v1/discovery/top",
-            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+            params={
+                "genre_id": 21,
+                "feed": "most-recent",
+                "kind": "albums",
+                "limit": 10,
+            },
         )
         resp2 = await client.get(
             "/api/v1/discovery/top",
-            params={"genre_id": 21, "feed": "most-recent", "kind": "albums", "limit": 10},
+            params={
+                "genre_id": 21,
+                "feed": "most-recent",
+                "kind": "albums",
+                "limit": 10,
+            },
         )
 
     assert resp1.status_code == 200
@@ -246,8 +307,12 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.anyio
-async def test_discovery_top_endpoint_wraps_mb_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+async def test_discovery_top_endpoint_wraps_mb_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_mb_get_json(
+        url: str, params: dict[str, str]
+    ) -> dict[str, Any]:  # noqa: ARG001
         if url.endswith("/artist"):
             return {
                 "artists": [
@@ -287,12 +352,16 @@ async def test_discovery_top_endpoint_wraps_mb_results(monkeypatch: pytest.Monke
 
 
 @pytest.mark.anyio
-async def test_discovery_top_endpoint_wraps_provider_results(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_top_endpoint_wraps_provider_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeDiscoveryService:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str, str, int]] = []
 
-        async def fetch_top(self, *, kind: str, tag: str, feed: str, limit: int) -> list[dict[str, Any]]:
+        async def fetch_top(
+            self, *, kind: str, tag: str, feed: str, limit: int
+        ) -> list[dict[str, Any]]:
             self.calls.append((kind, tag, feed, limit))
             return [
                 {
@@ -303,7 +372,9 @@ async def test_discovery_top_endpoint_wraps_provider_results(monkeypatch: pytest
 
     svc = FakeDiscoveryService()
 
-    async def fail_mb_get_json(*args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG001
+    async def fail_mb_get_json(
+        *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:  # noqa: ARG001
         raise AssertionError("MusicBrainz fallback should not be called")
 
     monkeypatch.setattr(discovery_routes, "discovery_service", svc, raising=False)
@@ -328,12 +399,16 @@ async def test_discovery_top_endpoint_wraps_provider_results(monkeypatch: pytest
 
 
 @pytest.mark.anyio
-async def test_discovery_providers_status_with_service(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_providers_status_with_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeDiscoveryService:
         async def providers_status(self) -> dict[str, bool]:
             return {"lastfm": True, "spotify": True}
 
-    monkeypatch.setattr(discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False
+    )
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -350,9 +425,13 @@ async def test_discovery_providers_status_with_service(monkeypatch: pytest.Monke
 
 
 @pytest.mark.anyio
-async def test_discovery_search_endpoint_uses_service(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_search_endpoint_uses_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeDiscoveryService:
-        async def search(self, query: str, limit: int) -> list[dict[str, str]]:  # noqa: ARG002
+        async def search(
+            self, query: str, limit: int
+        ) -> list[dict[str, str]]:  # noqa: ARG002
             return [
                 {
                     "id": "svc-1",
@@ -362,10 +441,14 @@ async def test_discovery_search_endpoint_uses_service(monkeypatch: pytest.Monkey
                 }
             ]
 
-    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+    async def fake_mb_get_json(
+        url: str, params: dict[str, str]
+    ) -> dict[str, Any]:  # noqa: ARG001
         return {"release-groups": []}
 
-    monkeypatch.setattr(discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False
+    )
     monkeypatch.setattr(discovery_routes, "_mb_get_json", fake_mb_get_json)
 
     app = FastAPI()
@@ -373,7 +456,9 @@ async def test_discovery_search_endpoint_uses_service(monkeypatch: pytest.Monkey
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/discovery/search", params={"q": "techno", "limit": 3})
+        resp = await client.get(
+            "/api/v1/discovery/search", params={"q": "techno", "limit": 3}
+        )
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -383,8 +468,12 @@ async def test_discovery_search_endpoint_uses_service(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.anyio
-async def test_discovery_search_endpoint_falls_back_to_mb(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_mb_get_json(url: str, params: dict[str, str]) -> dict[str, Any]:  # noqa: ARG001
+async def test_discovery_search_endpoint_falls_back_to_mb(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_mb_get_json(
+        url: str, params: dict[str, str]
+    ) -> dict[str, Any]:  # noqa: ARG001
         return {
             "release-groups": [
                 {
@@ -404,7 +493,9 @@ async def test_discovery_search_endpoint_falls_back_to_mb(monkeypatch: pytest.Mo
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/api/v1/discovery/search", params={"q": "ambient", "limit": 2})
+        resp = await client.get(
+            "/api/v1/discovery/search", params={"q": "ambient", "limit": 2}
+        )
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -413,7 +504,9 @@ async def test_discovery_search_endpoint_falls_back_to_mb(monkeypatch: pytest.Mo
 
 
 @pytest.mark.anyio
-async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_discovery_similar_artists_caches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_redis = FakeRedis()
     calls: list[tuple[str, int]] = []
 
@@ -423,8 +516,12 @@ async def test_discovery_similar_artists_caches(monkeypatch: pytest.MonkeyPatch)
             {"mbid": "artist-1", "name": "Example Artist", "score": 0.91},
         ]
 
-    monkeypatch.setattr(discovery_routes, "similar_artists", fake_similar, raising=False)
-    monkeypatch.setattr(discovery_routes, "get_redis", lambda: fake_redis, raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "similar_artists", fake_similar, raising=False
+    )
+    monkeypatch.setattr(
+        discovery_routes, "get_redis", lambda: fake_redis, raising=False
+    )
 
     app = FastAPI()
     app.include_router(discovery_routes.router)
@@ -499,7 +596,9 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
-def test_apple_feed_uses_all_genre_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apple_feed_uses_all_genre_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class DummyResponse:
         status_code = 200
         headers: dict[str, str] = {}

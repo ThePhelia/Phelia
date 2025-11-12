@@ -12,11 +12,15 @@ async def test_register_returns_token_and_checks_unique():
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pw"})
+        resp = await ac.post(
+            "/api/v1/auth/register", json={"email": "a@b.com", "password": "pw"}
+        )
     assert resp.status_code == 201
     body = resp.json()
     assert "accessToken" in body
 
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp_dup = await ac.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pw"})
+        resp_dup = await ac.post(
+            "/api/v1/auth/register", json={"email": "a@b.com", "password": "pw"}
+        )
     assert resp_dup.status_code == 400

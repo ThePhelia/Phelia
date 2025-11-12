@@ -27,7 +27,9 @@ class User(Base):
 class Download(Base):
     __tablename__ = "downloads"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True, index=True
+    )
     hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
@@ -77,7 +79,9 @@ class LibraryEntry(Base):
     list_type: Mapped[str] = mapped_column(String(32), index=True)
     item_kind: Mapped[str] = mapped_column(String(16), index=True)
     item_id: Mapped[str] = mapped_column(String(256), index=True)
-    playlist_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    playlist_slug: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=func.now()
@@ -91,7 +95,13 @@ class LibraryEntry(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("list_type", "item_kind", "item_id", "playlist_slug", name="uq_library_entry"),
+        UniqueConstraint(
+            "list_type",
+            "item_kind",
+            "item_id",
+            "playlist_slug",
+            name="uq_library_entry",
+        ),
     )
 
 
@@ -111,10 +121,14 @@ class LibraryPlaylist(Base):
         onupdate=datetime.utcnow,
         server_default=func.now(),
     )
+
+
 class PluginSetting(Base):
     __tablename__ = "plugin_settings"
 
-    plugin_id: Mapped[str] = mapped_column(String(128), primary_key=True, nullable=False)
+    plugin_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True, nullable=False
+    )
     key: Mapped[str] = mapped_column(String(128), primary_key=True, nullable=False)
     value_json: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSON, nullable=True

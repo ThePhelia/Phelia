@@ -15,8 +15,18 @@ if str(API_SRC) not in sys.path:
 
 
 def test_api_app_exposes_fastapi_instance() -> None:
-    module = import_module("app.main")
-    assert isinstance(module.app, fastapi.FastAPI)
+    try:
+        module = import_module("app.main")
+        assert isinstance(module.app, fastapi.FastAPI)
+    except ImportError as e:
+        # If import fails, try to provide more context
+        import os
+        print(f"Import failed: {e}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Python path: {sys.path[:5]}")
+        print(f"API_SRC exists: {API_SRC.exists()}")
+        print(f"API_SRC contents: {list(API_SRC.iterdir()) if API_SRC.exists() else 'N/A'}")
+        raise
 
 
 def test_health_router_registered() -> None:

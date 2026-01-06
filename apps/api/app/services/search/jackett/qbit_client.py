@@ -7,13 +7,13 @@ from typing import AsyncIterator
 
 from app.services.bt.qbittorrent import QbClient
 
-from .settings import PluginSettings
+from .settings import JackettSettings
 
 
 class TorrentClientAdapter:
-    """Create authenticated qBittorrent client sessions based on plugin settings."""
+    """Create authenticated qBittorrent client sessions based on Jackett settings."""
 
-    def __init__(self, settings: PluginSettings) -> None:
+    def __init__(self, settings: JackettSettings) -> None:
         self._settings = settings
 
     def build(self) -> QbClient:

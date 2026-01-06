@@ -12,7 +12,6 @@ const MusicPage = lazy(() => import('@/app/routes/music'));
 const LibraryPage = lazy(() => import('@/app/routes/library'));
 const DownloadsPage = lazy(() => import('@/app/routes/downloads'));
 const SettingsPage = lazy(() => import('@/app/routes/settings'));
-const MarketPage = lazy(() => import('@/pages/Market'));
 const DetailPage = lazy(() => import('@/app/routes/details/$kind.$id'));
 
 function AppRoutes() {
@@ -28,7 +27,6 @@ function AppRoutes() {
             <Route path="movies" element={<MoviesPage />} />
             <Route path="tv" element={<TvPage />} />
             <Route path="music" element={<MusicPage />} />
-            <Route path="market" element={<MarketPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="downloads" element={<DownloadsPage />} />
             <Route path="settings" element={<SettingsPage />} />

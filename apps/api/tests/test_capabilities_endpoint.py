@@ -46,9 +46,6 @@ async def test_capabilities_reports_service_status(monkeypatch):
     assert payload["services"]["qbittorrent"] is True
     assert payload["services"]["torrent_search"] is True
     assert payload.get("links") is None
-    assert payload["plugins"]["upload"] is True
-    assert payload["plugins"]["urlInstall"] is True
-    assert payload["plugins"]["phexOnly"] is True
 
 
 @pytest.mark.anyio

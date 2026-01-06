@@ -68,7 +68,13 @@ class SearchProviderRegistry(ProviderRegistry):
         return provider.descriptor()
 
     def primary(self) -> SearchProvider:
-        return next(iter(self._providers.values()), self._fallback)
+        for provider in self._providers.values():
+            try:
+                if provider.descriptor().configured:
+                    return provider
+            except Exception:
+                continue
+        return self._fallback
 
     def is_configured(self) -> bool:
         return any(descriptor.configured for descriptor in self.all())

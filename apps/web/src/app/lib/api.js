@@ -196,65 +196,6 @@ export function useCapabilities() {
         staleTime: 10 * 60000,
     });
 }
-export function useInstallPluginFromUrl() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: (payload) => http('market/plugins/install/url', {
-            method: 'POST',
-            json: payload,
-        }),
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-        },
-    });
-}
-export function useUploadPlugin() {
-    const qc = useQueryClient();
-    return useMutation({
-        mutationFn: async (file) => {
-            const form = new FormData();
-            form.append('file', file);
-            return http('market/plugins/install/upload', {
-                method: 'POST',
-                body: form,
-            });
-        },
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-        },
-    });
-}
-export function usePluginSettingsList() {
-    return useQuery({
-        queryKey: ['settings', 'plugins'],
-        queryFn: async () => {
-            const response = await http('settings/plugins');
-            return response.plugins ?? [];
-        },
-        staleTime: 60000,
-    });
-}
-export function usePluginSettings(pluginId, options) {
-    const enabled = options?.enabled ?? true;
-    return useQuery({
-        queryKey: ['settings', 'plugins', pluginId],
-        queryFn: () => http(`settings/plugins/${pluginId}`),
-        enabled: enabled && Boolean(pluginId),
-    });
-}
-export function useUpdatePluginSettings(pluginId) {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: (payload) => http(`settings/plugins/${pluginId}`, {
-            method: 'POST',
-            json: payload,
-        }),
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins', pluginId] });
-            void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-        },
-    });
-}
 export function fetchTorrentSearch(query, options) {
     const limit = options?.limit;
     return http('search', {

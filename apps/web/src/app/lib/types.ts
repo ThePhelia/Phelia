@@ -171,53 +171,10 @@ export interface CapabilitiesResponse {
   services: Record<string, boolean>;
   version: string;
   links?: Record<string, string | undefined>;
-  plugins?: {
-    upload: boolean;
-    urlInstall: boolean;
-    phexOnly: boolean;
-  };
 }
 
 export interface ListMutationInput {
   action: 'add' | 'remove';
   list: 'watchlist' | 'favorites' | 'playlist';
   item: { kind: MediaKind; id: string };
-}
-
-export interface PluginSettingFieldSchema {
-  type?: string | string[];
-  title?: string;
-  description?: string;
-  enum?: Array<string | number | boolean | null>;
-  format?: string;
-  default?: unknown;
-  [key: string]: unknown;
-}
-
-export interface PluginSettingsSchema {
-  type?: string;
-  title?: string;
-  description?: string;
-  properties?: Record<string, PluginSettingFieldSchema>;
-  required?: string[];
-  [key: string]: unknown;
-}
-
-export interface PluginSettingsSummary {
-  id: string;
-  name: string;
-  contributes_settings: boolean;
-  settings_schema?: PluginSettingsSchema | null;
-}
-
-export interface PluginSettingsListResponse {
-  plugins: PluginSettingsSummary[];
-}
-
-export interface PluginSettingsValuesResponse {
-  values: Record<string, unknown>;
-}
-
-export interface PluginSettingsUpdateRequest {
-  values: Record<string, unknown>;
 }

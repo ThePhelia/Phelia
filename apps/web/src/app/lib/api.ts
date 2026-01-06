@@ -8,10 +8,6 @@ import type {
   LibraryItemSummary,
   ListMutationInput,
   PaginatedResponse,
-  PluginSettingsListResponse,
-  PluginSettingsSummary,
-  PluginSettingsUpdateRequest,
-  PluginSettingsValuesResponse,
   SearchParams,
   SearchResponse,
 } from './types';
@@ -273,81 +269,6 @@ export function useCapabilities() {
     queryKey: ['capabilities'],
     queryFn: () => http<CapabilitiesResponse>('capabilities'),
     staleTime: 10 * 60_000,
-  });
-}
-
-export function useInstallPluginFromUrl() {
-  const qc = useQueryClient();
-  return useMutation<{ id: string; version: string }, Error, { url: string; expectedSha256?: string }>({
-    mutationFn: (payload) =>
-      http('market/plugins/install/url', {
-        method: 'POST',
-        json: payload,
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-    },
-  });
-}
-
-export function useUploadPlugin() {
-  const qc = useQueryClient();
-  return useMutation<{ id: string; version: string }, Error, File>({
-    mutationFn: async (file) => {
-      const form = new FormData();
-      form.append('file', file);
-      return http('market/plugins/install/upload', {
-        method: 'POST',
-        body: form,
-      });
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-    },
-  });
-}
-
-export function usePluginSettingsList() {
-  return useQuery<PluginSettingsSummary[], Error>({
-    queryKey: ['settings', 'plugins'],
-    queryFn: async () => {
-      const response = await http<PluginSettingsListResponse>('settings/plugins');
-      return response.plugins ?? [];
-    },
-    staleTime: 60_000,
-  });
-}
-
-interface UsePluginSettingsOptions {
-  enabled?: boolean;
-}
-
-export function usePluginSettings(
-  pluginId: string,
-  options?: UsePluginSettingsOptions,
-) {
-  const enabled = options?.enabled ?? true;
-
-  return useQuery<PluginSettingsValuesResponse, Error>({
-    queryKey: ['settings', 'plugins', pluginId],
-    queryFn: () => http<PluginSettingsValuesResponse>(`settings/plugins/${pluginId}`),
-    enabled: enabled && Boolean(pluginId),
-  });
-}
-
-export function useUpdatePluginSettings(pluginId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation<PluginSettingsValuesResponse, Error, PluginSettingsUpdateRequest>({
-    mutationFn: (payload) =>
-      http<PluginSettingsValuesResponse>(`settings/plugins/${pluginId}`, {
-        method: 'POST',
-        json: payload,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins', pluginId] });
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'plugins'] });
-    },
   });
 }
 

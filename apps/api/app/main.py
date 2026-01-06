@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 import asyncio
@@ -12,8 +12,6 @@ from app.db.init_db import init_db
 from app.db.session import session_scope
 from app.routers import health, auth, downloads
 from app.routes import discovery as discovery_routes
-from app.routes import market as market_routes
-from app.routes import market_text as market_text_routes
 from phelia.routers import discovery as discovery_router
 from app.api.v1.endpoints import discover as discover_endpoints
 from app.api.v1.endpoints import meta as meta_endpoints
@@ -23,6 +21,8 @@ from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
 from app.services.qbittorrent.health import qb_login_ok
+from app.services.search.jackett import JackettProvider, JackettSettings
+from app.services.search.registry import search_registry
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,6 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(downloads.router, prefix="/api/v1")
-app.include_router(market_routes.router, prefix="/api/v1")
-app.include_router(market_text_routes.router, prefix="/api/v1")
 app.include_router(metadata_search.router, prefix="/api/v1")
 app.include_router(meta_endpoints.router, prefix="/api/v1")
 app.include_router(discover_endpoints.router, prefix="/api/v1")
@@ -74,6 +72,14 @@ async def startup_event():
         logger.exception("Error loading provider credentials")
 
     try:
+        jackett_settings = JackettSettings.from_config(settings)
+        search_registry.register(
+            JackettProvider(jackett_settings, logger=logging.getLogger("phelia.jackett"))
+        )
+    except Exception:
+        logger.exception("Error initializing Jackett search provider")
+
+    try:
         login_ok = await asyncio.to_thread(qb_login_ok)
         if login_ok is False:
             logger.error("Error checking qBittorrent connectivity")
@@ -81,16 +87,6 @@ async def startup_event():
             logger.info("qBittorrent health-check skipped during startup")
     except Exception:
         logger.exception("Error checking qBittorrent connectivity")
-
-
-@app.get("/jackett/_removed")
-async def jackett_removed() -> None:
-    """Return a clear 410 for legacy Jackett URLs."""
-
-    raise HTTPException(
-        status_code=410,
-        detail="Jackett integration was removed from core.",
-    )
 
 
 @app.websocket("/ws/downloads/{download_id}")

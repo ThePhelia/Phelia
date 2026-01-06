@@ -52,6 +52,16 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("QBIT_PASSWORD", "QB_PASS")
     )
 
+    JACKETT_URL: AnyHttpUrl = Field(
+        default="http://jackett:9117",
+        validation_alias=AliasChoices("JACKETT_URL"),
+    )
+    JACKETT_API_KEY: str | None = None
+    JACKETT_ALLOWLIST: str | None = None
+    JACKETT_BLOCKLIST: str | None = None
+    JACKETT_CATEGORY_FILTERS: str | None = None
+    JACKETT_MINIMUM_SEEDERS: int = 0
+
     ALLOWED_SAVE_DIRS: str = "/downloads,/music"
     DEFAULT_SAVE_DIR: str = "/downloads"
 

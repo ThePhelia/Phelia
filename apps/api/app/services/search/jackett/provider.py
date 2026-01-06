@@ -13,7 +13,7 @@ from app.services.metadata.classifier import Classifier
 
 from .normalizer import NormalizedResult, parse_torznab
 from .qbit_client import TorrentClientAdapter
-from .settings import PluginSettings
+from .settings import JackettSettings
 
 
 class JackettProvider(SearchProvider):
@@ -24,7 +24,7 @@ class JackettProvider(SearchProvider):
 
     def __init__(
         self,
-        settings: PluginSettings,
+        settings: JackettSettings,
         logger: logging.Logger | None = None,
         timeout: float = 20.0,
     ) -> None:
@@ -36,19 +36,15 @@ class JackettProvider(SearchProvider):
         self._last_health: str | None = None
 
     @property
-    def settings(self) -> PluginSettings:
+    def settings(self) -> JackettSettings:
         return self._settings
 
-    def update_settings(self, settings: PluginSettings) -> None:
+    def update_settings(self, settings: JackettSettings) -> None:
         self._settings = settings
         self._torrent_client = TorrentClientAdapter(settings)
 
     def descriptor(self) -> ProviderDescriptor:
-        configured = bool(
-            self._settings.jackett_api_key
-            and self._settings.qbittorrent_username
-            and self._settings.qbittorrent_password
-        )
+        configured = self._settings.is_configured()
         healthy = self._last_health == "ok"
         return ProviderDescriptor(
             slug=self.slug,

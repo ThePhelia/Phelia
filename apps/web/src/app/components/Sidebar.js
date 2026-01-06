@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Bookmark, Download, Film, Home, Music2, Puzzle, Settings, Tv } from 'lucide-react';
+import { Bookmark, Download, Film, Home, Music2, Settings, Tv } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { useUiState } from '@/app/stores/ui';
@@ -12,7 +12,6 @@ const NAV_ITEMS = [
     { to: '/tv', label: 'TV Shows', icon: Tv },
     { to: '/music', label: 'Music', icon: Music2 },
     { to: '/library', label: 'My Library', icon: Bookmark },
-    { to: '/market', label: 'Marketplace', icon: Puzzle },
     { to: '/downloads', label: 'Downloads', icon: Download },
     { to: '/settings', label: 'Settings', icon: Settings },
 ];

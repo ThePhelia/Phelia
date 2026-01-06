@@ -173,6 +173,22 @@ export interface CapabilitiesResponse {
   links?: Record<string, string | undefined>;
 }
 
+export interface ServiceSettingsResponse {
+  jackett: {
+    url: string;
+    api_key_configured: boolean;
+  };
+  qbittorrent: {
+    url: string;
+    username: string;
+    password_configured: boolean;
+  };
+  downloads: {
+    allowed_dirs: string[];
+    default_dir: string;
+  };
+}
+
 export interface ListMutationInput {
   action: 'add' | 'remove';
   list: 'watchlist' | 'favorites' | 'playlist';

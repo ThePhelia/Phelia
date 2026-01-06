@@ -1,5 +1,21 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-export const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
+const RAW_API_BASE = import.meta.env?.VITE_API_BASE;
+const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
+function resolveApiBase(rawBase) {
+    if (!rawBase) {
+        return DEFAULT_API_BASE;
+    }
+    const hasScheme = /^[a-zA-Z][a-zA-Z\\d+\\-.]*:/.test(rawBase);
+    if (!hasScheme) {
+        const trimmed = rawBase.replace(/^\\/+/, '');
+        if (typeof window !== 'undefined' && window.location?.origin) {
+            return `${window.location.origin}/${trimmed}`;
+        }
+        return `${DEFAULT_API_BASE.replace(/\\/api\\/v1$/, '')}/${trimmed}`;
+    }
+    return rawBase;
+}
+export const API_BASE = resolveApiBase(RAW_API_BASE);
 const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
 function buildUrl(path, query) {
     const normalizedPath = path.replace(/^\//, '');

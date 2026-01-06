@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 import httpx
 import logging
 
-from app.core.config import settings
+from app.core.runtime_service_settings import runtime_service_settings
 
 
 class QbClient:
@@ -156,11 +156,12 @@ logger = logging.getLogger(__name__)
 
 
 async def health_check() -> None:
-    client = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS, timeout=5.0)
+    qb = runtime_service_settings.qbittorrent_snapshot()
+    client = QbClient(qb.url, qb.username, qb.password, timeout=5.0)
     try:
         async with client:
             await client.login()
             await client.list_torrents()
-        logger.info("qBittorrent reachable at %s", settings.QB_URL)
+        logger.info("qBittorrent reachable at %s", qb.url)
     except Exception as e:
         logger.error("qBittorrent health check failed: %s", e)

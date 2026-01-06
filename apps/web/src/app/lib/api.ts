@@ -10,6 +10,7 @@ import type {
   PaginatedResponse,
   SearchParams,
   SearchResponse,
+  ServiceSettingsResponse,
 } from './types';
 import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
 
@@ -21,8 +22,27 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: BodyInit | null;
 }
 
-export const API_BASE: string =
-  (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
+const RAW_API_BASE: string | undefined = (import.meta as any).env?.VITE_API_BASE;
+const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
+
+function resolveApiBase(rawBase?: string): string {
+  if (!rawBase) {
+    return DEFAULT_API_BASE;
+  }
+
+  const hasScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawBase);
+  if (!hasScheme) {
+    const trimmed = rawBase.replace(/^\/+/, '');
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}/${trimmed}`;
+    }
+    return `${DEFAULT_API_BASE.replace(/\/api\/v1$/, '')}/${trimmed}`;
+  }
+
+  return rawBase;
+}
+
+export const API_BASE: string = resolveApiBase(RAW_API_BASE);
 
 const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
 
@@ -327,6 +347,60 @@ export function useUpdateApiKeys() {
     mutationFn: (data) => http('settings/api-keys', { method: 'POST', json: data }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+}
+
+export function useServiceSettings() {
+  return useQuery<ServiceSettingsResponse, Error>({
+    queryKey: ['service-settings'],
+    queryFn: () => http<ServiceSettingsResponse>('settings/services'),
+  });
+}
+
+export function useUpdateJackettSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ServiceSettingsResponse['jackett'],
+    Error,
+    { url?: string | null; api_key?: string | null }
+  >({
+    mutationFn: (data) => http('settings/services/jackett', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
+    },
+  });
+}
+
+export function useUpdateQbittorrentSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ServiceSettingsResponse['qbittorrent'],
+    Error,
+    { url?: string | null; username?: string | null; password?: string | null }
+  >({
+    mutationFn: (data) => http('settings/services/qbittorrent', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
+    },
+  });
+}
+
+export function useUpdateDownloadSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ServiceSettingsResponse['downloads'],
+    Error,
+    { allowed_dirs?: string[]; default_dir?: string | null }
+  >({
+    mutationFn: (data) => http('settings/services/downloads', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
     },
   });
 }

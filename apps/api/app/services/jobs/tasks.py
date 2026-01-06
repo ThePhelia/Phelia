@@ -11,6 +11,7 @@ from celery import Celery
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.runtime_service_settings import runtime_service_settings
 from app.db.session import SessionLocal
 from app.db.models import Download
 from app.services.bt.qbittorrent import QbClient
@@ -34,10 +35,11 @@ logger = logging.getLogger(__name__)
 
 
 def _qb() -> QbClient:
+    qb = runtime_service_settings.qbittorrent_snapshot()
     return QbClient(
-        base_url=settings.QB_URL,
-        username=settings.QB_USER,
-        password=settings.QB_PASS,
+        base_url=qb.url,
+        username=qb.username,
+        password=qb.password,
     )
 
 
@@ -126,14 +128,16 @@ def enqueue_download(
                         await _maybe_await(
                             qb.add_magnet(
                                 dl.magnet,
-                                save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                                save_path=dl.save_path
+                                or runtime_service_settings.download_snapshot().default_dir,
                             )
                         )
                     else:
                         await _maybe_await(
                             qb.add_torrent_file(
                                 content,
-                                save_path=dl.save_path or settings.DEFAULT_SAVE_DIR,
+                                save_path=dl.save_path
+                                or runtime_service_settings.download_snapshot().default_dir,
                             )
                         )
                     return await _maybe_await(qb.list_torrents())

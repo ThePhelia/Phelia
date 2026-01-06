@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { Switch } from '@/app/components/ui/switch';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
-import { useApiKeys, useCapabilities } from '@/app/lib/api';
+import { API_BASE, useApiKeys, useCapabilities } from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { Button } from '@/app/components/ui/button';
@@ -33,7 +33,6 @@ function ApiKeyManagement() {
         const value = formValues[provider]?.trim() || null;
         setSavingProvider(provider);
         try {
-            const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
             const response = await fetch(`${API_BASE}/settings/api-keys/${provider}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -56,7 +55,6 @@ function ApiKeyManagement() {
     const handleClear = async (provider) => {
         setSavingProvider(provider);
         try {
-            const API_BASE = import.meta.env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
             const response = await fetch(`${API_BASE}/settings/api-keys/${provider}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

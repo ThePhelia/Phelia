@@ -8,6 +8,7 @@ import redis.asyncio as redis
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
+from app.core.runtime_service_settings import runtime_service_settings
 from app.db.init_db import init_db
 from app.db.session import session_scope
 from app.routers import health, auth, downloads
@@ -21,7 +22,7 @@ from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
 from app.services.qbittorrent.health import qb_login_ok
-from app.services.search.jackett import JackettProvider, JackettSettings
+from app.services.search.jackett import JackettProvider
 from app.services.search.registry import search_registry
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ async def startup_event():
         logger.exception("Error loading provider credentials")
 
     try:
-        jackett_settings = JackettSettings.from_config(settings)
+        jackett_settings = runtime_service_settings.jackett_settings()
         search_registry.register(
             JackettProvider(jackett_settings, logger=logging.getLogger("phelia.jackett"))
         )

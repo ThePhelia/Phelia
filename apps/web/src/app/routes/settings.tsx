@@ -3,7 +3,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { Switch } from '@/app/components/ui/switch';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
-import { useApiKeys, useCapabilities } from '@/app/lib/api';
+import {
+  API_BASE,
+  useApiKeys,
+  useCapabilities,
+  useServiceSettings,
+  useUpdateDownloadSettings,
+  useUpdateJackettSettings,
+  useUpdateQbittorrentSettings,
+} from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { Button } from '@/app/components/ui/button';
@@ -38,7 +46,6 @@ function ApiKeyManagement() {
     setSavingProvider(provider);
     
     try {
-      const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
       const response = await fetch(`${API_BASE}/settings/api-keys/${provider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +70,6 @@ function ApiKeyManagement() {
     setSavingProvider(provider);
     
     try {
-      const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
       const response = await fetch(`${API_BASE}/settings/api-keys/${provider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,6 +180,304 @@ function ApiKeyManagement() {
   );
 }
 
+function parseDirList(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function areEqualLists(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((value, index) => value === b[index]);
+}
+
+function ServiceConnections() {
+  const serviceQuery = useServiceSettings();
+  const updateJackett = useUpdateJackettSettings();
+  const updateQbittorrent = useUpdateQbittorrentSettings();
+  const updateDownloads = useUpdateDownloadSettings();
+
+  const [jackettUrl, setJackettUrl] = useState('');
+  const [jackettApiKey, setJackettApiKey] = useState('');
+  const [qbUrl, setQbUrl] = useState('');
+  const [qbUsername, setQbUsername] = useState('');
+  const [qbPassword, setQbPassword] = useState('');
+  const [allowedDirs, setAllowedDirs] = useState('');
+  const [defaultDir, setDefaultDir] = useState('');
+
+  useEffect(() => {
+    if (!serviceQuery.data) return;
+    setJackettUrl(serviceQuery.data.jackett.url ?? '');
+    setQbUrl(serviceQuery.data.qbittorrent.url ?? '');
+    setQbUsername(serviceQuery.data.qbittorrent.username ?? '');
+    setAllowedDirs(serviceQuery.data.downloads.allowed_dirs.join(', '));
+    setDefaultDir(serviceQuery.data.downloads.default_dir ?? '');
+  }, [serviceQuery.data]);
+
+  const jackettConfigured = serviceQuery.data?.jackett.api_key_configured ?? false;
+  const qbPasswordConfigured = serviceQuery.data?.qbittorrent.password_configured ?? false;
+  const allowedDirList = parseDirList(allowedDirs);
+  const downloadsChanged =
+    (serviceQuery.data?.downloads.default_dir ?? '') !== defaultDir.trim() ||
+    !areEqualLists(allowedDirList, serviceQuery.data?.downloads.allowed_dirs ?? []);
+
+  const jackettChanged =
+    jackettUrl.trim() !== (serviceQuery.data?.jackett.url ?? '') ||
+    jackettApiKey.trim().length > 0;
+  const qbChanged =
+    qbUrl.trim() !== (serviceQuery.data?.qbittorrent.url ?? '') ||
+    qbUsername.trim() !== (serviceQuery.data?.qbittorrent.username ?? '') ||
+    qbPassword.trim().length > 0;
+
+  const handleJackettSave = async () => {
+    const payload: { url?: string | null; api_key?: string | null } = {};
+    if (jackettUrl.trim()) {
+      payload.url = jackettUrl.trim();
+    }
+    if (jackettApiKey.trim()) {
+      payload.api_key = jackettApiKey.trim();
+    }
+
+    try {
+      await updateJackett.mutateAsync(payload);
+      toast.success('Jackett settings updated');
+      setJackettApiKey('');
+    } catch (error) {
+      toast.error('Failed to update Jackett settings');
+    }
+  };
+
+  const handleJackettClear = async () => {
+    try {
+      await updateJackett.mutateAsync({ api_key: null });
+      toast.success('Jackett API key cleared');
+      setJackettApiKey('');
+    } catch (error) {
+      toast.error('Failed to clear Jackett API key');
+    }
+  };
+
+  const handleQbSave = async () => {
+    const payload: { url?: string | null; username?: string | null; password?: string | null } = {};
+    if (qbUrl.trim()) {
+      payload.url = qbUrl.trim();
+    }
+    if (qbUsername.trim()) {
+      payload.username = qbUsername.trim();
+    }
+    if (qbPassword.trim()) {
+      payload.password = qbPassword.trim();
+    }
+
+    try {
+      await updateQbittorrent.mutateAsync(payload);
+      toast.success('qBittorrent settings updated');
+      setQbPassword('');
+    } catch (error) {
+      toast.error('Failed to update qBittorrent settings');
+    }
+  };
+
+  const handleQbClear = async () => {
+    try {
+      await updateQbittorrent.mutateAsync({ password: null });
+      toast.success('qBittorrent password cleared');
+      setQbPassword('');
+    } catch (error) {
+      toast.error('Failed to clear qBittorrent password');
+    }
+  };
+
+  const handleDownloadSave = async () => {
+    try {
+      await updateDownloads.mutateAsync({
+        allowed_dirs: allowedDirList,
+        default_dir: defaultDir.trim(),
+      });
+      toast.success('Download paths updated');
+    } catch (error) {
+      toast.error('Failed to update download paths');
+    }
+  };
+
+  if (serviceQuery.isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  if (serviceQuery.isError) {
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load service settings{serviceQuery.error?.message ? `: ${serviceQuery.error.message}` : '.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Jackett</h3>
+            <p className="text-sm text-muted-foreground">Configure the Jackett URL and API key.</p>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {jackettConfigured ? 'API key configured' : 'API key missing'}
+          </span>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="jackett-url">Jackett URL</Label>
+          <Input
+            id="jackett-url"
+            value={jackettUrl}
+            onChange={(e) => setJackettUrl(e.target.value)}
+            placeholder="http://jackett:9117"
+            disabled={updateJackett.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="jackett-api-key">Jackett API Key</Label>
+          <Input
+            id="jackett-api-key"
+            type="password"
+            value={jackettApiKey}
+            onChange={(e) => setJackettApiKey(e.target.value)}
+            placeholder={jackettConfigured ? 'Enter new API key to replace' : 'Enter API key'}
+            disabled={updateJackett.isPending}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={handleJackettSave}
+            disabled={!jackettChanged || updateJackett.isPending}
+          >
+            {updateJackett.isPending ? 'Saving...' : 'Save'}
+          </Button>
+          {jackettConfigured && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleJackettClear}
+              disabled={updateJackett.isPending}
+            >
+              Clear API key
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">qBittorrent</h3>
+            <p className="text-sm text-muted-foreground">Set the qBittorrent WebUI connection.</p>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {qbPasswordConfigured ? 'Password configured' : 'Password missing'}
+          </span>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="qb-url">qBittorrent URL</Label>
+          <Input
+            id="qb-url"
+            value={qbUrl}
+            onChange={(e) => setQbUrl(e.target.value)}
+            placeholder="http://qbittorrent:8080"
+            disabled={updateQbittorrent.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="qb-user">Username</Label>
+          <Input
+            id="qb-user"
+            value={qbUsername}
+            onChange={(e) => setQbUsername(e.target.value)}
+            placeholder="admin"
+            disabled={updateQbittorrent.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="qb-password">Password</Label>
+          <Input
+            id="qb-password"
+            type="password"
+            value={qbPassword}
+            onChange={(e) => setQbPassword(e.target.value)}
+            placeholder={qbPasswordConfigured ? 'Enter new password to replace' : 'Enter password'}
+            disabled={updateQbittorrent.isPending}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={handleQbSave}
+            disabled={!qbChanged || updateQbittorrent.isPending}
+          >
+            {updateQbittorrent.isPending ? 'Saving...' : 'Save'}
+          </Button>
+          {qbPasswordConfigured && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleQbClear}
+              disabled={updateQbittorrent.isPending}
+            >
+              Clear password
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Download Paths</h3>
+          <p className="text-sm text-muted-foreground">
+            Choose the default save directory and allowed paths for downloads.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="default-download-dir">Default download path</Label>
+          <Input
+            id="default-download-dir"
+            value={defaultDir}
+            onChange={(e) => setDefaultDir(e.target.value)}
+            placeholder="/downloads"
+            disabled={updateDownloads.isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="allowed-download-dirs">Allowed paths</Label>
+          <Input
+            id="allowed-download-dirs"
+            value={allowedDirs}
+            onChange={(e) => setAllowedDirs(e.target.value)}
+            placeholder="/downloads, /music"
+            disabled={updateDownloads.isPending}
+          />
+          <p className="text-xs text-muted-foreground">Use commas or new lines to separate paths.</p>
+        </div>
+        <Button
+          size="sm"
+          onClick={handleDownloadSave}
+          disabled={!downloadsChanged || updateDownloads.isPending || !defaultDir.trim()}
+        >
+          {updateDownloads.isPending ? 'Saving...' : 'Save'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { data: capabilities } = useCapabilities();
   const { mode, setMode } = useTheme();
@@ -216,6 +520,13 @@ function SettingsPage() {
             <h2 className="text-lg font-semibold text-foreground">Connected Services</h2>
             <p className="text-sm text-muted-foreground">
               Configure API keys for enhanced metadata and features. TMDB is pre-configured.
+            </p>
+          </div>
+          <ServiceConnections />
+          <div className="border-t border-border/60 pt-6">
+            <h3 className="text-base font-semibold text-foreground">Metadata API Keys</h3>
+            <p className="text-sm text-muted-foreground">
+              Keys are stored in memory and can be updated without restarting the server.
             </p>
           </div>
           <ApiKeyManagement />

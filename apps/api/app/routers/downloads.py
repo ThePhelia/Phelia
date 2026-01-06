@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db import models
-from app.core.config import settings
+from app.core.runtime_service_settings import runtime_service_settings
 from app.services.jobs.tasks import celery_app
 from app.services.bt.qbittorrent import QbClient
 
@@ -48,7 +48,8 @@ class DownloadOut(BaseModel):
 
 
 def _qb() -> QbClient:
-    return QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS)
+    qb = runtime_service_settings.qbittorrent_snapshot()
+    return QbClient(qb.url, qb.username, qb.password)
 
 
 @router.get("", response_model=List[DownloadOut])
@@ -59,7 +60,16 @@ def list_downloads(db: Session = Depends(get_db)):
 
 @router.post("", response_model=dict, status_code=201)
 def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
-    save_path = body.savePath or settings.DEFAULT_SAVE_DIR
+    downloads = runtime_service_settings.download_snapshot()
+    save_path = body.savePath or downloads.default_dir
+    if body.savePath and not runtime_service_settings.is_allowed_save_dir(save_path):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "save_path_not_allowed",
+                "allowed_dirs": downloads.allowed_dirs,
+            },
+        )
     dl = models.Download(magnet=body.magnet or "", save_path=save_path, status="queued")
     db.add(dl)
     db.commit()

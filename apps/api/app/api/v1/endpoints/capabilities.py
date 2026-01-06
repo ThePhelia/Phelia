@@ -6,8 +6,8 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from app.core.config import settings
 from app.core.runtime_settings import runtime_settings
+from app.core.runtime_service_settings import runtime_service_settings
 from app.schemas.ui import CapabilitiesResponse
 from app.services.bt.qbittorrent import QbClient
 from app.services.search.registry import search_registry
@@ -19,7 +19,8 @@ router = APIRouter(prefix="/capabilities", tags=["capabilities"])
 
 
 async def _check_qbittorrent() -> bool:
-    client = QbClient(settings.QB_URL, settings.QB_USER, settings.QB_PASS, timeout=5.0)
+    qb = runtime_service_settings.qbittorrent_snapshot()
+    client = QbClient(qb.url, qb.username, qb.password, timeout=5.0)
     try:
         async with client:
             await client.login()

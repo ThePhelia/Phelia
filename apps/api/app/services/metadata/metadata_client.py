@@ -73,7 +73,10 @@ class MetadataClient:
         *,
         request_id: str | None = None,
     ) -> Any:
-        return await self._get("lastfm", path, params, request_id)
+        payload = dict(params or {})
+        if path and "method" not in payload:
+            payload["method"] = path
+        return await self._get("lastfm", "", payload, request_id)
 
     async def mb(
         self,

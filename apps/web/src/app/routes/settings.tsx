@@ -227,7 +227,7 @@ function ServiceConnections() {
   const jackettChanged =
     jackettUrl.trim() !== (serviceQuery.data?.jackett.url ?? '') ||
     jackettApiKey.trim().length > 0;
-  const jackettUiUrl = `${API_BASE}/settings/services/jackett/proxy`;
+  const jackettUiUrl = 'http://localhost:9117/UI/Dashboard';
   const qbChanged =
     qbUrl.trim() !== (serviceQuery.data?.qbittorrent.url ?? '') ||
     qbUsername.trim() !== (serviceQuery.data?.qbittorrent.username ?? '') ||

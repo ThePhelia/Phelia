@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import asyncio
 import logging
+from typing import Any
+
+import httpx
 import redis.asyncio as redis
 from sqlalchemy.exc import IntegrityError
 
@@ -31,6 +34,38 @@ logger = logging.getLogger(__name__)
 def load_provider_credentials(_db) -> None:
     """Placeholder hook to preload provider credentials at startup."""
     return None
+
+
+def _extract_jackett_api_key(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            continue
+        if key.lower().replace("_", "") == "apikey":
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+async def _autoload_jackett_api_key() -> None:
+    snapshot = runtime_service_settings.jackett_snapshot()
+    if snapshot.api_key:
+        return
+    url = f"{snapshot.url.rstrip('/')}/api/v2.0/server/config"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url)
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return
+    try:
+        payload = response.json()
+    except ValueError:
+        return
+    api_key = _extract_jackett_api_key(payload)
+    if api_key:
+        runtime_service_settings.update_jackett(api_key=api_key)
 
 
 app = FastAPI(title="Phelia", version="0.1.0")
@@ -73,6 +108,7 @@ async def startup_event():
         logger.exception("Error loading provider credentials")
 
     try:
+        await _autoload_jackett_api_key()
         jackett_settings = runtime_service_settings.jackett_settings()
         search_registry.register(
             JackettProvider(jackett_settings, logger=logging.getLogger("phelia.jackett"))

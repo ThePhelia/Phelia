@@ -75,11 +75,7 @@ class JackettSettings:
         )
 
     def is_configured(self) -> bool:
-        return bool(
-            self.jackett_api_key
-            and self.qbittorrent_username
-            and self.qbittorrent_password
-        )
+        return bool(self.jackett_api_key)
 
 
 __all__ = ["JackettSettings"]

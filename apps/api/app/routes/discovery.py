@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Generator, Iterable, Sequence
 from datetime import datetime, timedelta
+import logging
 from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 apple_feed = None  # type: ignore[assignment]
 new_releases_by_genre = None  # type: ignore[assignment]
@@ -590,10 +593,18 @@ async def search_albums(
             pass
 
     if len(aggregate) < limit:
-        data = await _mb_get_json(
-            "https://musicbrainz.org/ws/2/release-group",
-            {"query": query, "fmt": "json", "limit": str(limit)},
-        )
+        try:
+            data = await _mb_get_json(
+                "https://musicbrainz.org/ws/2/release-group",
+                {"query": query, "fmt": "json", "limit": str(limit)},
+            )
+        except HTTPException as exc:
+            logger.warning(
+                "discovery search: musicbrainz lookup failed query=%s detail=%s",
+                query,
+                exc.detail,
+            )
+            data = {}
         for rg in data.get("release-groups", []):
             aggregate.append(
                 {

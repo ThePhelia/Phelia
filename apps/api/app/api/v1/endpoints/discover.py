@@ -224,8 +224,16 @@ async def _discover_albums(
         ):
             logger.warning("discover: lastfm not configured")
             return _fallback_response("album", page)
+        if exc.status_code < 500:
+            logger.warning(
+                "discover: lastfm chart lookup rejected page=%s status=%s detail=%s",
+                page,
+                exc.status_code,
+                detail,
+            )
+            return _fallback_response("album", page)
         logger.exception("discover: lastfm chart lookup failed page=%s", page)
-        raise HTTPException(status_code=502, detail=detail) from exc
+        return _fallback_response("album", page)
     except Exception:
         logger.exception("discover: lastfm chart lookup failed page=%s", page)
         return _fallback_response("album", page)

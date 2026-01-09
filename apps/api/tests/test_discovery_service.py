@@ -66,6 +66,20 @@ class MockAsyncClient:
         raise AssertionError("POST not expected in tests")
 
 
+class RoutedAsyncClient:
+    def __init__(self, handler):
+        self._handler = handler
+
+    async def __aenter__(self) -> "RoutedAsyncClient":
+        return self
+
+    async def __aexit__(self, _exc_type, _exc, _tb) -> None:  # noqa: ANN001
+        return None
+
+    async def get(self, url: str, params: dict | None = None, headers=None, **_kwargs):  # type: ignore[override]
+        return self._handler(url, params or {}, headers or {})
+
+
 @pytest.mark.anyio
 async def test_get_charts_uses_cache(monkeypatch):
     monkeypatch.setenv("DEEZER_ENABLED", "true")
@@ -167,3 +181,43 @@ async def test_providers_status_flags(monkeypatch):
     assert status.lastfm is True
     assert status.deezer is True
     assert status.spotify is False
+
+
+@pytest.mark.anyio
+async def test_quick_search_falls_back_to_listenbrainz(monkeypatch):
+    runtime_settings.set("lastfm", "key")
+    runtime_settings.set("listenbrainz", "token")
+    calls: List[Tuple[str, dict | None]] = []
+
+    def handler(url: str, params: dict, _headers: dict) -> httpx.Response:
+        calls.append((url, params))
+        request = httpx.Request("GET", url, params=params)
+        if "ws.audioscrobbler.com" in url:
+            return httpx.Response(429, request=request)
+        if "api.listenbrainz.org" in url:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "release_name": "Fallback Album",
+                            "artist_name": "Fallback Artist",
+                            "release_mbid": "lb-release",
+                            "release_date": "2024-01-01",
+                        }
+                    ]
+                },
+                request=request,
+            )
+        return httpx.Response(500, request=request)
+
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *_args, **_kwargs: RoutedAsyncClient(handler),
+    )
+
+    items = await service.quick_search(query="ambient", limit=1)
+    assert len(items) == 1
+    assert items[0].source == "listenbrainz"
+    assert any("api.listenbrainz.org" in call[0] for call in calls)

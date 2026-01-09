@@ -31,6 +31,9 @@ class QbClient:
         body = response.text.strip().lower()
         return body in {"", "ok", "ok."}
 
+    def _has_auth_cookie(self, response: httpx.Response) -> bool:
+        return bool(response.cookies.get("SID") or response.cookies.get("sid"))
+
     async def login(self) -> None:
         r = await self._c().post(
             f"{self.base_url}/api/v2/auth/login",
@@ -38,7 +41,7 @@ class QbClient:
             headers=self._headers,
         )
         r.raise_for_status()
-        if not self._is_success(r):
+        if not (self._is_success(r) or self._has_auth_cookie(r)):
             raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
 
     async def add_magnet(

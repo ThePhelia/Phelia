@@ -73,7 +73,9 @@ def qb_login_ok() -> bool | None:
                 user,
             )
         else:
-            if resp.status_code == 200 and body.strip() == "Ok.":
+            cookie_ok = bool(resp.cookies.get("SID") or resp.cookies.get("sid"))
+            body_ok = body.strip().lower() in {"ok", "ok.", ""}
+            if resp.status_code == 200 and (body_ok or cookie_ok):
                 return True
 
             body_lower = body.lower()

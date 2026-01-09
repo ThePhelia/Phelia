@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Optional
 
 from app.core.config import settings
-from app.core.secure_store import get_key_store
+from app.core.secure_store import SecretsStore, get_secrets_store
 
 PROVIDER_ENV_MAP: dict[str, str] = {
     "omdb": "OMDB_API_KEY",
@@ -31,10 +31,10 @@ def normalize_provider(slug: str) -> str:
 class RuntimeProviderSettings:
     """Manage provider API keys that can be updated at runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, store: SecretsStore | None = None) -> None:
         self._lock = RLock()
         self._values: dict[str, Optional[str]] = {}
-        self._store = get_key_store()
+        self._store = store or get_secrets_store()
         self.reset_to_env()
 
     def reset_to_env(self) -> None:
@@ -42,17 +42,21 @@ class RuntimeProviderSettings:
 
         with self._lock:
             values: dict[str, Optional[str]] = {}
+            store_updates: dict[str, Optional[str]] = {}
             for slug, env_name in PROVIDER_ENV_MAP.items():
                 value = os.environ.get(env_name)
                 if value is None:
                     value = getattr(settings, env_name, None)
                 values[slug] = value
-            stored = self._store.load_section("providers")
             for slug in SUPPORTED_PROVIDER_SLUGS:
-                stored_value = stored.get(slug)
+                stored_value = self._store.get(slug)
                 if isinstance(stored_value, str) and stored_value.strip():
                     values[slug] = stored_value
+                elif values.get(slug):
+                    store_updates[slug] = values[slug]
             self._values = values
+            if store_updates:
+                self._store.set_many(store_updates)
 
     def get(self, slug: str) -> Optional[str]:
         normalized = normalize_provider(slug)
@@ -82,11 +86,10 @@ class RuntimeProviderSettings:
 
     def _persist(self) -> None:
         payload = {
-            slug: value
-            for slug, value in self._values.items()
-            if slug in SUPPORTED_PROVIDER_SLUGS and value
+            slug: self._values.get(slug)
+            for slug in SUPPORTED_PROVIDER_SLUGS
         }
-        self._store.save_section("providers", payload)
+        self._store.set_many(payload)
 
     def snapshot(self) -> dict[str, Optional[str]]:
         with self._lock:

@@ -18,6 +18,7 @@ _DEFAULT_ENV = {
     "QB_PASS": "dummy_password",
     "ANYIO_BACKEND": "asyncio",
     "METADATA_BASE_URL": "http://metadata-proxy.test",
+    "PHELIA_API_KEYS_PATH": str(Path(__file__).resolve().parent / ".test_api_keys.enc"),
 }
 
 for key, value in _DEFAULT_ENV.items():

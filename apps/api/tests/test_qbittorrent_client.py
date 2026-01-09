@@ -162,3 +162,33 @@ async def test_add_magnet_allows_blank_response():
     async with QbClient("http://qb", "user", "pass") as qb:
         qb._client = httpx.AsyncClient(transport=transport)
         await qb.add_magnet("magnet:?xt=urn:btih:abc")
+
+
+@pytest.mark.anyio
+async def test_login_accepts_auth_cookie():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text="",
+            headers={"set-cookie": "SID=abc; HttpOnly"},
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        await qb.login()
+
+
+@pytest.mark.anyio
+async def test_login_rejects_unexpected_body():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="Fails.", request=request)
+
+    transport = httpx.MockTransport(handler)
+
+    async with QbClient("http://qb", "user", "pass") as qb:
+        qb._client = httpx.AsyncClient(transport=transport)
+        with pytest.raises(httpx.HTTPStatusError):
+            await qb.login()

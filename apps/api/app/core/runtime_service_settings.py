@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Optional
 
 from app.core.config import settings
-from app.core.secure_store import get_key_store
+from app.core.secure_store import SecretsStore, get_secrets_store
 from app.services.search.jackett.settings import JackettSettings
 
 
@@ -64,12 +64,12 @@ class DownloadRuntimeSnapshot:
 class RuntimeServiceSettings:
     """Manage service configuration that can be updated at runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, store: SecretsStore | None = None) -> None:
         self._lock = RLock()
         self._jackett: JackettRuntimeSnapshot
         self._qbittorrent: QbittorrentRuntimeSnapshot
         self._downloads: DownloadRuntimeSnapshot
-        self._store = get_key_store()
+        self._store = store or get_secrets_store()
         self.reset_to_env()
 
     def reset_to_env(self) -> None:
@@ -82,13 +82,16 @@ class RuntimeServiceSettings:
                 getattr(settings, "JACKETT_CATEGORY_FILTERS", None)
             )
             minimum_seeders = max(0, int(getattr(settings, "JACKETT_MINIMUM_SEEDERS", 0)))
-            stored = self._store.load_section("services")
-            jackett_key = stored.get("jackett_api_key")
-            qb_password = stored.get("qbittorrent_password")
+            jackett_key = self._store.get("jackett_api_key")
+            qb_password = self._store.get("qbittorrent_password")
             if not isinstance(jackett_key, str) or not jackett_key.strip():
                 jackett_key = getattr(settings, "JACKETT_API_KEY", None) or None
+                if jackett_key:
+                    self._store.set("jackett_api_key", jackett_key)
             if not isinstance(qb_password, str) or not qb_password.strip():
                 qb_password = getattr(settings, "QB_PASS", "") or ""
+                if qb_password:
+                    self._store.set("qbittorrent_password", qb_password)
             self._jackett = JackettRuntimeSnapshot(
                 url=jackett_url,
                 api_key=jackett_key,
@@ -210,7 +213,7 @@ class RuntimeServiceSettings:
             "jackett_api_key": self._jackett.api_key,
             "qbittorrent_password": self._qbittorrent.password,
         }
-        self._store.save_section("services", payload)
+        self._store.set_many(payload)
 
     def is_allowed_save_dir(self, save_dir: str) -> bool:
         with self._lock:

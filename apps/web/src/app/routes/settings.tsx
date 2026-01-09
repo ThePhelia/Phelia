@@ -227,6 +227,7 @@ function ServiceConnections() {
   const jackettChanged =
     jackettUrl.trim() !== (serviceQuery.data?.jackett.url ?? '') ||
     jackettApiKey.trim().length > 0;
+  const jackettUiUrl = `${API_BASE}/settings/services/jackett/proxy`;
   const qbChanged =
     qbUrl.trim() !== (serviceQuery.data?.qbittorrent.url ?? '') ||
     qbUsername.trim() !== (serviceQuery.data?.qbittorrent.username ?? '') ||
@@ -354,6 +355,14 @@ function ServiceConnections() {
             placeholder={jackettConfigured ? 'Enter new API key to replace' : 'Enter API key'}
             disabled={updateJackett.isPending}
           />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>Need to add indexers? Open the Jackett UI.</span>
+          <Button asChild size="sm" variant="outline">
+            <a href={jackettUiUrl} target="_blank" rel="noreferrer">
+              Open Jackett UI
+            </a>
+          </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

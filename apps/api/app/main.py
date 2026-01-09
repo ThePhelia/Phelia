@@ -22,7 +22,7 @@ from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
 from app.services.qbittorrent.health import qb_login_ok
-from app.services.search.jackett import JackettProvider
+from app.services.search.jackett.provider import JackettProvider
 from app.services.search.registry import search_registry
 
 logger = logging.getLogger(__name__)

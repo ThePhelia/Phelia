@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -166,9 +168,41 @@ def _refresh_jackett_provider() -> None:
         logger.exception("Failed to refresh Jackett provider settings")
 
 
+def _extract_jackett_api_key(payload: Any) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            continue
+        if key.lower().replace("_", "") == "apikey":
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _autoload_jackett_api_key() -> None:
+    snapshot = runtime_service_settings.jackett_snapshot()
+    if snapshot.api_key:
+        return
+    url = f"{snapshot.url.rstrip('/')}/api/v2.0/server/config"
+    try:
+        response = httpx.get(url, timeout=5.0)
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return
+    try:
+        payload = response.json()
+    except ValueError:
+        return
+    api_key = _extract_jackett_api_key(payload)
+    if api_key and runtime_service_settings.update_jackett(api_key=api_key):
+        _refresh_jackett_provider()
+
+
 
 @router.get("/services", response_model=ServiceSettingsResponse)
 def get_service_settings() -> ServiceSettingsResponse:
+    _autoload_jackett_api_key()
     jackett = runtime_service_settings.jackett_snapshot()
     qbittorrent = runtime_service_settings.qbittorrent_snapshot()
     downloads = runtime_service_settings.download_snapshot()

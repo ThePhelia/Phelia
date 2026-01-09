@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Optional
 
 from app.core.config import settings
+from app.core.secure_store import get_key_store
 from app.services.search.jackett.settings import JackettSettings
 
 
@@ -68,6 +69,7 @@ class RuntimeServiceSettings:
         self._jackett: JackettRuntimeSnapshot
         self._qbittorrent: QbittorrentRuntimeSnapshot
         self._downloads: DownloadRuntimeSnapshot
+        self._store = get_key_store()
         self.reset_to_env()
 
     def reset_to_env(self) -> None:
@@ -80,9 +82,16 @@ class RuntimeServiceSettings:
                 getattr(settings, "JACKETT_CATEGORY_FILTERS", None)
             )
             minimum_seeders = max(0, int(getattr(settings, "JACKETT_MINIMUM_SEEDERS", 0)))
+            stored = self._store.load_section("services")
+            jackett_key = stored.get("jackett_api_key")
+            qb_password = stored.get("qbittorrent_password")
+            if not isinstance(jackett_key, str) or not jackett_key.strip():
+                jackett_key = getattr(settings, "JACKETT_API_KEY", None) or None
+            if not isinstance(qb_password, str) or not qb_password.strip():
+                qb_password = getattr(settings, "QB_PASS", "") or ""
             self._jackett = JackettRuntimeSnapshot(
                 url=jackett_url,
-                api_key=getattr(settings, "JACKETT_API_KEY", None) or None,
+                api_key=jackett_key,
                 allowlist=allowlist,
                 blocklist=blocklist,
                 category_filters=category_filters,
@@ -91,7 +100,7 @@ class RuntimeServiceSettings:
             self._qbittorrent = QbittorrentRuntimeSnapshot(
                 url=qb_url,
                 username=getattr(settings, "QB_USER", "") or "",
-                password=getattr(settings, "QB_PASS", "") or "",
+                password=qb_password,
             )
             allowed_dirs = _normalize_dirs(_parse_list(settings.ALLOWED_SAVE_DIRS))
             default_dir = str(settings.DEFAULT_SAVE_DIR).strip() or "/downloads"
@@ -146,6 +155,7 @@ class RuntimeServiceSettings:
             if updated == snapshot:
                 return False
             self._jackett = updated
+            self._persist()
             return True
 
     def update_qbittorrent(
@@ -165,6 +175,7 @@ class RuntimeServiceSettings:
             if updated == snapshot:
                 return False
             self._qbittorrent = updated
+            self._persist()
             return True
 
     def update_downloads(
@@ -193,6 +204,13 @@ class RuntimeServiceSettings:
                 return False
             self._downloads = updated
             return True
+
+    def _persist(self) -> None:
+        payload = {
+            "jackett_api_key": self._jackett.api_key,
+            "qbittorrent_password": self._qbittorrent.password,
+        }
+        self._store.save_section("services", payload)
 
     def is_allowed_save_dir(self, save_dir: str) -> bool:
         with self._lock:

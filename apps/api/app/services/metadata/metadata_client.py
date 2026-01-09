@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.core.runtime_settings import runtime_settings
 
 
 class MetadataProxyError(Exception):
@@ -33,15 +34,18 @@ class MetadataClient:
         path: str,
         params: dict[str, Any] | None,
         request_id: str | None,
+        headers: dict[str, str] | None = None,
     ) -> Any:
         url = f"{self.base_url}/{provider}/{path.lstrip('/')}"
-        headers = {"accept": "application/json"}
+        req_headers = {"accept": "application/json"}
         if request_id:
-            headers["x-request-id"] = request_id
+            req_headers["x-request-id"] = request_id
+        if headers:
+            req_headers.update(headers)
         async with httpx.AsyncClient(
             timeout=self._timeout, limits=self._limits
         ) as client:
-            response = await client.get(url, params=params or {}, headers=headers)
+            response = await client.get(url, params=params or {}, headers=req_headers)
         if response.status_code >= 400:
             detail = self._extract_error(response)
             raise MetadataProxyError(response.status_code, detail)
@@ -76,7 +80,11 @@ class MetadataClient:
         payload = dict(params or {})
         if path and "method" not in payload:
             payload["method"] = path
-        return await self._get("lastfm", "", payload, request_id)
+        headers: dict[str, str] = {}
+        api_key = runtime_settings.get("lastfm")
+        if api_key:
+            headers["x-phelia-lastfm-key"] = api_key
+        return await self._get("lastfm", "", payload, request_id, headers=headers)
 
     async def mb(
         self,

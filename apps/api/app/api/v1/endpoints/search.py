@@ -105,6 +105,39 @@ def _extract_genres(details: dict[str, Any]) -> list[str]:
     return deduped
 
 
+def _extract_sources(
+    details: dict[str, Any], parsed: dict[str, Any]
+) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    jackett = details.get("jackett") if isinstance(details, dict) else None
+    if isinstance(jackett, dict):
+        categories = jackett.get("categories")
+        category_names: list[str] = []
+        if isinstance(categories, Iterable) and not isinstance(categories, (str, bytes)):
+            for entry in categories:
+                name = _ensure_str(entry)
+                if name:
+                    category_names.append(name)
+        category = ", ".join(category_names) if category_names else None
+        magnet = _first_str(jackett.get("magnet"), parsed.get("magnet"))
+        torrent_url = _first_str(jackett.get("torrentUrl"), parsed.get("link"))
+        source = {
+            "provider": "jackett",
+            "tracker": _ensure_str(jackett.get("tracker")),
+            "indexer": _ensure_str(jackett.get("tracker")),
+            "category": category,
+            "size": jackett.get("size") or parsed.get("size"),
+            "seeders": jackett.get("seeders") or parsed.get("seeders"),
+            "leechers": jackett.get("peers") or parsed.get("peers"),
+            "magnet": magnet,
+            "url": torrent_url,
+        }
+        source = {key: value for key, value in source.items() if value not in (None, "")}
+        if source:
+            sources.append(source)
+    return sources
+
+
 def _extract_rating(details: dict[str, Any]) -> float | None:
     omdb = details.get("omdb")
     if isinstance(omdb, dict):
@@ -227,6 +260,7 @@ def _card_to_discover_item(card: EnrichedCard) -> DiscoverItem | None:
 
     rating = _extract_rating(details)
     genres = _extract_genres(details)
+    sources = _extract_sources(details, parsed)
 
     badges: list[str] = []
     if card.needs_confirmation:
@@ -241,6 +275,7 @@ def _card_to_discover_item(card: EnrichedCard) -> DiscoverItem | None:
         "parsed": card.parsed,
         "source_title": card.title,
         "source_kind": card.media_type,
+        "sources": sources or None,
     }
 
     # Prune empty entries to keep payload compact.

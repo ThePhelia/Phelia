@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Optional
 
 from app.core.config import settings
+from app.core.secure_store import get_key_store
 
 PROVIDER_ENV_MAP: dict[str, str] = {
     "omdb": "OMDB_API_KEY",
@@ -33,6 +34,7 @@ class RuntimeProviderSettings:
     def __init__(self) -> None:
         self._lock = RLock()
         self._values: dict[str, Optional[str]] = {}
+        self._store = get_key_store()
         self.reset_to_env()
 
     def reset_to_env(self) -> None:
@@ -45,6 +47,11 @@ class RuntimeProviderSettings:
                 if value is None:
                     value = getattr(settings, env_name, None)
                 values[slug] = value
+            stored = self._store.load_section("providers")
+            for slug in SUPPORTED_PROVIDER_SLUGS:
+                stored_value = stored.get(slug)
+                if isinstance(stored_value, str) and stored_value.strip():
+                    values[slug] = stored_value
             self._values = values
 
     def get(self, slug: str) -> Optional[str]:
@@ -62,6 +69,7 @@ class RuntimeProviderSettings:
             if current == new_value:
                 return False
             self._values[normalized] = new_value
+            self._persist()
             return True
 
     def update_many(self, values: dict[str, Optional[str]]) -> bool:
@@ -71,6 +79,14 @@ class RuntimeProviderSettings:
         for slug, value in values.items():
             mutated |= self.set(slug, value)
         return mutated
+
+    def _persist(self) -> None:
+        payload = {
+            slug: value
+            for slug, value in self._values.items()
+            if slug in SUPPORTED_PROVIDER_SLUGS and value
+        }
+        self._store.save_section("providers", payload)
 
     def snapshot(self) -> dict[str, Optional[str]]:
         with self._lock:

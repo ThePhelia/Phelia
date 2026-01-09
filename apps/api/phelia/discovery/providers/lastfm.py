@@ -112,6 +112,7 @@ class LastFMProvider(Provider):
             {
                 "method": "album.search",
                 "album": query,
+                "autocorrect": 1,
                 "limit": limit,
             }
         )

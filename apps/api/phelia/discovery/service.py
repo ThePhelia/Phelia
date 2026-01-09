@@ -267,22 +267,26 @@ async def get_new_releases(*, market: Optional[str], limit: int) -> List[AlbumIt
 
 async def quick_search(*, query: str, limit: int) -> List[AlbumItem]:
     limit = _max_limit(limit)
-    tasks: List[asyncio.Task[List[AlbumItem]]] = []
-    for name in ("spotify", "deezer", "lastfm", "itunes", "musicbrainz"):
-        provider = _get_provider(name)
-        if not provider:
-            continue
-        tasks.append(
-            asyncio.create_task(
-                _call_provider(
-                    provider, "search_albums", {"query": query, "limit": limit}
-                )
-            )
+    lastfm = _get_provider("lastfm")
+    if lastfm:
+        results = await _call_provider(
+            lastfm, "search_albums", {"query": query, "limit": limit}
         )
-    results = await asyncio.gather(*tasks) if tasks else []
-    merged = _merge_items(item for group in results for item in group)
-    await _enrich_items(merged)
-    return merged[:limit]
+        if results:
+            merged = _merge_items(results)
+            await _enrich_items(merged)
+            return merged[:limit]
+
+    listenbrainz = _get_provider("listenbrainz")
+    if listenbrainz:
+        results = await _call_provider(
+            listenbrainz, "search_albums", {"query": query, "limit": limit}
+        )
+        merged = _merge_items(results)
+        await _enrich_items(merged)
+        return merged[:limit]
+
+    return []
 
 
 async def providers_status() -> ProvidersStatus:

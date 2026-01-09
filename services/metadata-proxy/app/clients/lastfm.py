@@ -12,9 +12,11 @@ LASTFM_TTL = 60 * 60 * 24  # 24 hours
 
 
 def _lastfm_params(request: Request, path: str, settings) -> list[tuple[str, str]]:
-    if not settings.lastfm_api_key:
+    override_key = request.headers.get("x-phelia-lastfm-key")
+    api_key = override_key or settings.lastfm_api_key
+    if not api_key:
         raise HTTPException(status_code=503, detail="lastfm_not_configured")
-    params = [("api_key", settings.lastfm_api_key), ("format", "json")]
+    params = [("api_key", api_key), ("format", "json")]
     if path and "method" not in request.query_params:
         params.append(("method", path))
     return params

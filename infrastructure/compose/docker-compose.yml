@@ -41,6 +41,20 @@ services:
       timeout: 5s
       retries: 30
 
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+    volumes:
+      - jackett_config:/config
+    ports:
+      - "9117:9117"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9117/UI/Dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   api:
     build:
       context: ../../apps/api
@@ -178,5 +192,6 @@ volumes:
   db_data:
   redis_data:
   qb_config:
+  jackett_config:
   downloads:
   music:

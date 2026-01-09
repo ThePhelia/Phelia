@@ -125,6 +125,8 @@ def _lastfm_search_item(result: dict[str, Any]) -> tuple[float, MetaSearchItem] 
     if not name:
         return None
     artist = result.get("artist") if isinstance(result, dict) else None
+    if isinstance(artist, dict):
+        artist = artist.get("name") or artist.get("artist")
     images = result.get("image") if isinstance(result, dict) else None
     poster = None
     if isinstance(images, Iterable):
@@ -273,6 +275,38 @@ async def meta_search(
         if not isinstance(albums, list):
             return hits
         for result in albums:
+            mapped = _lastfm_search_item(result)
+            if mapped:
+                hits.append(mapped)
+
+        if hits:
+            return hits
+
+        params = {"artist": q, "limit": limit}
+        try:
+            response = await metadata.lastfm(
+                "artist.getTopAlbums", params=params, request_id=None
+            )
+        except MetadataProxyError as exc:
+            detail = exc.detail or "lastfm_error"
+            if (
+                exc.status_code in {502, 503}
+                and isinstance(detail, str)
+                and detail == "lastfm_not_configured"
+            ):
+                return hits
+            if exc.status_code == 404:
+                return hits
+            raise HTTPException(status_code=502, detail=detail) from exc
+        if not isinstance(response, dict):
+            return hits
+        topalbums = response.get("topalbums")
+        album_entries = topalbums.get("album") if isinstance(topalbums, dict) else []
+        if isinstance(album_entries, dict):
+            album_entries = [album_entries]
+        if not isinstance(album_entries, list):
+            return hits
+        for result in album_entries:
             mapped = _lastfm_search_item(result)
             if mapped:
                 hits.append(mapped)

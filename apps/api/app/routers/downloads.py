@@ -17,6 +17,20 @@ from app.services.bt.qbittorrent import QbClient
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 logger = logging.getLogger(__name__)
+QB_ERROR_DETAIL_MAP = {
+    "AUTH_FAILED": "qBittorrent auth failed; check credentials",
+    "NO_SID_COOKIE": "qBittorrent auth failed; missing SID cookie",
+    "BAD_BASE_URL": "qBittorrent base URL is invalid",
+    "UNREACHABLE": "qBittorrent is unreachable; check host/port",
+    "HTTP_STATUS": "qBittorrent returned an unexpected status",
+}
+
+
+def _qb_error_detail(status_value: str) -> str:
+    if status_value.startswith("error:"):
+        code = status_value.split(":", 1)[1]
+        return QB_ERROR_DETAIL_MAP.get(code, "Failed to reach qBittorrent")
+    return "Failed to reach qBittorrent"
 
 
 class DownloadCreate(BaseModel):
@@ -98,8 +112,8 @@ def create_download(body: DownloadCreate, db: Session = Depends(get_db)):
         deadline = time.time() + 2
         while time.time() < deadline:
             db.refresh(dl)
-            if dl.status == "error":
-                detail = "Failed to reach qBittorrent"
+            if dl.status.startswith("error"):
+                detail = _qb_error_detail(dl.status)
                 logger.error(detail)
                 raise HTTPException(status_code=502, detail=detail)
             time.sleep(0.1)

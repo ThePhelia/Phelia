@@ -147,11 +147,13 @@ class SecretsStore:
     def set(self, key: str, value: Any) -> None:
         self.set_many({key: value})
 
-    def set_many(self, values: dict[str, Any]) -> None:
+    def set_many(
+        self, values: dict[str, Any], allow_empty_keys: set[str] | None = None
+    ) -> None:
         with self._lock:
             data = self._store.load()
             for key, value in values.items():
-                if value is None or value == "":
+                if value is None or (value == "" and key not in (allow_empty_keys or set())):
                     data.pop(key, None)
                 else:
                     data[key] = value

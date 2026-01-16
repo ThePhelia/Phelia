@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.runtime_service_settings import runtime_service_settings
 from app.db.session import SessionLocal
 from app.db.models import Download
-from app.services.bt.qbittorrent import QbClient
+from app.services.bt.qbittorrent import QbClient, QbittorrentLoginError
 from app.services.broadcast import broadcast_download
 
 
@@ -41,6 +41,15 @@ def _qb() -> QbClient:
         username=qb.username,
         password=qb.password,
     )
+
+
+def _mark_download_error(db: Session, dl: Download, code: str | None = None) -> None:
+    if code:
+        dl.status = f"error:{code}"
+    else:
+        dl.status = "error"
+    db.commit()
+    broadcast_download(dl)
 
 
 def _db() -> Session:
@@ -120,9 +129,7 @@ def enqueue_download(
                                     content = resp.content
                         except httpx.HTTPError as e:
                             logger.error("Failed to fetch %s: %s", url, e)
-                            dl.status = "error"
-                            db.commit()
-                            broadcast_download(dl)
+                            _mark_download_error(db, dl)
                             raise
                     if dl.magnet:
                         await _maybe_await(
@@ -141,13 +148,17 @@ def enqueue_download(
                             )
                         )
                     return await _maybe_await(qb.list_torrents())
+                except QbittorrentLoginError as e:
+                    logger.warning(
+                        "qBittorrent auth error for %s: %s", download_id, e
+                    )
+                    _mark_download_error(db, dl, e.code)
+                    raise
                 except httpx.HTTPError as e:
                     logger.error(
                         "HTTP error talking to qBittorrent for %s: %s", download_id, e
                     )
-                    dl.status = "error"
-                    db.commit()
-                    broadcast_download(dl)
+                    _mark_download_error(db, dl)
                     raise
                 finally:
                     close = getattr(qb, "close", None)
@@ -160,9 +171,8 @@ def enqueue_download(
                 logger.exception(
                     "Failed to enqueue download for %s: %s", download_id, e
                 )
-                dl.status = "error"
-                db.commit()
-                broadcast_download(dl)
+                if not dl.status.startswith("error"):
+                    _mark_download_error(db, dl)
                 return False
 
             dl.status = "queued"
@@ -183,10 +193,8 @@ def enqueue_download(
     except Exception as e:
         logger.exception("Error in enqueue_download for %s: %s", download_id, e)
         dl = locals().get("dl")
-        if dl:
-            dl.status = "error"
-            db.commit()
-            broadcast_download(dl)
+        if dl and not dl.status.startswith("error"):
+            _mark_download_error(db, dl)
         return False
     finally:
         db.close()

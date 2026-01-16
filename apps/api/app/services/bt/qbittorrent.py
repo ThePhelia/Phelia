@@ -1,16 +1,26 @@
 from __future__ import annotations
-from typing import Dict, List, Optional
-import httpx
 import logging
+from typing import Dict, List, Optional
+
+import httpx
 
 from app.core.runtime_service_settings import runtime_service_settings
+
+logger = logging.getLogger(__name__)
+
+
+class QbittorrentLoginError(RuntimeError):
+    def __init__(self, code: str, message: str, status_code: int | None = None) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.status_code = status_code
 
 
 class QbClient:
     def __init__(
         self, base_url: str, username: str, password: str, timeout: float = 15.0
     ):
-        self.base_url = str(base_url).rstrip("/")
+        self.base_url = str(base_url).strip().rstrip("/")
         self.username = username
         self.password = password
         self.timeout = timeout
@@ -34,15 +44,65 @@ class QbClient:
     def _has_auth_cookie(self, response: httpx.Response) -> bool:
         return bool(response.cookies.get("SID") or response.cookies.get("sid"))
 
+    def _client_has_auth_cookie(self) -> bool:
+        client = self._client
+        if client is None:
+            return False
+        return bool(client.cookies.get("SID") or client.cookies.get("sid"))
+
     async def login(self) -> None:
-        r = await self._c().post(
-            f"{self.base_url}/api/v2/auth/login",
-            data={"username": self.username, "password": self.password},
-            headers=self._headers,
+        if not self.base_url or not self.base_url.startswith(("http://", "https://")):
+            raise QbittorrentLoginError(
+                "BAD_BASE_URL", "qBittorrent base URL must include http(s) scheme"
+            )
+        logger.debug(
+            "qBittorrent login url=%s user=%s password_set=%s",
+            self.base_url,
+            self.username,
+            bool(self.password),
         )
-        r.raise_for_status()
-        if not (self._is_success(r) or self._has_auth_cookie(r)):
-            raise httpx.HTTPStatusError("Login failed", request=r.request, response=r)
+        payload = {"username": self.username, "password": self.password}
+        headers = {**self._headers, "Content-Type": "application/x-www-form-urlencoded"}
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                r = await self._c().post(
+                    f"{self.base_url}/api/v2/auth/login",
+                    data=payload,
+                    headers=headers,
+                )
+                break
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt == 0:
+                    logger.warning("qBittorrent login request error: %s", exc)
+                    continue
+                raise QbittorrentLoginError(
+                    "UNREACHABLE", "qBittorrent login request failed"
+                ) from exc
+        else:  # pragma: no cover - defensive guard
+            raise QbittorrentLoginError(
+                "UNREACHABLE", "qBittorrent login request failed"
+            ) from last_error
+
+        body_snippet = r.text.strip()[:20]
+        logger.debug(
+            "qBittorrent auth response status=%s body=%r",
+            r.status_code,
+            body_snippet,
+        )
+        if r.status_code != 200:
+            raise QbittorrentLoginError(
+                "HTTP_STATUS",
+                f"qBittorrent auth returned status {r.status_code}",
+                status_code=r.status_code,
+            )
+        if r.text.strip().lower().startswith("fails"):
+            raise QbittorrentLoginError("AUTH_FAILED", "qBittorrent auth rejected")
+        if not (self._has_auth_cookie(r) or self._client_has_auth_cookie()):
+            raise QbittorrentLoginError("NO_SID_COOKIE", "qBittorrent auth missing SID")
+        if not self._is_success(r):
+            raise QbittorrentLoginError("AUTH_FAILED", "qBittorrent auth rejected")
 
     async def add_magnet(
         self,
@@ -154,8 +214,6 @@ class QbClient:
 
 
 QBitClient = QbClient
-
-logger = logging.getLogger(__name__)
 
 
 async def health_check() -> None:

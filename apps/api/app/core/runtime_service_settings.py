@@ -76,6 +76,7 @@ class RuntimeServiceSettings:
         with self._lock:
             jackett_url = _normalize_url(str(settings.JACKETT_URL))
             qb_url = _normalize_url(str(settings.QB_URL))
+            qb_username = getattr(settings, "QB_USER", "") or ""
             allowlist = _parse_list(getattr(settings, "JACKETT_ALLOWLIST", None))
             blocklist = _parse_list(getattr(settings, "JACKETT_BLOCKLIST", None))
             category_filters = _parse_list(
@@ -83,15 +84,27 @@ class RuntimeServiceSettings:
             )
             minimum_seeders = max(0, int(getattr(settings, "JACKETT_MINIMUM_SEEDERS", 0)))
             jackett_key = self._store.get("jackett_api_key")
+            qb_url_store = self._store.get("qbittorrent_url")
+            qb_username_store = self._store.get("qbittorrent_username")
             qb_password = self._store.get("qbittorrent_password")
             if not isinstance(jackett_key, str) or not jackett_key.strip():
                 jackett_key = getattr(settings, "JACKETT_API_KEY", None) or None
                 if jackett_key:
                     self._store.set("jackett_api_key", jackett_key)
-            if not isinstance(qb_password, str) or not qb_password.strip():
+            if isinstance(qb_url_store, str) and qb_url_store.strip():
+                qb_url = _normalize_url(qb_url_store)
+            if isinstance(qb_username_store, str) and qb_username_store.strip():
+                qb_username = qb_username_store.strip()
+            if not isinstance(qb_password, str):
                 qb_password = getattr(settings, "QB_PASS", "") or ""
-                if qb_password:
-                    self._store.set("qbittorrent_password", qb_password)
+            if qb_url:
+                self._store.set("qbittorrent_url", qb_url)
+            if qb_username:
+                self._store.set("qbittorrent_username", qb_username)
+            self._store.set_many(
+                {"qbittorrent_password": qb_password},
+                allow_empty_keys={"qbittorrent_password"},
+            )
             self._jackett = JackettRuntimeSnapshot(
                 url=jackett_url,
                 api_key=jackett_key,
@@ -102,7 +115,7 @@ class RuntimeServiceSettings:
             )
             self._qbittorrent = QbittorrentRuntimeSnapshot(
                 url=qb_url,
-                username=getattr(settings, "QB_USER", "") or "",
+                username=qb_username,
                 password=qb_password,
             )
             allowed_dirs = _normalize_dirs(_parse_list(settings.ALLOWED_SAVE_DIRS))
@@ -117,6 +130,7 @@ class RuntimeServiceSettings:
     def jackett_settings(self) -> JackettSettings:
         with self._lock:
             snapshot = self._jackett
+            self._refresh_qbittorrent_from_store()
             qb = self._qbittorrent
         return JackettSettings(
             jackett_url=snapshot.url,
@@ -136,6 +150,7 @@ class RuntimeServiceSettings:
 
     def qbittorrent_snapshot(self) -> QbittorrentRuntimeSnapshot:
         with self._lock:
+            self._refresh_qbittorrent_from_store()
             return self._qbittorrent
 
     def download_snapshot(self) -> DownloadRuntimeSnapshot:
@@ -211,9 +226,35 @@ class RuntimeServiceSettings:
     def _persist(self) -> None:
         payload = {
             "jackett_api_key": self._jackett.api_key,
+            "qbittorrent_url": self._qbittorrent.url,
+            "qbittorrent_username": self._qbittorrent.username,
             "qbittorrent_password": self._qbittorrent.password,
         }
-        self._store.set_many(payload)
+        self._store.set_many(
+            payload, allow_empty_keys={"qbittorrent_password"}
+        )
+
+    def _refresh_qbittorrent_from_store(self) -> None:
+        snapshot = self._qbittorrent
+        qb_url = snapshot.url
+        qb_username = snapshot.username
+        qb_password = snapshot.password
+        stored_url = self._store.get("qbittorrent_url")
+        stored_username = self._store.get("qbittorrent_username")
+        stored_password = self._store.get("qbittorrent_password")
+        if isinstance(stored_url, str) and stored_url.strip():
+            qb_url = _normalize_url(stored_url)
+        if isinstance(stored_username, str) and stored_username.strip():
+            qb_username = stored_username.strip()
+        if isinstance(stored_password, str):
+            qb_password = stored_password
+        updated = QbittorrentRuntimeSnapshot(
+            url=qb_url,
+            username=qb_username,
+            password=qb_password,
+        )
+        if updated != snapshot:
+            self._qbittorrent = updated
 
     def is_allowed_save_dir(self, save_dir: str) -> bool:
         with self._lock:

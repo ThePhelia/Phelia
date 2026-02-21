@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.runtime_settings import runtime_settings
@@ -255,17 +255,6 @@ def update_prowlarr_settings(request: ProwlarrSettingsUpdateRequest) -> Prowlarr
         api_key_configured=bool(snapshot.api_key),
     )
 
-
-
-
-@router.post("/services/jackett", response_model=ProwlarrSettingsResponse, deprecated=True)
-def update_jackett_settings_deprecated(
-    request: ProwlarrSettingsUpdateRequest,
-    response: Response,
-) -> ProwlarrSettingsResponse:
-    """Deprecated alias for legacy clients; prefer /services/prowlarr."""
-    response.headers["Warning"] = '299 - "Deprecated endpoint: use /settings/services/prowlarr"'
-    return update_prowlarr_settings(request)
 
 
 @router.post("/services/qbittorrent", response_model=QbittorrentSettingsResponse)

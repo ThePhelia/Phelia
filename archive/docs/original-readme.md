@@ -2,7 +2,7 @@
 
 ## About
 Phelia is a self-hosted media automation platform with a **modular plugin architecture**.  
-It combines ideas from Sonarr, Radarr, Jackett, and music discovery tools, but is built to be **extensible, self-contained, and community-driven**.  
+It combines ideas from Sonarr, Radarr, Prowlarr, and music discovery tools, but is built to be **extensible, self-contained, and community-driven**.  
 
 Phelia is not just another PVR — it is a framework where every feature (indexers, metadata providers, discovery panels, even UI settings) can be extended via plugins.
 
@@ -15,7 +15,7 @@ Phelia is not just another PVR — it is a framework where every feature (indexe
   Plugins can:
   - Add discovery sources (movies, TV, music, etc.)
   - Integrate external APIs (TMDB, Discogs, Last.fm, …)
-  - Provide torrent indexers (Jackett-style) or alternative providers
+  - Provide torrent indexers (Prowlarr-style) or alternative providers
   - Extend the UI with new settings panels and actions  
 
 - **Unified Media Discovery**  

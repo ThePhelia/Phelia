@@ -10,7 +10,7 @@ class Snapshot:
         self.api_key = api_key
 
 
-def test_deprecated_jackett_alias_updates_prowlarr(monkeypatch):
+def test_update_prowlarr_settings(monkeypatch):
     app = FastAPI()
     app.include_router(settings_endpoints.router, prefix="")
 
@@ -32,12 +32,11 @@ def test_deprecated_jackett_alias_updates_prowlarr(monkeypatch):
 
     client = TestClient(app)
     response = client.post(
-        "/settings/services/jackett",
+        "/settings/services/prowlarr",
         json={"url": "http://prowlarr.local", "api_key": "key123"},
     )
 
     assert response.status_code == 200
-    assert response.headers["Warning"].startswith("299")
     assert response.json() == {
         "url": "http://prowlarr.local",
         "api_key_configured": True,

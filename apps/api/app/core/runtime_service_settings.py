@@ -84,8 +84,6 @@ class RuntimeServiceSettings:
             )
             minimum_seeders = max(0, int(getattr(settings, "PROWLARR_MINIMUM_SEEDERS", 0)))
             prowlarr_key = self._store.get("prowlarr_api_key")
-            if not isinstance(prowlarr_key, str) or not prowlarr_key.strip():
-                prowlarr_key = self._store.get("jackett_api_key")
             qb_url_store = self._store.get("qbittorrent_url")
             qb_username_store = self._store.get("qbittorrent_username")
             qb_password = self._store.get("qbittorrent_password")

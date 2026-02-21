@@ -1,3 +1,4 @@
+import { API_BASE } from './api';
 import { SimilarArtist } from './types';
 
 export type AlbumItem = {
@@ -25,8 +26,7 @@ function buildUrl(path: string, params?: Record<string, string | number | undefi
     });
   }
   const qs = query.toString();
-  const rawBase = import.meta.env.VITE_API_BASE ?? '';
-  const normalisedBase = rawBase.replace(/\/+$/, '');
+  const normalisedBase = API_BASE.replace(/\/+$/, '');
   const normalisedPath = path.replace(/^\/+/, '');
 
   let url = normalisedPath;

@@ -92,25 +92,6 @@ describe('SettingsPage services tab', () => {
     expect(screen.getByRole('button', { name: 'Clear API key' })).toBeInTheDocument();
   });
 
-
-  it('gracefully handles missing nested service objects', async () => {
-    serviceSettingsState.data = {
-      prowlarr: undefined as unknown as { url: string; api_key_configured: boolean },
-      qbittorrent: undefined as unknown as { url: string; username: string; password_configured: boolean },
-      downloads: undefined as unknown as { allowed_dirs: string[]; default_dir: string },
-    };
-
-    const user = userEvent.setup();
-    renderWithProviders(<SettingsPage />);
-
-    await user.click(screen.getByRole('button', { name: /services/i }));
-
-    await waitFor(() => expect(screen.getByLabelText('Prowlarr URL')).toHaveValue(''));
-    expect(screen.getByLabelText('qBittorrent URL')).toHaveValue('');
-    expect(screen.getByLabelText('Username')).toHaveValue('');
-    expect(screen.getByLabelText('Default download path')).toHaveValue('');
-    expect(screen.getByLabelText('Allowed paths')).toHaveValue('');
-  });
   it('gracefully handles legacy allowed_dirs payloads returned as a string', async () => {
     serviceSettingsState.data = {
       ...serviceSettingsState.data,

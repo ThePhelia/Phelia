@@ -9,7 +9,7 @@ def _store(tmp_path):
 
 def test_qbittorrent_update_preserves_other_keys(tmp_path):
     store = _store(tmp_path)
-    store.set_many({"jackett_api_key": "jackett", "extra_key": "keep"})
+    store.set_many({"prowlarr_api_key": "prowlarr", "extra_key": "keep"})
     runtime = RuntimeServiceSettings(store=store)
 
     runtime.update_qbittorrent(

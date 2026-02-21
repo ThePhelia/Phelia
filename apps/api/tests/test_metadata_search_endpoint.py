@@ -116,3 +116,37 @@ async def test_search_transforms_cards():
 
     # Adapter should have been invoked with the requested query and default pagination.
     assert provider.calls == [("example", 40, "all")]
+
+
+@pytest.mark.anyio
+async def test_search_sources_use_prowlarr_metadata():
+    card = EnrichedCard(
+        media_type="movie",
+        confidence=0.9,
+        title="Example Source",
+        details={
+            "prowlarr": {
+                "tracker": "IndexerA",
+                "categories": ["Movies"],
+                "seeders": 12,
+                "peers": 3,
+                "size": 1024,
+                "magnet": "magnet:?xt=urn:btih:abc",
+                "torrentUrl": "https://example.test/torrent",
+            }
+        },
+        parsed={"seeders": 12, "peers": 3, "size": 1024},
+    )
+    provider = DummyProvider([card], {})
+    app = build_app(provider)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/search", params={"q": "source"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    source = payload["items"][0]["meta"]["sources"][0]
+    assert source["provider"] == "prowlarr"
+    assert source["tracker"] == "IndexerA"
+    assert source["seeders"] == 12

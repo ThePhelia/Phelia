@@ -25,7 +25,7 @@ from app.api.v1.endpoints import library as library_endpoints
 from app.api.v1.endpoints import details as details_endpoints
 from app.api.v1.endpoints import settings as settings_endpoints
 from app.services.qbittorrent.health import qb_login_ok
-from app.services.search.jackett.provider import JackettProvider
+from app.services.search.prowlarr.provider import ProwlarrProvider
 from app.services.search.registry import search_registry
 
 logger = logging.getLogger(__name__)
@@ -36,36 +36,43 @@ def load_provider_credentials(_db) -> None:
     return None
 
 
-def _extract_jackett_api_key(payload: Any) -> str | None:
-    if not isinstance(payload, dict):
-        return None
-    for key, value in payload.items():
-        if not isinstance(key, str):
-            continue
-        if key.lower().replace("_", "") == "apikey":
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+def _extract_prowlarr_api_key(payload: Any) -> str | None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if isinstance(key, str) and key.lower().replace("_", "") == "apikey":
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            candidate = _extract_prowlarr_api_key(value)
+            if candidate:
+                return candidate
+    elif isinstance(payload, list):
+        for value in payload:
+            candidate = _extract_prowlarr_api_key(value)
+            if candidate:
+                return candidate
     return None
 
 
-async def _autoload_jackett_api_key() -> None:
-    snapshot = runtime_service_settings.jackett_snapshot()
+async def _autoload_prowlarr_api_key() -> None:
+    snapshot = runtime_service_settings.prowlarr_snapshot()
     if snapshot.api_key:
         return
-    url = f"{snapshot.url.rstrip('/')}/api/v2.0/server/config"
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url)
-        response.raise_for_status()
-    except httpx.HTTPError:
-        return
-    try:
-        payload = response.json()
-    except ValueError:
-        return
-    api_key = _extract_jackett_api_key(payload)
-    if api_key:
-        runtime_service_settings.update_jackett(api_key=api_key)
+    for path in ("/api/v1/config/host", "/api/v2.0/server/config"):
+        url = f"{snapshot.url.rstrip('/')}" + path
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            continue
+        api_key = _extract_prowlarr_api_key(payload)
+        if api_key:
+            runtime_service_settings.update_prowlarr(api_key=api_key)
+            return
 
 
 app = FastAPI(title="Phelia", version="0.1.0")
@@ -108,13 +115,13 @@ async def startup_event():
         logger.exception("Error loading provider credentials")
 
     try:
-        await _autoload_jackett_api_key()
-        jackett_settings = runtime_service_settings.jackett_settings()
+        await _autoload_prowlarr_api_key()
+        prowlarr_settings = runtime_service_settings.prowlarr_settings()
         search_registry.register(
-            JackettProvider(jackett_settings, logger=logging.getLogger("phelia.search.jackett"))
+            ProwlarrProvider(prowlarr_settings, logger=logging.getLogger("phelia.search.prowlarr"))
         )
     except Exception:
-        logger.exception("Error initializing Jackett search provider")
+        logger.exception("Error initializing Prowlarr search provider")
 
     try:
         login_ok = await asyncio.to_thread(qb_login_ok)

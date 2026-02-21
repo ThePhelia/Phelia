@@ -6,12 +6,12 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from app.core.runtime_settings import runtime_settings
 from app.core.runtime_service_settings import runtime_service_settings
-from app.services.search.jackett.provider import JackettProvider
+from app.services.search.prowlarr.provider import ProwlarrProvider
 from app.services.search.registry import search_registry
 
 
@@ -120,12 +120,12 @@ def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysResponse:
     return ApiKeysResponse(api_keys=api_keys)
 
 
-class JackettSettingsResponse(BaseModel):
+class ProwlarrSettingsResponse(BaseModel):
     url: str
     api_key_configured: bool
 
 
-class JackettSettingsUpdateRequest(BaseModel):
+class ProwlarrSettingsUpdateRequest(BaseModel):
     url: str | None = None
     api_key: str | None = None
 
@@ -153,63 +153,71 @@ class DownloadSettingsUpdateRequest(BaseModel):
 
 
 class ServiceSettingsResponse(BaseModel):
-    jackett: JackettSettingsResponse
+    prowlarr: ProwlarrSettingsResponse
     qbittorrent: QbittorrentSettingsResponse
     downloads: DownloadSettingsResponse
 
 
-def _refresh_jackett_provider() -> None:
+def _refresh_prowlarr_provider() -> None:
     try:
-        settings = runtime_service_settings.jackett_settings()
+        settings = runtime_service_settings.prowlarr_settings()
         search_registry.register(
-            JackettProvider(settings, logger=logging.getLogger("phelia.search.jackett"))
+            ProwlarrProvider(settings, logger=logging.getLogger("phelia.search.prowlarr"))
         )
     except Exception:
-        logger.exception("Failed to refresh Jackett provider settings")
+        logger.exception("Failed to refresh Prowlarr provider settings")
 
 
-def _extract_jackett_api_key(payload: Any) -> str | None:
-    if not isinstance(payload, dict):
-        return None
-    for key, value in payload.items():
-        if not isinstance(key, str):
-            continue
-        if key.lower().replace("_", "") == "apikey":
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+def _extract_prowlarr_api_key(payload: Any) -> str | None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if isinstance(key, str) and key.lower().replace("_", "") == "apikey":
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            candidate = _extract_prowlarr_api_key(value)
+            if candidate:
+                return candidate
+    elif isinstance(payload, list):
+        for value in payload:
+            candidate = _extract_prowlarr_api_key(value)
+            if candidate:
+                return candidate
     return None
 
 
-def _autoload_jackett_api_key() -> None:
-    snapshot = runtime_service_settings.jackett_snapshot()
+def _autoload_prowlarr_api_key() -> None:
+    snapshot = runtime_service_settings.prowlarr_snapshot()
     if snapshot.api_key:
         return
-    url = f"{snapshot.url.rstrip('/')}/api/v2.0/server/config"
-    try:
-        response = httpx.get(url, timeout=5.0)
-        response.raise_for_status()
-    except httpx.HTTPError:
-        return
-    try:
-        payload = response.json()
-    except ValueError:
-        return
-    api_key = _extract_jackett_api_key(payload)
-    if api_key and runtime_service_settings.update_jackett(api_key=api_key):
-        _refresh_jackett_provider()
+    for path in ("/api/v1/config/host", "/api/v2.0/server/config"):
+        url = f"{snapshot.url.rstrip('/')}" + path
+        try:
+            response = httpx.get(url, timeout=5.0)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            continue
+        api_key = _extract_prowlarr_api_key(payload)
+        if api_key and runtime_service_settings.update_prowlarr(api_key=api_key):
+            _refresh_prowlarr_provider()
+        if api_key:
+            return
 
 
 
 @router.get("/services", response_model=ServiceSettingsResponse)
 def get_service_settings() -> ServiceSettingsResponse:
-    _autoload_jackett_api_key()
-    jackett = runtime_service_settings.jackett_snapshot()
+    _autoload_prowlarr_api_key()
+    prowlarr = runtime_service_settings.prowlarr_snapshot()
     qbittorrent = runtime_service_settings.qbittorrent_snapshot()
     downloads = runtime_service_settings.download_snapshot()
     return ServiceSettingsResponse(
-        jackett=JackettSettingsResponse(
-            url=jackett.url,
-            api_key_configured=bool(jackett.api_key),
+        prowlarr=ProwlarrSettingsResponse(
+            url=prowlarr.url,
+            api_key_configured=bool(prowlarr.api_key),
         ),
         qbittorrent=QbittorrentSettingsResponse(
             url=qbittorrent.url,
@@ -223,8 +231,8 @@ def get_service_settings() -> ServiceSettingsResponse:
     )
 
 
-@router.post("/services/jackett", response_model=JackettSettingsResponse)
-def update_jackett_settings(request: JackettSettingsUpdateRequest) -> JackettSettingsResponse:
+@router.post("/services/prowlarr", response_model=ProwlarrSettingsResponse)
+def update_prowlarr_settings(request: ProwlarrSettingsUpdateRequest) -> ProwlarrSettingsResponse:
     fields_set = request.model_fields_set
     url = None
     api_key = None
@@ -239,13 +247,25 @@ def update_jackett_settings(request: JackettSettingsUpdateRequest) -> JackettSet
             detail={"error": "invalid_url"},
         )
 
-    runtime_service_settings.update_jackett(url=url, api_key=api_key or None)
-    _refresh_jackett_provider()
-    snapshot = runtime_service_settings.jackett_snapshot()
-    return JackettSettingsResponse(
+    runtime_service_settings.update_prowlarr(url=url, api_key=api_key or None)
+    _refresh_prowlarr_provider()
+    snapshot = runtime_service_settings.prowlarr_snapshot()
+    return ProwlarrSettingsResponse(
         url=snapshot.url,
         api_key_configured=bool(snapshot.api_key),
     )
+
+
+
+
+@router.post("/services/jackett", response_model=ProwlarrSettingsResponse, deprecated=True)
+def update_jackett_settings_deprecated(
+    request: ProwlarrSettingsUpdateRequest,
+    response: Response,
+) -> ProwlarrSettingsResponse:
+    """Deprecated alias for legacy clients; prefer /services/prowlarr."""
+    response.headers["Warning"] = '299 - "Deprecated endpoint: use /settings/services/prowlarr"'
+    return update_prowlarr_settings(request)
 
 
 @router.post("/services/qbittorrent", response_model=QbittorrentSettingsResponse)
@@ -274,7 +294,7 @@ def update_qbittorrent_settings(
         username=username,
         password=password,
     )
-    _refresh_jackett_provider()
+    _refresh_prowlarr_provider()
     snapshot = runtime_service_settings.qbittorrent_snapshot()
     return QbittorrentSettingsResponse(
         url=snapshot.url,

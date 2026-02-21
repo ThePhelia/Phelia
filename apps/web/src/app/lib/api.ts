@@ -25,7 +25,19 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 const RAW_API_BASE: string | undefined = (import.meta as any).env?.VITE_API_BASE;
 const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
 
-function resolveApiBase(rawBase?: string): string {
+function shouldRewriteLocalhostApiBase(parsedBase: URL): boolean {
+  if (typeof window === 'undefined' || !window.location?.hostname) {
+    return false;
+  }
+
+  const isLocalHost = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i.test(parsedBase.hostname);
+  const browserHost = window.location.hostname;
+  const browserIsLocalHost = /^(localhost|127(?:\.\d{1,3}){3}|::1)$/i.test(browserHost);
+
+  return isLocalHost && !browserIsLocalHost;
+}
+
+export function resolveApiBase(rawBase?: string): string {
   if (!rawBase) {
     return DEFAULT_API_BASE;
   }
@@ -39,7 +51,16 @@ function resolveApiBase(rawBase?: string): string {
     return `${DEFAULT_API_BASE.replace(/\/api\/v1$/, '')}/${trimmed}`;
   }
 
-  return rawBase;
+  try {
+    const parsedBase = new URL(rawBase);
+    if (shouldRewriteLocalhostApiBase(parsedBase)) {
+      parsedBase.hostname = window.location.hostname;
+      return parsedBase.toString().replace(/\/$/, '');
+    }
+    return parsedBase.toString().replace(/\/$/, '');
+  } catch {
+    return rawBase;
+  }
 }
 
 export const API_BASE: string = resolveApiBase(RAW_API_BASE);

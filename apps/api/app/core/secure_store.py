@@ -159,6 +159,15 @@ class SecretsStore:
                     data[key] = value
             self._store.save(data)
 
+
+    def load_section(self, section: str) -> dict[str, Any]:
+        with self._lock:
+            return self._store.load_section(section)
+
+    def save_section(self, section: str, values: dict[str, Any]) -> None:
+        with self._lock:
+            self._store.save_section(section, values)
+
     def list_configured(self) -> list[str]:
         with self._lock:
             return [key for key, value in self._store.load().items() if value]

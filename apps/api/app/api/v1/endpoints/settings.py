@@ -6,10 +6,14 @@ import logging
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.core.runtime_settings import runtime_settings
+from app.core.runtime_integration_settings import (
+    FIELD_BY_KEY,
+    runtime_integration_settings,
+)
 from app.core.runtime_service_settings import runtime_service_settings
 from app.services.search.prowlarr.provider import ProwlarrProvider
 from app.services.search.registry import search_registry
@@ -18,6 +22,85 @@ from app.services.search.registry import search_registry
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+class IntegrationFieldResponse(BaseModel):
+    key: str
+    label: str
+    required: bool
+    masked_at_rest: bool
+    validation_rule: str
+    configured: bool
+    value: str | None = None
+
+
+class IntegrationsResponse(BaseModel):
+    integrations: list[IntegrationFieldResponse]
+
+
+class IntegrationUpdateRequest(BaseModel):
+    value: str | None
+
+
+class IntegrationsBulkUpdateRequest(BaseModel):
+    integrations: dict[str, str | None]
+
+
+def _build_integrations_response(*, include_secrets: bool = False) -> IntegrationsResponse:
+    described = runtime_integration_settings.describe(include_secrets=include_secrets)
+    fields = [
+        IntegrationFieldResponse(key=key, **payload)
+        for key, payload in described.items()
+    ]
+    return IntegrationsResponse(integrations=fields)
+
+
+@router.get("/integrations", response_model=IntegrationsResponse)
+def get_integrations(include_secrets: bool = Query(default=False)) -> IntegrationsResponse:
+    """Get third-party integration settings with metadata and masked secret values."""
+    return _build_integrations_response(include_secrets=include_secrets)
+
+
+@router.post("/integrations/{integration_key}", response_model=IntegrationFieldResponse)
+def update_integration(
+    integration_key: str, request: IntegrationUpdateRequest
+) -> IntegrationFieldResponse:
+    """Update a third-party integration field."""
+    if integration_key not in FIELD_BY_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "integration_not_found", "integration_key": integration_key},
+        )
+    try:
+        runtime_integration_settings.set(integration_key, request.value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "integration_key": integration_key, "message": str(exc)},
+        ) from exc
+
+    described = runtime_integration_settings.describe(include_secrets=False)[integration_key]
+    return IntegrationFieldResponse(key=integration_key, **described)
+
+
+@router.post("/integrations", response_model=IntegrationsResponse)
+def update_integrations(request: IntegrationsBulkUpdateRequest) -> IntegrationsResponse:
+    """Bulk update third-party integration fields."""
+    for integration_key in request.integrations.keys():
+        if integration_key not in FIELD_BY_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "integration_not_found", "integration_key": integration_key},
+            )
+    try:
+        runtime_integration_settings.update_many(request.integrations)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "message": str(exc)},
+        ) from exc
+
+    return _build_integrations_response(include_secrets=False)
 
 
 # API Key Management Models

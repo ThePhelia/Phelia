@@ -9,7 +9,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.secure_store import SecretsStore, get_secrets_store
-from app.services.search.jackett.settings import JackettSettings
+from app.services.search.prowlarr.settings import ProwlarrSettings
 
 
 def _normalize_url(value: str) -> str:
@@ -39,7 +39,7 @@ def _normalize_dirs(values: Iterable[str]) -> list[str]:
 
 
 @dataclass(frozen=True)
-class JackettRuntimeSnapshot:
+class ProwlarrRuntimeSnapshot:
     url: str
     api_key: Optional[str]
     allowlist: list[str]
@@ -66,7 +66,7 @@ class RuntimeServiceSettings:
 
     def __init__(self, store: SecretsStore | None = None) -> None:
         self._lock = RLock()
-        self._jackett: JackettRuntimeSnapshot
+        self._prowlarr: ProwlarrRuntimeSnapshot
         self._qbittorrent: QbittorrentRuntimeSnapshot
         self._downloads: DownloadRuntimeSnapshot
         self._store = store or get_secrets_store()
@@ -74,23 +74,27 @@ class RuntimeServiceSettings:
 
     def reset_to_env(self) -> None:
         with self._lock:
-            jackett_url = _normalize_url(str(settings.JACKETT_URL))
+            prowlarr_url = _normalize_url(str(settings.PROWLARR_URL))
             qb_url = _normalize_url(str(settings.QB_URL))
             qb_username = getattr(settings, "QB_USER", "") or ""
-            allowlist = _parse_list(getattr(settings, "JACKETT_ALLOWLIST", None))
-            blocklist = _parse_list(getattr(settings, "JACKETT_BLOCKLIST", None))
+            allowlist = _parse_list(getattr(settings, "PROWLARR_ALLOWLIST", None))
+            blocklist = _parse_list(getattr(settings, "PROWLARR_BLOCKLIST", None))
             category_filters = _parse_list(
-                getattr(settings, "JACKETT_CATEGORY_FILTERS", None)
+                getattr(settings, "PROWLARR_CATEGORY_FILTERS", None)
             )
-            minimum_seeders = max(0, int(getattr(settings, "JACKETT_MINIMUM_SEEDERS", 0)))
-            jackett_key = self._store.get("jackett_api_key")
+            minimum_seeders = max(0, int(getattr(settings, "PROWLARR_MINIMUM_SEEDERS", 0)))
+            prowlarr_key = self._store.get("prowlarr_api_key")
+            if not isinstance(prowlarr_key, str) or not prowlarr_key.strip():
+                prowlarr_key = self._store.get("jackett_api_key")
             qb_url_store = self._store.get("qbittorrent_url")
             qb_username_store = self._store.get("qbittorrent_username")
             qb_password = self._store.get("qbittorrent_password")
-            if not isinstance(jackett_key, str) or not jackett_key.strip():
-                jackett_key = getattr(settings, "JACKETT_API_KEY", None) or None
-                if jackett_key:
-                    self._store.set("jackett_api_key", jackett_key)
+            if not isinstance(prowlarr_key, str) or not prowlarr_key.strip():
+                prowlarr_key = getattr(settings, "PROWLARR_API_KEY", None) or None
+                if prowlarr_key:
+                    self._store.set("prowlarr_api_key", prowlarr_key)
+            elif self._store.get("prowlarr_api_key") != prowlarr_key:
+                self._store.set("prowlarr_api_key", prowlarr_key)
             if isinstance(qb_url_store, str) and qb_url_store.strip():
                 qb_url = _normalize_url(qb_url_store)
             if isinstance(qb_username_store, str) and qb_username_store.strip():
@@ -105,9 +109,9 @@ class RuntimeServiceSettings:
                 {"qbittorrent_password": qb_password},
                 allow_empty_keys={"qbittorrent_password"},
             )
-            self._jackett = JackettRuntimeSnapshot(
-                url=jackett_url,
-                api_key=jackett_key,
+            self._prowlarr = ProwlarrRuntimeSnapshot(
+                url=prowlarr_url,
+                api_key=prowlarr_key,
                 allowlist=allowlist,
                 blocklist=blocklist,
                 category_filters=category_filters,
@@ -127,14 +131,14 @@ class RuntimeServiceSettings:
                 default_dir=default_dir,
             )
 
-    def jackett_settings(self) -> JackettSettings:
+    def prowlarr_settings(self) -> ProwlarrSettings:
         with self._lock:
-            snapshot = self._jackett
+            snapshot = self._prowlarr
             self._refresh_qbittorrent_from_store()
             qb = self._qbittorrent
-        return JackettSettings(
-            jackett_url=snapshot.url,
-            jackett_api_key=snapshot.api_key,
+        return ProwlarrSettings(
+            prowlarr_url=snapshot.url,
+            prowlarr_api_key=snapshot.api_key,
             qbittorrent_url=qb.url,
             qbittorrent_username=qb.username,
             qbittorrent_password=qb.password,
@@ -144,9 +148,9 @@ class RuntimeServiceSettings:
             minimum_seeders=snapshot.minimum_seeders,
         )
 
-    def jackett_snapshot(self) -> JackettRuntimeSnapshot:
+    def prowlarr_snapshot(self) -> ProwlarrRuntimeSnapshot:
         with self._lock:
-            return self._jackett
+            return self._prowlarr
 
     def qbittorrent_snapshot(self) -> QbittorrentRuntimeSnapshot:
         with self._lock:
@@ -157,12 +161,12 @@ class RuntimeServiceSettings:
         with self._lock:
             return self._downloads
 
-    def update_jackett(self, *, url: Optional[str] = None, api_key: Optional[str] = None) -> bool:
+    def update_prowlarr(self, *, url: Optional[str] = None, api_key: Optional[str] = None) -> bool:
         with self._lock:
-            snapshot = self._jackett
+            snapshot = self._prowlarr
             new_url = snapshot.url if url is None else _normalize_url(url)
             new_api_key = snapshot.api_key if api_key is None else (api_key or None)
-            updated = JackettRuntimeSnapshot(
+            updated = ProwlarrRuntimeSnapshot(
                 url=new_url,
                 api_key=new_api_key,
                 allowlist=list(snapshot.allowlist),
@@ -172,7 +176,7 @@ class RuntimeServiceSettings:
             )
             if updated == snapshot:
                 return False
-            self._jackett = updated
+            self._prowlarr = updated
             self._persist()
             return True
 
@@ -225,7 +229,7 @@ class RuntimeServiceSettings:
 
     def _persist(self) -> None:
         payload = {
-            "jackett_api_key": self._jackett.api_key,
+            "prowlarr_api_key": self._prowlarr.api_key,
             "qbittorrent_url": self._qbittorrent.url,
             "qbittorrent_username": self._qbittorrent.username,
             "qbittorrent_password": self._qbittorrent.password,
@@ -266,7 +270,7 @@ runtime_service_settings = RuntimeServiceSettings()
 __all__ = [
     "runtime_service_settings",
     "RuntimeServiceSettings",
-    "JackettRuntimeSnapshot",
+    "ProwlarrRuntimeSnapshot",
     "QbittorrentRuntimeSnapshot",
     "DownloadRuntimeSnapshot",
 ]

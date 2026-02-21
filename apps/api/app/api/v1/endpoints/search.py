@@ -109,9 +109,9 @@ def _extract_sources(
     details: dict[str, Any], parsed: dict[str, Any]
 ) -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
-    jackett = details.get("jackett") if isinstance(details, dict) else None
-    if isinstance(jackett, dict):
-        categories = jackett.get("categories")
+    prowlarr = details.get("prowlarr") if isinstance(details, dict) else None
+    if isinstance(prowlarr, dict):
+        categories = prowlarr.get("categories")
         category_names: list[str] = []
         if isinstance(categories, Iterable) and not isinstance(categories, (str, bytes)):
             for entry in categories:
@@ -119,16 +119,16 @@ def _extract_sources(
                 if name:
                     category_names.append(name)
         category = ", ".join(category_names) if category_names else None
-        magnet = _first_str(jackett.get("magnet"), parsed.get("magnet"))
-        torrent_url = _first_str(jackett.get("torrentUrl"), parsed.get("link"))
+        magnet = _first_str(prowlarr.get("magnet"), parsed.get("magnet"))
+        torrent_url = _first_str(prowlarr.get("torrentUrl"), parsed.get("link"))
         source = {
-            "provider": "jackett",
-            "tracker": _ensure_str(jackett.get("tracker")),
-            "indexer": _ensure_str(jackett.get("tracker")),
+            "provider": "prowlarr",
+            "tracker": _ensure_str(prowlarr.get("tracker")),
+            "indexer": _ensure_str(prowlarr.get("tracker")),
             "category": category,
-            "size": jackett.get("size") or parsed.get("size"),
-            "seeders": jackett.get("seeders") or parsed.get("seeders"),
-            "leechers": jackett.get("peers") or parsed.get("peers"),
+            "size": prowlarr.get("size") or parsed.get("size"),
+            "seeders": prowlarr.get("seeders") or parsed.get("seeders"),
+            "leechers": prowlarr.get("peers") or parsed.get("peers"),
             "magnet": magnet,
             "url": torrent_url,
         }

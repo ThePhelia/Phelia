@@ -227,8 +227,8 @@ function ServiceConnections() {
     setDefaultDir(serviceQuery.data.downloads?.default_dir ?? '');
   }, [serviceQuery.data]);
 
-  const prowlarrConfigured = serviceQuery.data?.prowlarr.api_key_configured ?? false;
-  const qbPasswordConfigured = serviceQuery.data?.qbittorrent.password_configured ?? false;
+  const prowlarrConfigured = serviceQuery.data?.prowlarr?.api_key_configured ?? false;
+  const qbPasswordConfigured = serviceQuery.data?.qbittorrent?.password_configured ?? false;
   const allowedDirList = parseDirList(allowedDirs);
   const persistedAllowedDirs = normalizeAllowedDirs(serviceQuery.data?.downloads?.allowed_dirs);
   const downloadsChanged =
@@ -236,12 +236,12 @@ function ServiceConnections() {
     !areEqualLists(allowedDirList, persistedAllowedDirs);
 
   const prowlarrChanged =
-    prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr.url ?? '') ||
+    prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr?.url ?? '') ||
     prowlarrApiKey.trim().length > 0;
   const prowlarrUiUrl = 'http://localhost:9696';
   const qbChanged =
-    qbUrl.trim() !== (serviceQuery.data?.qbittorrent.url ?? '') ||
-    qbUsername.trim() !== (serviceQuery.data?.qbittorrent.username ?? '') ||
+    qbUrl.trim() !== (serviceQuery.data?.qbittorrent?.url ?? '') ||
+    qbUsername.trim() !== (serviceQuery.data?.qbittorrent?.username ?? '') ||
     qbPassword.trim().length > 0;
 
   const handleProwlarrSave = async () => {

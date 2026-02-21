@@ -232,9 +232,9 @@ function ServiceConnections() {
   const allowedDirList = parseDirList(allowedDirs);
   const persistedAllowedDirs = normalizeAllowedDirs(serviceQuery.data?.downloads?.allowed_dirs);
   const downloadsChanged =
-    (serviceQuery.data?.downloads.default_dir ?? '') !== defaultDir.trim() ||
-    !areEqualLists(allowedDirList, persistedAllowedDirs);
-
+	(serviceQuery.data?.downloads?.default_dir ?? '') !== defaultDir.trim() ||
+	!areEqualLists(allowedDirList, persistedAllowedDirs);
+	
   const prowlarrChanged =
     prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr?.url ?? '') ||
     prowlarrApiKey.trim().length > 0;

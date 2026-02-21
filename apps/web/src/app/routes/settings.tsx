@@ -9,7 +9,7 @@ import {
   useCapabilities,
   useServiceSettings,
   useUpdateDownloadSettings,
-  useUpdateJackettSettings,
+  useUpdateProwlarrSettings,
   useUpdateQbittorrentSettings,
 } from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
@@ -196,12 +196,12 @@ function areEqualLists(a: string[], b: string[]): boolean {
 
 function ServiceConnections() {
   const serviceQuery = useServiceSettings();
-  const updateJackett = useUpdateJackettSettings();
+  const updateProwlarr = useUpdateProwlarrSettings();
   const updateQbittorrent = useUpdateQbittorrentSettings();
   const updateDownloads = useUpdateDownloadSettings();
 
-  const [jackettUrl, setJackettUrl] = useState('');
-  const [jackettApiKey, setJackettApiKey] = useState('');
+  const [prowlarrUrl, setProwlarrUrl] = useState('');
+  const [prowlarrApiKey, setProwlarrApiKey] = useState('');
   const [qbUrl, setQbUrl] = useState('');
   const [qbUsername, setQbUsername] = useState('');
   const [qbPassword, setQbPassword] = useState('');
@@ -210,54 +210,54 @@ function ServiceConnections() {
 
   useEffect(() => {
     if (!serviceQuery.data) return;
-    setJackettUrl(serviceQuery.data.jackett.url ?? '');
+    setProwlarrUrl(serviceQuery.data.prowlarr.url ?? '');
     setQbUrl(serviceQuery.data.qbittorrent.url ?? '');
     setQbUsername(serviceQuery.data.qbittorrent.username ?? '');
     setAllowedDirs(serviceQuery.data.downloads.allowed_dirs.join(', '));
     setDefaultDir(serviceQuery.data.downloads.default_dir ?? '');
   }, [serviceQuery.data]);
 
-  const jackettConfigured = serviceQuery.data?.jackett.api_key_configured ?? false;
+  const prowlarrConfigured = serviceQuery.data?.prowlarr.api_key_configured ?? false;
   const qbPasswordConfigured = serviceQuery.data?.qbittorrent.password_configured ?? false;
   const allowedDirList = parseDirList(allowedDirs);
   const downloadsChanged =
     (serviceQuery.data?.downloads.default_dir ?? '') !== defaultDir.trim() ||
     !areEqualLists(allowedDirList, serviceQuery.data?.downloads.allowed_dirs ?? []);
 
-  const jackettChanged =
-    jackettUrl.trim() !== (serviceQuery.data?.jackett.url ?? '') ||
-    jackettApiKey.trim().length > 0;
-  const jackettUiUrl = 'http://localhost:9117/UI/Dashboard';
+  const prowlarrChanged =
+    prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr.url ?? '') ||
+    prowlarrApiKey.trim().length > 0;
+  const prowlarrUiUrl = 'http://localhost:9696';
   const qbChanged =
     qbUrl.trim() !== (serviceQuery.data?.qbittorrent.url ?? '') ||
     qbUsername.trim() !== (serviceQuery.data?.qbittorrent.username ?? '') ||
     qbPassword.trim().length > 0;
 
-  const handleJackettSave = async () => {
+  const handleProwlarrSave = async () => {
     const payload: { url?: string | null; api_key?: string | null } = {};
-    if (jackettUrl.trim()) {
-      payload.url = jackettUrl.trim();
+    if (prowlarrUrl.trim()) {
+      payload.url = prowlarrUrl.trim();
     }
-    if (jackettApiKey.trim()) {
-      payload.api_key = jackettApiKey.trim();
+    if (prowlarrApiKey.trim()) {
+      payload.api_key = prowlarrApiKey.trim();
     }
 
     try {
-      await updateJackett.mutateAsync(payload);
-      toast.success('Jackett settings updated');
-      setJackettApiKey('');
+      await updateProwlarr.mutateAsync(payload);
+      toast.success('Prowlarr settings updated');
+      setProwlarrApiKey('');
     } catch (error) {
-      toast.error('Failed to update Jackett settings');
+      toast.error('Failed to update Prowlarr settings');
     }
   };
 
-  const handleJackettClear = async () => {
+  const handleProwlarrClear = async () => {
     try {
-      await updateJackett.mutateAsync({ api_key: null });
-      toast.success('Jackett API key cleared');
-      setJackettApiKey('');
+      await updateProwlarr.mutateAsync({ api_key: null });
+      toast.success('Prowlarr API key cleared');
+      setProwlarrApiKey('');
     } catch (error) {
-      toast.error('Failed to clear Jackett API key');
+      toast.error('Failed to clear Prowlarr API key');
     }
   };
 
@@ -328,56 +328,56 @@ function ServiceConnections() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold text-foreground">Jackett</h3>
-            <p className="text-sm text-muted-foreground">Configure the Jackett URL and API key.</p>
+            <h3 className="text-base font-semibold text-foreground">Prowlarr</h3>
+            <p className="text-sm text-muted-foreground">Configure the Prowlarr URL and API key.</p>
           </div>
           <span className="text-xs text-muted-foreground">
-            {jackettConfigured ? 'API key configured' : 'API key missing'}
+            {prowlarrConfigured ? 'API key configured' : 'API key missing'}
           </span>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="jackett-url">Jackett URL</Label>
+          <Label htmlFor="prowlarr-url">Prowlarr URL</Label>
           <Input
-            id="jackett-url"
-            value={jackettUrl}
-            onChange={(e) => setJackettUrl(e.target.value)}
-            placeholder="http://jackett:9117"
-            disabled={updateJackett.isPending}
+            id="prowlarr-url"
+            value={prowlarrUrl}
+            onChange={(e) => setProwlarrUrl(e.target.value)}
+            placeholder="http://prowlarr:9696"
+            disabled={updateProwlarr.isPending}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="jackett-api-key">Jackett API Key</Label>
+          <Label htmlFor="prowlarr-api-key">Prowlarr API Key</Label>
           <Input
-            id="jackett-api-key"
+            id="prowlarr-api-key"
             type="password"
-            value={jackettApiKey}
-            onChange={(e) => setJackettApiKey(e.target.value)}
-            placeholder={jackettConfigured ? 'Enter new API key to replace' : 'Enter API key'}
-            disabled={updateJackett.isPending}
+            value={prowlarrApiKey}
+            onChange={(e) => setProwlarrApiKey(e.target.value)}
+            placeholder={prowlarrConfigured ? 'Enter new API key to replace' : 'Enter API key'}
+            disabled={updateProwlarr.isPending}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>Need to add indexers? Open the Jackett UI.</span>
+          <span>Need to add indexers? Open the Prowlarr UI.</span>
           <Button asChild size="sm" variant="outline">
-            <a href={jackettUiUrl} target="_blank" rel="noreferrer">
-              Open Jackett UI
+            <a href={prowlarrUiUrl} target="_blank" rel="noreferrer">
+              Open Prowlarr UI
             </a>
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            onClick={handleJackettSave}
-            disabled={!jackettChanged || updateJackett.isPending}
+            onClick={handleProwlarrSave}
+            disabled={!prowlarrChanged || updateProwlarr.isPending}
           >
-            {updateJackett.isPending ? 'Saving...' : 'Save'}
+            {updateProwlarr.isPending ? 'Saving...' : 'Save'}
           </Button>
-          {jackettConfigured && (
+          {prowlarrConfigured && (
             <Button
               size="sm"
               variant="outline"
-              onClick={handleJackettClear}
-              disabled={updateJackett.isPending}
+              onClick={handleProwlarrClear}
+              disabled={updateProwlarr.isPending}
             >
               Clear API key
             </Button>

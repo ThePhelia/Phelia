@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SettingsPage from '@/app/routes/settings';
 import { renderWithProviders } from '@/app/test-utils';
@@ -68,7 +68,7 @@ describe('SettingsPage services tab', () => {
 
     await user.click(screen.getByRole('button', { name: /services/i }));
 
-    expect(screen.getByLabelText('Prowlarr URL')).toHaveValue('http://prowlarr:9696');
+    await waitFor(() => expect(screen.getByLabelText('Prowlarr URL')).toHaveValue('http://prowlarr:9696'));
     expect(screen.getByLabelText('Prowlarr API Key')).toHaveAttribute('placeholder', 'Enter API key');
     expect(screen.queryByRole('button', { name: 'Clear API key' })).not.toBeInTheDocument();
   });
@@ -90,5 +90,19 @@ describe('SettingsPage services tab', () => {
       'Enter new API key to replace',
     );
     expect(screen.getByRole('button', { name: 'Clear API key' })).toBeInTheDocument();
+  });
+
+  it('gracefully handles legacy allowed_dirs payloads returned as a string', async () => {
+    serviceSettingsState.data = {
+      ...serviceSettingsState.data,
+      downloads: { allowed_dirs: '/downloads, /music' as unknown as string[], default_dir: '/downloads' },
+    };
+
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(screen.getByRole('button', { name: /services/i }));
+
+    expect(screen.getByLabelText('Allowed paths')).toHaveValue('/downloads, /music');
   });
 });

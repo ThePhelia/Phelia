@@ -194,6 +194,16 @@ function areEqualLists(a: string[], b: string[]): boolean {
   return a.every((value, index) => value === b[index]);
 }
 
+function normalizeAllowedDirs(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return parseDirList(value);
+  }
+  return [];
+}
+
 function ServiceConnections() {
   const serviceQuery = useServiceSettings();
   const updateProwlarr = useUpdateProwlarrSettings();
@@ -210,19 +220,20 @@ function ServiceConnections() {
 
   useEffect(() => {
     if (!serviceQuery.data) return;
-    setProwlarrUrl(serviceQuery.data.prowlarr.url ?? '');
-    setQbUrl(serviceQuery.data.qbittorrent.url ?? '');
-    setQbUsername(serviceQuery.data.qbittorrent.username ?? '');
-    setAllowedDirs(serviceQuery.data.downloads.allowed_dirs.join(', '));
-    setDefaultDir(serviceQuery.data.downloads.default_dir ?? '');
+    setProwlarrUrl(serviceQuery.data.prowlarr?.url ?? '');
+    setQbUrl(serviceQuery.data.qbittorrent?.url ?? '');
+    setQbUsername(serviceQuery.data.qbittorrent?.username ?? '');
+    setAllowedDirs(normalizeAllowedDirs(serviceQuery.data.downloads?.allowed_dirs).join(', '));
+    setDefaultDir(serviceQuery.data.downloads?.default_dir ?? '');
   }, [serviceQuery.data]);
 
   const prowlarrConfigured = serviceQuery.data?.prowlarr.api_key_configured ?? false;
   const qbPasswordConfigured = serviceQuery.data?.qbittorrent.password_configured ?? false;
   const allowedDirList = parseDirList(allowedDirs);
+  const persistedAllowedDirs = normalizeAllowedDirs(serviceQuery.data?.downloads?.allowed_dirs);
   const downloadsChanged =
     (serviceQuery.data?.downloads.default_dir ?? '') !== defaultDir.trim() ||
-    !areEqualLists(allowedDirList, serviceQuery.data?.downloads.allowed_dirs ?? []);
+    !areEqualLists(allowedDirList, persistedAllowedDirs);
 
   const prowlarrChanged =
     prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr.url ?? '') ||

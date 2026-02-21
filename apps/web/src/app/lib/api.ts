@@ -23,7 +23,7 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 }
 
 const RAW_API_BASE: string | undefined = (import.meta as any).env?.VITE_API_BASE;
-const DEFAULT_API_BASE = 'http://localhost:8000/api/v1';
+const DEFAULT_API_PATH = '/api/v1';
 
 function shouldRewriteLocalhostApiBase(parsedBase: URL): boolean {
   if (typeof window === 'undefined' || !window.location?.hostname) {
@@ -39,7 +39,10 @@ function shouldRewriteLocalhostApiBase(parsedBase: URL): boolean {
 
 export function resolveApiBase(rawBase?: string): string {
   if (!rawBase) {
-    return DEFAULT_API_BASE;
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}${DEFAULT_API_PATH}`;
+    }
+    return `http://localhost:8000${DEFAULT_API_PATH}`;
   }
 
   const hasScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawBase);
@@ -48,7 +51,8 @@ export function resolveApiBase(rawBase?: string): string {
     if (typeof window !== 'undefined' && window.location?.origin) {
       return `${window.location.origin}/${trimmed}`;
     }
-    return `${DEFAULT_API_BASE.replace(/\/api\/v1$/, '')}/${trimmed}`;
+
+    return `/${trimmed}`;
   }
 
   try {
@@ -67,9 +71,17 @@ export const API_BASE: string = resolveApiBase(RAW_API_BASE);
 
 const API_BASE_WITH_SLASH = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
 
+function isAbsoluteHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
 function buildUrl(path: string, query?: Record<string, QueryRecordValue>): string {
   const normalizedPath = path.replace(/^\//, '');
-  const url = new URL(normalizedPath, API_BASE_WITH_SLASH);
+  const base = API_BASE_WITH_SLASH;
+  const fallbackOrigin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+  const url = isAbsoluteHttpUrl(base)
+    ? new URL(normalizedPath, base)
+    : new URL(`${base.replace(/\/+$/, '')}/${normalizedPath}`, fallbackOrigin);
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {

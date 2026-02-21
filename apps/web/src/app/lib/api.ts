@@ -15,6 +15,7 @@ import type {
   IntegrationSettingsResponse,
   ProwlarrIndexer,
   ProwlarrIndexerTemplate,
+  ProwlarrApiKeyDiscoveryResponse,
 } from './types';
 import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
 
@@ -450,6 +451,23 @@ export function useUpdateProwlarrSettings() {
     { url?: string | null; api_key?: string | null }
   >({
     mutationFn: (data) => http('settings/services/prowlarr', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
+    },
+  });
+}
+
+
+export function useDiscoverProwlarrApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ProwlarrApiKeyDiscoveryResponse,
+    Error,
+    { force_refresh?: boolean; auth?: { username: string; password: string } | null }
+  >({
+    mutationFn: (data) => http('settings/services/prowlarr/discover-api-key', { method: 'POST', json: data }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
       void queryClient.invalidateQueries({ queryKey: ['capabilities'] });

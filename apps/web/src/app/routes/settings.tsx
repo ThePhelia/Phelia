@@ -12,6 +12,7 @@ import {
   useUpdateDownloadSettings,
   useUpdateIntegrationSettings,
   useUpdateProwlarrSettings,
+  useDiscoverProwlarrApiKey,
   useUpdateQbittorrentSettings,
   useProwlarrIndexers,
   useProwlarrIndexerTemplates,
@@ -617,11 +618,15 @@ function IndexersPanel() {
 function ServiceConnections() {
   const serviceQuery = useServiceSettings();
   const updateProwlarr = useUpdateProwlarrSettings();
+  const discoverProwlarrApiKey = useDiscoverProwlarrApiKey();
   const updateQbittorrent = useUpdateQbittorrentSettings();
   const updateDownloads = useUpdateDownloadSettings();
 
   const [prowlarrUrl, setProwlarrUrl] = useState('');
   const [prowlarrApiKey, setProwlarrApiKey] = useState('');
+  const [prowlarrAuthUsername, setProwlarrAuthUsername] = useState('');
+  const [prowlarrAuthPassword, setProwlarrAuthPassword] = useState('');
+  const [prowlarrFetchStatus, setProwlarrFetchStatus] = useState<'idle' | 'fetching' | 'success' | 'failed'>('idle');
   const [qbUrl, setQbUrl] = useState('');
   const [qbUsername, setQbUsername] = useState('');
   const [qbPassword, setQbPassword] = useState('');
@@ -638,6 +643,8 @@ function ServiceConnections() {
   }, [serviceQuery.data]);
 
   const prowlarrConfigured = serviceQuery.data?.prowlarr?.api_key_configured ?? false;
+  const prowlarrFetchBusy = discoverProwlarrApiKey.isPending || updateProwlarr.isPending;
+  const canFetchFromCache = !prowlarrConfigured;
   const qbPasswordConfigured = serviceQuery.data?.qbittorrent?.password_configured ?? false;
   const allowedDirList = parseDirList(allowedDirs);
   const persistedAllowedDirs = normalizeAllowedDirs(serviceQuery.data?.downloads?.allowed_dirs);
@@ -677,8 +684,27 @@ function ServiceConnections() {
       await updateProwlarr.mutateAsync({ api_key: null });
       toast.success('Prowlarr API key cleared');
       setProwlarrApiKey('');
+      setProwlarrFetchStatus('idle');
     } catch (error) {
       toast.error('Failed to clear Prowlarr API key');
+    }
+  };
+
+  const handleProwlarrFetchApiKey = async (forceRefresh = false) => {
+    setProwlarrFetchStatus('fetching');
+    try {
+      const auth = prowlarrAuthUsername.trim()
+        ? { username: prowlarrAuthUsername.trim(), password: prowlarrAuthPassword }
+        : null;
+      const response = await discoverProwlarrApiKey.mutateAsync({
+        force_refresh: forceRefresh,
+        auth,
+      });
+      setProwlarrFetchStatus('success');
+      toast.success(response.message);
+    } catch (error) {
+      setProwlarrFetchStatus('failed');
+      toast.error(error instanceof Error ? error.message : 'Failed to fetch Prowlarr API key');
     }
   };
 
@@ -776,6 +802,38 @@ function ServiceConnections() {
             placeholder={prowlarrConfigured ? 'Enter new API key to replace' : 'Enter API key'}
             disabled={updateProwlarr.isPending}
           />
+        </div>
+        <div className="space-y-2 rounded-md border border-border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">API key discovery</p>
+            <span className="text-xs text-muted-foreground">
+              {prowlarrFetchStatus === 'fetching' ? 'Fetching…' : prowlarrFetchStatus === 'success' ? 'Success' : prowlarrFetchStatus === 'failed' ? 'Failed' : 'Idle'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">Automatically fetch from Prowlarr config endpoint. Manual API key entry remains available as fallback.</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Input
+              value={prowlarrAuthUsername}
+              onChange={(e) => setProwlarrAuthUsername(e.target.value)}
+              placeholder="Optional local username"
+              disabled={prowlarrFetchBusy}
+            />
+            <Input
+              type="password"
+              value={prowlarrAuthPassword}
+              onChange={(e) => setProwlarrAuthPassword(e.target.value)}
+              placeholder="Optional local password"
+              disabled={prowlarrFetchBusy}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleProwlarrFetchApiKey(false)} disabled={prowlarrFetchBusy || !canFetchFromCache}>
+              {discoverProwlarrApiKey.isPending ? 'Fetching...' : 'Fetch API key'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => handleProwlarrFetchApiKey(true)} disabled={prowlarrFetchBusy}>
+              Refresh
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Need to add indexers? Open the Prowlarr UI.</span>

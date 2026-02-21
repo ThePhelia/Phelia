@@ -289,6 +289,23 @@ class ProwlarrSettingsResponse(BaseModel):
     api_key_configured: bool
 
 
+class ProwlarrApiKeyDiscoveryAuthContext(BaseModel):
+    username: str
+    password: str
+
+
+class ProwlarrApiKeyDiscoveryRequest(BaseModel):
+    force_refresh: bool = False
+    auth: ProwlarrApiKeyDiscoveryAuthContext | None = None
+
+
+class ProwlarrApiKeyDiscoveryResponse(BaseModel):
+    connected: bool
+    api_key_configured: bool
+    status: str
+    message: str
+
+
 class ProwlarrSettingsUpdateRequest(BaseModel):
     url: str | None = None
     api_key: str | None = None
@@ -406,14 +423,21 @@ def _extract_prowlarr_api_key(payload: Any) -> str | None:
     return None
 
 
-def _autoload_prowlarr_api_key() -> None:
+def _discover_prowlarr_api_key(
+    *,
+    force_refresh: bool = False,
+    auth: ProwlarrApiKeyDiscoveryAuthContext | None = None,
+) -> tuple[str | None, bool]:
     snapshot = runtime_service_settings.prowlarr_snapshot()
-    if snapshot.api_key:
-        return
+    if snapshot.api_key and not force_refresh:
+        return snapshot.api_key, True
+    request_auth = None
+    if auth is not None and auth.username.strip():
+        request_auth = httpx.BasicAuth(auth.username.strip(), auth.password)
     for path in ("/api/v1/config/host", "/api/v2.0/server/config"):
         url = f"{snapshot.url.rstrip('/')}" + path
         try:
-            response = httpx.get(url, timeout=5.0)
+            response = httpx.get(url, timeout=5.0, auth=request_auth)
             response.raise_for_status()
         except httpx.HTTPError:
             continue
@@ -422,10 +446,15 @@ def _autoload_prowlarr_api_key() -> None:
         except ValueError:
             continue
         api_key = _extract_prowlarr_api_key(payload)
-        if api_key and runtime_service_settings.update_prowlarr(api_key=api_key):
-            _refresh_prowlarr_provider()
         if api_key:
-            return
+            if runtime_service_settings.update_prowlarr(api_key=api_key):
+                _refresh_prowlarr_provider()
+            return api_key, False
+    return None, False
+
+
+def _autoload_prowlarr_api_key() -> None:
+    _discover_prowlarr_api_key()
 
 
 def _normalize_field(field: dict[str, Any]) -> ProwlarrIndexerFieldResponse:
@@ -560,6 +589,45 @@ def update_prowlarr_settings(request: ProwlarrSettingsUpdateRequest) -> Prowlarr
     return ProwlarrSettingsResponse(
         url=snapshot.url,
         api_key_configured=bool(snapshot.api_key),
+    )
+
+
+@router.post("/services/prowlarr/discover-api-key", response_model=ProwlarrApiKeyDiscoveryResponse)
+def discover_prowlarr_api_key(request: ProwlarrApiKeyDiscoveryRequest) -> ProwlarrApiKeyDiscoveryResponse:
+    snapshot = runtime_service_settings.prowlarr_snapshot()
+    if not snapshot.url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "prowlarr_url_missing",
+                "message": "Set the Prowlarr base URL before fetching the API key.",
+                "manual_entry_hint": "Enter the API key manually if automatic discovery cannot be used.",
+            },
+        )
+
+    api_key, from_cache = _discover_prowlarr_api_key(
+        force_refresh=request.force_refresh,
+        auth=request.auth,
+    )
+    if api_key:
+        return ProwlarrApiKeyDiscoveryResponse(
+            connected=True,
+            api_key_configured=True,
+            status="cached" if from_cache else "success",
+            message="Using cached API key." if from_cache else "Fetched and saved API key from Prowlarr.",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "error": "prowlarr_api_key_discovery_failed",
+            "message": (
+                "Unable to discover a Prowlarr API key from the supported config endpoints. "
+                "Verify URL/authentication and try again."
+            ),
+            "manual_entry_hint": "Enter the API key manually in Prowlarr settings as a fallback.",
+            "supported_endpoints": ["/api/v1/config/host", "/api/v2.0/server/config"],
+        },
     )
 
 

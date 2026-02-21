@@ -173,6 +173,13 @@ export interface CapabilitiesResponse {
   links?: Record<string, string | undefined>;
 }
 
+export interface ProwlarrApiKeyDiscoveryResponse {
+  connected: boolean;
+  api_key_configured: boolean;
+  status: 'cached' | 'success';
+  message: string;
+}
+
 export interface ServiceSettingsResponse {
   prowlarr: {
     url: string;

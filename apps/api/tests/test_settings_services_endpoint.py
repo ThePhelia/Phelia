@@ -59,3 +59,53 @@ def test_update_prowlarr_settings_rejects_invalid_url():
         "field": "url",
         "message": "url must be a valid http(s) URL",
     }
+
+
+def test_discover_prowlarr_api_key_success(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    monkeypatch.setattr(
+        settings_endpoints.runtime_service_settings,
+        "prowlarr_snapshot",
+        lambda: Snapshot(url="http://prowlarr.local:9696", api_key=None),
+    )
+    monkeypatch.setattr(
+        settings_endpoints,
+        "_discover_prowlarr_api_key",
+        lambda force_refresh=False, auth=None: ("abcd1234", False),
+    )
+
+    client = TestClient(app)
+    response = client.post("/settings/services/prowlarr/discover-api-key", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "connected": True,
+        "api_key_configured": True,
+        "status": "success",
+        "message": "Fetched and saved API key from Prowlarr.",
+    }
+
+
+def test_discover_prowlarr_api_key_failure_includes_manual_hint(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    monkeypatch.setattr(
+        settings_endpoints.runtime_service_settings,
+        "prowlarr_snapshot",
+        lambda: Snapshot(url="http://prowlarr.local:9696", api_key=None),
+    )
+    monkeypatch.setattr(
+        settings_endpoints,
+        "_discover_prowlarr_api_key",
+        lambda force_refresh=False, auth=None: (None, False),
+    )
+
+    client = TestClient(app)
+    response = client.post("/settings/services/prowlarr/discover-api-key", json={})
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "prowlarr_api_key_discovery_failed"
+    assert "manual_entry_hint" in response.json()["detail"]

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Switch } from '@/app/components/ui/switch';
 import { Label } from '@/app/components/ui/label';
@@ -13,11 +13,18 @@ import {
   useUpdateIntegrationSettings,
   useUpdateProwlarrSettings,
   useUpdateQbittorrentSettings,
+  useProwlarrIndexers,
+  useProwlarrIndexerTemplates,
+  useCreateProwlarrIndexer,
+  useUpdateProwlarrIndexer,
+  useDeleteProwlarrIndexer,
+  useTestProwlarrIndexer,
 } from '@/app/lib/api';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
+import type { ProwlarrIndexer, ProwlarrIndexerTemplate } from '@/app/lib/types';
 
 function formatProviderLabel(provider: string): string {
   return provider
@@ -423,6 +430,190 @@ function normalizeAllowedDirs(value: unknown): string[] {
   return [];
 }
 
+
+
+function IndexersPanel() {
+  const indexersQuery = useProwlarrIndexers();
+  const templatesQuery = useProwlarrIndexerTemplates();
+  const createIndexer = useCreateProwlarrIndexer();
+  const updateIndexer = useUpdateProwlarrIndexer();
+  const deleteIndexer = useDeleteProwlarrIndexer();
+  const testIndexer = useTestProwlarrIndexer();
+
+  const templates = templatesQuery.data?.templates ?? [];
+  const indexers = indexersQuery.data?.indexers ?? [];
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newSettings, setNewSettings] = useState<Record<string, string>>({});
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSettings, setEditSettings] = useState<Record<string, string>>({});
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId],
+  );
+
+  const busy = createIndexer.isPending || updateIndexer.isPending || deleteIndexer.isPending || testIndexer.isPending;
+
+  const loadTemplateDefaults = (template: ProwlarrIndexerTemplate | null) => {
+    if (!template) {
+      setNewSettings({});
+      return;
+    }
+    const defaults: Record<string, string> = {};
+    template.fields.forEach((field) => {
+      defaults[field.name] = field.value == null ? '' : String(field.value);
+    });
+    setNewSettings(defaults);
+  };
+
+  const startEdit = (indexer: ProwlarrIndexer) => {
+    setEditingId(indexer.id);
+    setEditName(indexer.name);
+    const next: Record<string, string> = {};
+    indexer.fields.forEach((field) => {
+      next[field.name] = field.value == null ? '' : String(field.value);
+    });
+    setEditSettings(next);
+  };
+
+  const saveNewIndexer = async () => {
+    if (!selectedTemplate) return;
+    try {
+      await createIndexer.mutateAsync({
+        template_id: selectedTemplate.id,
+        name: newName.trim() || selectedTemplate.name,
+        settings: newSettings,
+      });
+      toast.success('Indexer added');
+      setSelectedTemplateId(null);
+      setNewName('');
+      setNewSettings({});
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to add indexer');
+    }
+  };
+
+  const saveEditIndexer = async () => {
+    if (editingId == null) return;
+    try {
+      await updateIndexer.mutateAsync({
+        id: editingId,
+        name: editName.trim(),
+        settings: editSettings,
+      });
+      toast.success('Indexer updated');
+      setEditingId(null);
+      setEditSettings({});
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to update indexer');
+    }
+  };
+
+  const handleDelete = async (indexer: ProwlarrIndexer) => {
+    if (!window.confirm(`Delete indexer "${indexer.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteIndexer.mutateAsync({ id: indexer.id });
+      toast.success('Indexer deleted');
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to delete indexer');
+    }
+  };
+
+  const handleTest = async (indexer: ProwlarrIndexer) => {
+    try {
+      const result = await testIndexer.mutateAsync({ id: indexer.id });
+      toast.success(result.message || 'Indexer test succeeded');
+    } catch (error) {
+      toast.error((error as Error).message || 'Indexer test failed');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-base font-semibold text-foreground">Indexers</h3>
+        <p className="text-sm text-muted-foreground">Manage Prowlarr indexers from Phelia.</p>
+      </div>
+      {indexersQuery.isError && <p className="text-xs text-destructive">{indexersQuery.error.message}</p>}
+      {templatesQuery.isError && <p className="text-xs text-destructive">{templatesQuery.error.message}</p>}
+
+      <div className="rounded-lg border border-border/60 p-3 space-y-2">
+        <Label>Add indexer from template</Label>
+        <select
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          value={selectedTemplateId ?? ''}
+          onChange={(e) => {
+            const value = e.target.value ? Number(e.target.value) : null;
+            setSelectedTemplateId(value);
+            const template = templates.find((item) => item.id === value) ?? null;
+            loadTemplateDefaults(template);
+            setNewName(template?.name ?? '');
+          }}
+          disabled={busy}
+        >
+          <option value="">Choose template</option>
+          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+        </select>
+        {selectedTemplate && (
+          <div className="space-y-2">
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Indexer name" disabled={busy} />
+            {selectedTemplate.fields.slice(0, 8).map((field) => (
+              <div key={field.name} className="space-y-1">
+                <Label>{field.label}</Label>
+                <Input
+                  value={newSettings[field.name] ?? ''}
+                  onChange={(e) => setNewSettings((prev) => ({ ...prev, [field.name]: e.target.value }))}
+                  disabled={busy}
+                />
+              </div>
+            ))}
+            <Button size="sm" onClick={saveNewIndexer} disabled={busy || !newName.trim()}>{createIndexer.isPending ? 'Saving...' : 'Add Indexer'}</Button>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {indexers.map((indexer) => (
+          <div key={indexer.id} className="rounded-lg border border-border/60 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-medium text-sm">{indexer.name}</div>
+                <div className="text-xs text-muted-foreground">{indexer.implementation_name || indexer.implementation || 'Indexer'}</div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleTest(indexer)} disabled={busy}>{testIndexer.isPending ? 'Testing...' : 'Test'}</Button>
+                <Button size="sm" variant="outline" onClick={() => startEdit(indexer)} disabled={busy}>Edit</Button>
+                <Button size="sm" variant="outline" onClick={() => handleDelete(indexer)} disabled={busy}>Delete</Button>
+              </div>
+            </div>
+            {editingId === indexer.id && (
+              <div className="space-y-2">
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} disabled={busy} />
+                {indexer.fields.slice(0, 8).map((field) => (
+                  <div key={field.name} className="space-y-1">
+                    <Label>{field.label}</Label>
+                    <Input
+                      value={editSettings[field.name] ?? ''}
+                      onChange={(e) => setEditSettings((prev) => ({ ...prev, [field.name]: e.target.value }))}
+                      disabled={busy}
+                    />
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={saveEditIndexer} disabled={busy || !editName.trim()}>{updateIndexer.isPending ? 'Saving...' : 'Save'}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)} disabled={busy}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ServiceConnections() {
   const serviceQuery = useServiceSettings();
   const updateProwlarr = useUpdateProwlarrSettings();
@@ -762,6 +953,9 @@ function SettingsPage() {
             </p>
           </div>
           <ServiceConnections />
+          <div className="border-t border-border/60 pt-6">
+            <IndexersPanel />
+          </div>
           <div className="border-t border-border/60 pt-6">
             <IntegrationsPanel />
           </div>

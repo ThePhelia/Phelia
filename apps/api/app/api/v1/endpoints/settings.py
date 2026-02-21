@@ -7,8 +7,8 @@ import re
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 
 from app.core.runtime_settings import runtime_settings
 from app.core.runtime_integration_settings import (
@@ -17,6 +17,7 @@ from app.core.runtime_integration_settings import (
 )
 from app.core.runtime_service_settings import runtime_service_settings
 from app.services.search.prowlarr.provider import ProwlarrProvider
+from app.services.prowlarr_client import ProwlarrApiError, ProwlarrClient
 from app.services.search.registry import search_registry
 
 
@@ -321,6 +322,63 @@ class ServiceSettingsResponse(BaseModel):
     downloads: DownloadSettingsResponse
 
 
+class ProwlarrIndexerFieldResponse(BaseModel):
+    name: str
+    label: str
+    value: Any | None = None
+    type: str | None = None
+    required: bool = False
+    help_text: str | None = None
+    options: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProwlarrIndexerResponse(BaseModel):
+    id: int
+    name: str
+    enable: bool
+    implementation: str | None = None
+    implementation_name: str | None = None
+    protocol: str | None = None
+    app_profile_id: int | None = None
+    priority: int | None = None
+    fields: list[ProwlarrIndexerFieldResponse] = Field(default_factory=list)
+
+
+class ProwlarrIndexerListResponse(BaseModel):
+    indexers: list[ProwlarrIndexerResponse]
+
+
+class ProwlarrIndexerTemplateResponse(BaseModel):
+    id: int
+    name: str
+    implementation: str | None = None
+    implementation_name: str | None = None
+    protocol: str | None = None
+    fields: list[ProwlarrIndexerFieldResponse] = Field(default_factory=list)
+
+
+class ProwlarrIndexerTemplateListResponse(BaseModel):
+    templates: list[ProwlarrIndexerTemplateResponse]
+
+
+class ProwlarrIndexerUpsertRequest(BaseModel):
+    name: str | None = None
+    enable: bool | None = None
+    app_profile_id: int | None = None
+    priority: int | None = None
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProwlarrIndexerCreateRequest(ProwlarrIndexerUpsertRequest):
+    template_id: int
+
+
+class ProwlarrIndexerTestResponse(BaseModel):
+    success: bool
+    message: str
+    details: Any | None = None
+
+
 def _refresh_prowlarr_provider() -> None:
     try:
         settings = runtime_service_settings.prowlarr_settings()
@@ -368,6 +426,79 @@ def _autoload_prowlarr_api_key() -> None:
             _refresh_prowlarr_provider()
         if api_key:
             return
+
+
+def _normalize_field(field: dict[str, Any]) -> ProwlarrIndexerFieldResponse:
+    options = field.get("selectOptions") or field.get("options") or []
+    if not isinstance(options, list):
+        options = []
+    return ProwlarrIndexerFieldResponse(
+        name=str(field.get("name") or ""),
+        label=str(field.get("label") or field.get("name") or ""),
+        value=field.get("value"),
+        type=field.get("type"),
+        required=bool(field.get("required", False)),
+        help_text=field.get("helpText") or field.get("helpTextWarning") or None,
+        options=[item for item in options if isinstance(item, dict)],
+    )
+
+
+def _normalize_indexer(payload: dict[str, Any]) -> ProwlarrIndexerResponse:
+    fields = payload.get("fields")
+    normalized_fields = []
+    if isinstance(fields, list):
+        normalized_fields = [_normalize_field(field) for field in fields if isinstance(field, dict)]
+    return ProwlarrIndexerResponse(
+        id=int(payload.get("id") or 0),
+        name=str(payload.get("name") or ""),
+        enable=bool(payload.get("enable", False)),
+        implementation=payload.get("implementation"),
+        implementation_name=payload.get("implementationName"),
+        protocol=payload.get("protocol"),
+        app_profile_id=payload.get("appProfileId"),
+        priority=payload.get("priority"),
+        fields=normalized_fields,
+    )
+
+
+def _apply_settings(base: dict[str, Any], request: ProwlarrIndexerUpsertRequest) -> dict[str, Any]:
+    payload = dict(base)
+    if request.name is not None:
+        payload["name"] = request.name
+    if request.enable is not None:
+        payload["enable"] = request.enable
+    if request.app_profile_id is not None:
+        payload["appProfileId"] = request.app_profile_id
+    if request.priority is not None:
+        payload["priority"] = request.priority
+
+    fields = payload.get("fields")
+    if isinstance(fields, list):
+        by_name = {
+            str(field.get("name")): field
+            for field in fields
+            if isinstance(field, dict) and isinstance(field.get("name"), str)
+        }
+        for key, value in request.settings.items():
+            if key in by_name:
+                by_name[key]["value"] = value
+    return payload
+
+
+async def _prowlarr_client() -> ProwlarrClient:
+    _autoload_prowlarr_api_key()
+    return ProwlarrClient()
+
+
+def _raise_prowlarr_error(exc: ProwlarrApiError) -> None:
+    raise HTTPException(
+        status_code=exc.status_code,
+        detail={
+            "error": "prowlarr_request_failed",
+            "message": exc.message,
+            "prowlarr": exc.details,
+        },
+    ) from exc
 
 
 
@@ -522,3 +653,143 @@ def update_download_settings(
         allowed_dirs=snapshot.allowed_dirs,
         default_dir=snapshot.default_dir,
     )
+
+
+@router.get("/services/prowlarr/indexers", response_model=ProwlarrIndexerListResponse)
+async def list_prowlarr_indexers() -> ProwlarrIndexerListResponse:
+    client = await _prowlarr_client()
+    try:
+        indexers = await client.list_indexers()
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+    return ProwlarrIndexerListResponse(
+        indexers=[_normalize_indexer(indexer) for indexer in indexers if isinstance(indexer, dict)]
+    )
+
+
+@router.get("/services/prowlarr/indexer-templates", response_model=ProwlarrIndexerTemplateListResponse)
+async def list_prowlarr_indexer_templates() -> ProwlarrIndexerTemplateListResponse:
+    client = await _prowlarr_client()
+    try:
+        templates = await client.list_indexer_templates()
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+
+    normalized = []
+    for template in templates:
+        if not isinstance(template, dict):
+            continue
+        fields = template.get("fields") if isinstance(template.get("fields"), list) else []
+        normalized.append(
+            ProwlarrIndexerTemplateResponse(
+                id=int(template.get("id") or 0),
+                name=str(template.get("name") or ""),
+                implementation=template.get("implementation"),
+                implementation_name=template.get("implementationName"),
+                protocol=template.get("protocol"),
+                fields=[_normalize_field(field) for field in fields if isinstance(field, dict)],
+            )
+        )
+
+    return ProwlarrIndexerTemplateListResponse(templates=normalized)
+
+
+@router.post("/services/prowlarr/indexers", response_model=ProwlarrIndexerResponse)
+async def create_prowlarr_indexer(request: ProwlarrIndexerCreateRequest) -> ProwlarrIndexerResponse:
+    client = await _prowlarr_client()
+    try:
+        templates = await client.list_indexer_templates()
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+
+    template = next(
+        (
+            item
+            for item in templates
+            if isinstance(item, dict) and int(item.get("id") or 0) == request.template_id
+        ),
+        None,
+    )
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "template_not_found", "template_id": request.template_id},
+        )
+
+    payload = _apply_settings(template, request)
+
+    try:
+        created = await client.create_indexer(payload)
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+    return _normalize_indexer(created)
+
+
+@router.put("/services/prowlarr/indexers/{indexer_id}", response_model=ProwlarrIndexerResponse)
+async def update_prowlarr_indexer(indexer_id: int, request: ProwlarrIndexerUpsertRequest) -> ProwlarrIndexerResponse:
+    client = await _prowlarr_client()
+    try:
+        indexers = await client.list_indexers()
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+
+    current = next(
+        (
+            item
+            for item in indexers
+            if isinstance(item, dict) and int(item.get("id") or 0) == indexer_id
+        ),
+        None,
+    )
+    if current is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "indexer_not_found", "indexer_id": indexer_id},
+        )
+
+    payload = _apply_settings(current, request)
+    try:
+        updated = await client.update_indexer(indexer_id, payload)
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+    return _normalize_indexer(updated)
+
+
+@router.delete("/services/prowlarr/indexers/{indexer_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_prowlarr_indexer(indexer_id: int) -> Response:
+    client = await _prowlarr_client()
+    try:
+        await client.delete_indexer(indexer_id)
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/services/prowlarr/indexers/{indexer_id}/test", response_model=ProwlarrIndexerTestResponse)
+async def test_prowlarr_indexer(indexer_id: int) -> ProwlarrIndexerTestResponse:
+    client = await _prowlarr_client()
+    try:
+        indexers = await client.list_indexers()
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+
+    current = next(
+        (
+            item
+            for item in indexers
+            if isinstance(item, dict) and int(item.get("id") or 0) == indexer_id
+        ),
+        None,
+    )
+    if current is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "indexer_not_found", "indexer_id": indexer_id},
+        )
+
+    try:
+        result = await client.test_indexer(current)
+    except ProwlarrApiError as exc:
+        _raise_prowlarr_error(exc)
+
+    return ProwlarrIndexerTestResponse(success=True, message="Indexer test succeeded.", details=result)

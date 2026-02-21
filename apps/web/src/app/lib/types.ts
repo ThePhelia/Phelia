@@ -203,6 +203,37 @@ export interface IntegrationSettingsResponse {
   integrations: IntegrationField[];
 }
 
+
+export interface ProwlarrIndexerField {
+  name: string;
+  label: string;
+  value: unknown;
+  type?: string | null;
+  required: boolean;
+  help_text?: string | null;
+  options: Array<Record<string, unknown>>;
+}
+
+export interface ProwlarrIndexer {
+  id: number;
+  name: string;
+  enable: boolean;
+  implementation?: string | null;
+  implementation_name?: string | null;
+  protocol?: string | null;
+  app_profile_id?: number | null;
+  priority?: number | null;
+  fields: ProwlarrIndexerField[];
+}
+
+export interface ProwlarrIndexerTemplate {
+  id: number;
+  name: string;
+  implementation?: string | null;
+  implementation_name?: string | null;
+  protocol?: string | null;
+  fields: ProwlarrIndexerField[];
+}
 export interface ListMutationInput {
   action: 'add' | 'remove';
   list: 'watchlist' | 'favorites' | 'playlist';

@@ -13,6 +13,8 @@ import type {
   ServiceSettingsResponse,
   IntegrationField,
   IntegrationSettingsResponse,
+  ProwlarrIndexer,
+  ProwlarrIndexerTemplate,
 } from './types';
 import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
 
@@ -129,9 +131,12 @@ async function http<T>(path: string, options: RequestOptions = {}): Promise<T> {
       const errorData = await response.json();
       if (errorData && typeof errorData.message === 'string') {
         message = errorData.message;
+      } else if (errorData && typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (errorData && typeof errorData.detail === 'object' && errorData.detail && typeof (errorData.detail as { message?: unknown }).message === 'string') {
+        message = String((errorData.detail as { message: string }).message);
       }
     } catch {
-      // ignore JSON parse errors and fall back to status text
       if (response.statusText) {
         message = response.statusText;
       }
@@ -480,5 +485,64 @@ export function useUpdateDownloadSettings() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
     },
+  });
+}
+
+
+export function useProwlarrIndexers() {
+  return useQuery<{ indexers: ProwlarrIndexer[] }, Error>({
+    queryKey: ['prowlarr-indexers'],
+    queryFn: () => http('settings/services/prowlarr/indexers'),
+  });
+}
+
+export function useProwlarrIndexerTemplates() {
+  return useQuery<{ templates: ProwlarrIndexerTemplate[] }, Error>({
+    queryKey: ['prowlarr-indexer-templates'],
+    queryFn: () => http('settings/services/prowlarr/indexer-templates'),
+  });
+}
+
+export function useCreateProwlarrIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ProwlarrIndexer,
+    Error,
+    { template_id: number; name?: string; enable?: boolean; app_profile_id?: number; priority?: number; settings: Record<string, unknown> }
+  >({
+    mutationFn: (data) => http('settings/services/prowlarr/indexers', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['prowlarr-indexers'] });
+    },
+  });
+}
+
+export function useUpdateProwlarrIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    ProwlarrIndexer,
+    Error,
+    { id: number; name?: string; enable?: boolean; app_profile_id?: number; priority?: number; settings: Record<string, unknown> }
+  >({
+    mutationFn: ({ id, ...data }) => http(`settings/services/prowlarr/indexers/${id}`, { method: 'PUT', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['prowlarr-indexers'] });
+    },
+  });
+}
+
+export function useDeleteProwlarrIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { id: number }>({
+    mutationFn: ({ id }) => http(`settings/services/prowlarr/indexers/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['prowlarr-indexers'] });
+    },
+  });
+}
+
+export function useTestProwlarrIndexer() {
+  return useMutation<{ success: boolean; message: string }, Error, { id: number }>({
+    mutationFn: ({ id }) => http(`settings/services/prowlarr/indexers/${id}/test`, { method: 'POST' }),
   });
 }

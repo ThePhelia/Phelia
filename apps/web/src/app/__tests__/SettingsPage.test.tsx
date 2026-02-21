@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import SettingsPage from '@/app/routes/settings';
 import { renderWithProviders } from '@/app/test-utils';
 
-const { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, updateIntegrationsMutate } = vi.hoisted(() => {
+const { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateIntegrationsMutate } = vi.hoisted(() => {
   const capabilitiesState = {
     data: { version: '1.2.3', services: { torrent_search: false } },
     isLoading: false,
@@ -37,6 +37,22 @@ const { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettin
     refetch: vi.fn(),
   };
 
+
+
+  const prowlarrIndexersState = {
+    data: { indexers: [{ id: 1, name: 'Demo Indexer', enable: true, fields: [] }] },
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+  };
+
+  const prowlarrTemplatesState = {
+    data: { templates: [{ id: 10, name: 'Template', fields: [] }] },
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+  };
+
   const updateIntegrationsMutate = vi.fn();
 
   const serviceSettingsState = {
@@ -50,7 +66,7 @@ const { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettin
     error: null as Error | null,
   };
 
-  return { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, updateIntegrationsMutate };
+  return { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateIntegrationsMutate };
 });
 
 vi.mock('@/app/lib/api', () => ({
@@ -62,6 +78,12 @@ vi.mock('@/app/lib/api', () => ({
   useUpdateDownloadSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useIntegrationSettings: () => integrationSettingsState,
   useUpdateIntegrationSettings: () => ({ mutateAsync: updateIntegrationsMutate, isPending: false }),
+  useProwlarrIndexers: () => prowlarrIndexersState,
+  useProwlarrIndexerTemplates: () => prowlarrTemplatesState,
+  useCreateProwlarrIndexer: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateProwlarrIndexer: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteProwlarrIndexer: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useTestProwlarrIndexer: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 describe('SettingsPage services tab', () => {
@@ -96,6 +118,7 @@ describe('SettingsPage services tab', () => {
     await user.click(screen.getByRole('button', { name: /services/i }));
 
     expect(screen.getByText('Connected Services')).toBeInTheDocument();
+    expect(screen.getByText('Indexers')).toBeInTheDocument();
     expect(screen.getByText(/Phelia version 1\.2\.3/)).toBeInTheDocument();
     expect(screen.getByLabelText(/OMDb API Key/i)).toBeInTheDocument();
   });

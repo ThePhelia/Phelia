@@ -358,15 +358,15 @@ export function useServiceSettings() {
   });
 }
 
-export function useUpdateJackettSettings() {
+export function useUpdateProwlarrSettings() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    ServiceSettingsResponse['jackett'],
+    ServiceSettingsResponse['prowlarr'],
     Error,
     { url?: string | null; api_key?: string | null }
   >({
-    mutationFn: (data) => http('settings/services/jackett', { method: 'POST', json: data }),
+    mutationFn: (data) => http('settings/services/prowlarr', { method: 'POST', json: data }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['service-settings'] });
       void queryClient.invalidateQueries({ queryKey: ['capabilities'] });

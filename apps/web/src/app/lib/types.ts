@@ -174,7 +174,7 @@ export interface CapabilitiesResponse {
 }
 
 export interface ServiceSettingsResponse {
-  jackett: {
+  prowlarr: {
     url: string;
     api_key_configured: boolean;
   };

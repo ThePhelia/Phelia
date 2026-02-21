@@ -8,7 +8,9 @@ import {
   useApiKeys,
   useCapabilities,
   useServiceSettings,
+  useIntegrationSettings,
   useUpdateDownloadSettings,
+  useUpdateIntegrationSettings,
   useUpdateProwlarrSettings,
   useUpdateQbittorrentSettings,
 } from '@/app/lib/api';
@@ -176,6 +178,223 @@ function ApiKeyManagement() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+const SECRET_MASK = '••••••••';
+
+function parseValidationRule(rule: string): { minLength?: number; regex?: RegExp } {
+  if (rule.startsWith('min_length:')) {
+    const min = Number(rule.split(':')[1]);
+    return Number.isFinite(min) ? { minLength: min } : {};
+  }
+  if (rule.startsWith('regex:')) {
+    const pattern = rule.slice('regex:'.length);
+    try {
+      return { regex: new RegExp(pattern) };
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function integrationValueError(field: { required: boolean; validation_rule: string; label: string; configured: boolean; masked_at_rest: boolean }, value: string, initialValue: string): string | null {
+  const trimmed = value.trim();
+  const isMaskedUnchanged = field.masked_at_rest && field.configured && value === initialValue && initialValue === SECRET_MASK;
+
+  if (isMaskedUnchanged) return null;
+  if (field.required && !trimmed) {
+    return `${field.label} is required.`;
+  }
+  if (!trimmed) return null;
+
+  const rule = parseValidationRule(field.validation_rule);
+  if (rule.minLength && trimmed.length < rule.minLength) {
+    return `${field.label} must be at least ${rule.minLength} characters.`;
+  }
+  if (rule.regex && !rule.regex.test(trimmed)) {
+    return `${field.label} format is invalid.`;
+  }
+  return null;
+}
+
+function IntegrationsPanel() {
+  const integrationsQuery = useIntegrationSettings();
+  const updateIntegrations = useUpdateIntegrationSettings();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [initialValues, setInitialValues] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+
+  const integrations = integrationsQuery.data?.integrations ?? [];
+
+  useEffect(() => {
+    const nextValues: Record<string, string> = {};
+    const nextTouched: Record<string, boolean> = {};
+    integrations.forEach((field) => {
+      nextValues[field.key] = field.value ?? '';
+      nextTouched[field.key] = false;
+    });
+    setValues(nextValues);
+    setInitialValues(nextValues);
+    setTouched(nextTouched);
+    setRevealed({});
+  }, [integrationsQuery.data]);
+
+  const providerHealth = integrations.reduce<Record<string, { configured: number; total: number }>>((acc, field) => {
+    const provider = field.key.split('.')[0] ?? 'general';
+    const current = acc[provider] ?? { configured: 0, total: 0 };
+    current.total += 1;
+    if (field.configured) current.configured += 1;
+    acc[provider] = current;
+    return acc;
+  }, {});
+
+  const fieldErrors = integrations.reduce<Record<string, string | null>>((acc, field) => {
+    acc[field.key] = integrationValueError(field, values[field.key] ?? '', initialValues[field.key] ?? '');
+    return acc;
+  }, {});
+
+  const changedKeys = integrations
+    .map((field) => field.key)
+    .filter((key) => touched[key] && (values[key] ?? '') !== (initialValues[key] ?? ''));
+
+  const hasValidationErrors = changedKeys.some((key) => Boolean(fieldErrors[key]));
+
+  const handleSave = async () => {
+    const payload: Record<string, string | null> = {};
+
+    integrations.forEach((field) => {
+      const key = field.key;
+      if (!touched[key]) return;
+      const current = values[key] ?? '';
+      const initial = initialValues[key] ?? '';
+      if (current === initial) return;
+
+      if (field.masked_at_rest && field.configured && current === SECRET_MASK && initial === SECRET_MASK) {
+        return;
+      }
+
+      const trimmed = current.trim();
+      payload[key] = trimmed ? trimmed : null;
+    });
+
+    const payloadKeys = Object.keys(payload);
+    if (!payloadKeys.length) return;
+
+    try {
+      await updateIntegrations.mutateAsync({ integrations: payload });
+      toast.success('Integrations updated');
+      await integrationsQuery.refetch();
+    } catch (error) {
+      toast.error('Failed to update integrations');
+    }
+  };
+
+  if (integrationsQuery.isLoading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (integrationsQuery.isError) {
+    return <p className="text-sm text-destructive">Failed to load integrations.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold text-foreground">Integrations</h3>
+        <p className="text-sm text-muted-foreground">Manage provider integration credentials and metadata from backend schema.</p>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(providerHealth).map(([provider, health]) => {
+          const healthy = health.configured === health.total;
+          return (
+            <div key={provider} className="rounded-lg border border-border/60 px-3 py-2 text-xs">
+              <div className="font-medium text-foreground">{formatProviderLabel(provider)}</div>
+              <div className={healthy ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
+                {healthy ? 'Configured' : `Unconfigured (${health.configured}/${health.total})`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {integrations.map((field) => {
+        const value = values[field.key] ?? '';
+        const dirty = touched[field.key] && value !== (initialValues[field.key] ?? '');
+        const error = fieldErrors[field.key];
+        const isSecret = field.masked_at_rest;
+        const displayType = isSecret && !revealed[field.key] ? 'password' : 'text';
+
+        return (
+          <div key={field.key} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor={`integration-${field.key}`}>{field.label}</Label>
+              <span className="text-xs text-muted-foreground">
+                {field.configured ? 'Configured' : 'Unconfigured'}
+                {dirty ? ' • Modified' : ' • Unchanged'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                id={`integration-${field.key}`}
+                type={displayType}
+                value={value}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setValues((prev) => ({ ...prev, [field.key]: next }));
+                  setTouched((prev) => ({ ...prev, [field.key]: true }));
+                }}
+                placeholder={field.configured ? 'Leave unchanged or provide replacement' : 'Enter value'}
+                disabled={updateIntegrations.isPending}
+                className="flex-1"
+              />
+              {isSecret && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRevealed((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                  disabled={updateIntegrations.isPending}
+                >
+                  {revealed[field.key] ? 'Hide' : 'Reveal'}
+                </Button>
+              )}
+              {field.configured && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setValues((prev) => ({ ...prev, [field.key]: '' }));
+                    setTouched((prev) => ({ ...prev, [field.key]: true }));
+                  }}
+                  disabled={updateIntegrations.isPending}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+            {error ? (
+              <p className="text-xs text-destructive">{error}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Validation: {field.validation_rule}</p>
+            )}
+          </div>
+        );
+      })}
+
+      <Button
+        size="sm"
+        onClick={handleSave}
+        disabled={updateIntegrations.isPending || !changedKeys.length || hasValidationErrors}
+      >
+        {updateIntegrations.isPending ? 'Saving...' : 'Save Integrations'}
+      </Button>
     </div>
   );
 }
@@ -543,6 +762,9 @@ function SettingsPage() {
             </p>
           </div>
           <ServiceConnections />
+          <div className="border-t border-border/60 pt-6">
+            <IntegrationsPanel />
+          </div>
           <div className="border-t border-border/60 pt-6">
             <h3 className="text-base font-semibold text-foreground">Metadata API Keys</h3>
             <p className="text-sm text-muted-foreground">

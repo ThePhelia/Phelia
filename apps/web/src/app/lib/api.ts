@@ -11,6 +11,8 @@ import type {
   SearchParams,
   SearchResponse,
   ServiceSettingsResponse,
+  IntegrationField,
+  IntegrationSettingsResponse,
 } from './types';
 import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
 
@@ -380,6 +382,49 @@ export function useUpdateApiKeys() {
     mutationFn: (data) => http('settings/api-keys', { method: 'POST', json: data }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+  });
+}
+
+
+export function useIntegrationSettings() {
+  return useQuery<IntegrationSettingsResponse, Error>({
+    queryKey: ['integration-settings'],
+    queryFn: () => http<IntegrationSettingsResponse>('settings/integrations'),
+  });
+}
+
+export function useUpdateIntegrationSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    IntegrationSettingsResponse,
+    Error,
+    { integrations: Record<string, string | null> }
+  >({
+    mutationFn: (data) => http('settings/integrations', { method: 'POST', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
+    },
+  });
+}
+
+export function useUpdateIntegrationField() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    IntegrationField,
+    Error,
+    { key: string; value: string | null }
+  >({
+    mutationFn: ({ key, value }) => http(`settings/integrations/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      json: { value },
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
     },
   });
 }

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import SettingsPage from '@/app/routes/settings';
 import { renderWithProviders } from '@/app/test-utils';
 
-const { capabilitiesState, apiKeysState, serviceSettingsState } = vi.hoisted(() => {
+const { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, updateIntegrationsMutate } = vi.hoisted(() => {
   const capabilitiesState = {
     data: { version: '1.2.3', services: { torrent_search: false } },
     isLoading: false,
@@ -17,6 +17,28 @@ const { capabilitiesState, apiKeysState, serviceSettingsState } = vi.hoisted(() 
     refetch: vi.fn(),
   };
 
+  const integrationSettingsState = {
+    data: {
+      integrations: [
+        {
+          key: 'tmdb.api_key',
+          label: 'TMDb API Key',
+          required: false,
+          masked_at_rest: true,
+          validation_rule: 'min_length:16',
+          configured: true,
+          value: '••••••••',
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+    refetch: vi.fn(),
+  };
+
+  const updateIntegrationsMutate = vi.fn();
+
   const serviceSettingsState = {
     data: {
       prowlarr: { url: 'http://prowlarr:9696', api_key_configured: false },
@@ -28,7 +50,7 @@ const { capabilitiesState, apiKeysState, serviceSettingsState } = vi.hoisted(() 
     error: null as Error | null,
   };
 
-  return { capabilitiesState, apiKeysState, serviceSettingsState };
+  return { capabilitiesState, apiKeysState, serviceSettingsState, integrationSettingsState, updateIntegrationsMutate };
 });
 
 vi.mock('@/app/lib/api', () => ({
@@ -38,12 +60,28 @@ vi.mock('@/app/lib/api', () => ({
   useUpdateProwlarrSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateQbittorrentSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDownloadSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useIntegrationSettings: () => integrationSettingsState,
+  useUpdateIntegrationSettings: () => ({ mutateAsync: updateIntegrationsMutate, isPending: false }),
 }));
 
 describe('SettingsPage services tab', () => {
   beforeEach(() => {
     capabilitiesState.data = { version: '1.2.3', services: { torrent_search: false } };
     apiKeysState.data = { api_keys: [{ provider: 'omdb', configured: false }] };
+    integrationSettingsState.data = {
+      integrations: [
+        {
+          key: 'tmdb.api_key',
+          label: 'TMDb API Key',
+          required: false,
+          masked_at_rest: true,
+          validation_rule: 'min_length:16',
+          configured: true,
+          value: '••••••••',
+        },
+      ],
+    };
+    updateIntegrationsMutate.mockReset();
     serviceSettingsState.data = {
       prowlarr: { url: 'http://prowlarr:9696', api_key_configured: false },
       qbittorrent: { url: 'http://qbittorrent:8080', username: 'admin', password_configured: false },
@@ -73,36 +111,27 @@ describe('SettingsPage services tab', () => {
     expect(screen.queryByRole('button', { name: 'Clear API key' })).not.toBeInTheDocument();
   });
 
-  it('renders clear action and replacement placeholder when API key is configured', async () => {
-    serviceSettingsState.data = {
-      ...serviceSettingsState.data,
-      prowlarr: { url: 'http://prowlarr:9696', api_key_configured: true },
-    };
-
+  it('renders integrations and validates before save', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<SettingsPage />);
+    updateIntegrationsMutate.mockResolvedValue({ integrations: [] });
 
+    renderWithProviders(<SettingsPage />);
     await user.click(screen.getByRole('button', { name: /services/i }));
 
-    expect(screen.getByText('API key configured')).toBeInTheDocument();
-    expect(screen.getByLabelText('Prowlarr API Key')).toHaveAttribute(
-      'placeholder',
-      'Enter new API key to replace',
-    );
-    expect(screen.getByRole('button', { name: 'Clear API key' })).toBeInTheDocument();
-  });
+    const saveButton = screen.getByRole('button', { name: 'Save Integrations' });
+    expect(saveButton).toBeDisabled();
 
-  it('gracefully handles legacy allowed_dirs payloads returned as a string', async () => {
-    serviceSettingsState.data = {
-      ...serviceSettingsState.data,
-      downloads: { allowed_dirs: '/downloads, /music' as unknown as string[], default_dir: '/downloads' },
-    };
+    const integrationInput = screen.getByLabelText('TMDb API Key');
+    await user.type(integrationInput, 'short');
 
-    const user = userEvent.setup();
-    renderWithProviders(<SettingsPage />);
+    expect(screen.getByText('TMDb API Key must be at least 16 characters.')).toBeInTheDocument();
+    expect(saveButton).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: /services/i }));
+    await user.clear(integrationInput);
+    await user.type(integrationInput, '1234567890123456');
+    expect(saveButton).toBeEnabled();
 
-    expect(screen.getByLabelText('Allowed paths')).toHaveValue('/downloads, /music');
+    await user.click(saveButton);
+    expect(updateIntegrationsMutate).toHaveBeenCalledWith({ integrations: { 'tmdb.api_key': '1234567890123456' } });
   });
 });

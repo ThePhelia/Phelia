@@ -189,6 +189,20 @@ export interface ServiceSettingsResponse {
   };
 }
 
+export interface IntegrationField {
+  key: string;
+  label: string;
+  required: boolean;
+  masked_at_rest: boolean;
+  validation_rule: string;
+  configured: boolean;
+  value: string | null;
+}
+
+export interface IntegrationSettingsResponse {
+  integrations: IntegrationField[];
+}
+
 export interface ListMutationInput {
   action: 'add' | 'remove';
   list: 'watchlist' | 'favorites' | 'playlist';

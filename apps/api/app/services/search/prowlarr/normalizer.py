@@ -133,7 +133,6 @@ def parse_torznab(xml_payload: str | bytes) -> list[NormalizedResult]:
         indexer_candidates: Iterable[str] = [
             attr_map.get("indexer"),
             attr_map.get("prowlarrindexer"),
-            attr_map.get("jackettindexer"),
             attr_map.get("site"),
             attr_map.get("tracker"),
             attr_map.get("indexername"),

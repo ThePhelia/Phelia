@@ -33,11 +33,29 @@ def test_update_prowlarr_settings(monkeypatch):
     client = TestClient(app)
     response = client.post(
         "/settings/services/prowlarr",
-        json={"url": "http://prowlarr.local", "api_key": "key123"},
+        json={"url": "http://prowlarr.local", "api_key": "key12345"},
     )
 
     assert response.status_code == 200
     assert response.json() == {
         "url": "http://prowlarr.local",
         "api_key_configured": True,
+    }
+
+
+def test_update_prowlarr_settings_rejects_invalid_url():
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    client = TestClient(app)
+    response = client.post(
+        "/settings/services/prowlarr",
+        json={"url": "notaurl"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "error": "validation_failed",
+        "field": "url",
+        "message": "url must be a valid http(s) URL",
     }

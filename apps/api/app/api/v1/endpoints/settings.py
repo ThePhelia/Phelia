@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -44,6 +45,63 @@ class IntegrationUpdateRequest(BaseModel):
 
 class IntegrationsBulkUpdateRequest(BaseModel):
     integrations: dict[str, str | None]
+
+
+class ProviderIntegrationUpdateRequest(BaseModel):
+    values: dict[str, str | None]
+
+
+class IntegrationsProviderBulkUpdateRequest(BaseModel):
+    providers: dict[str, ProviderIntegrationUpdateRequest]
+
+
+_URL_PATTERN = re.compile(r"^https?://[^\s/$.?#].[^\s]*$")
+
+
+def _is_valid_http_url(value: str) -> bool:
+    return bool(_URL_PATTERN.match(value))
+
+
+def _validate_provider_payloads(
+    providers: dict[str, ProviderIntegrationUpdateRequest],
+) -> dict[str, str | None]:
+    updates: dict[str, str | None] = {}
+    for provider_name, payload in providers.items():
+        if not payload.values:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "validation_failed",
+                    "provider": provider_name,
+                    "message": "Provider payload must include at least one field",
+                },
+            )
+        for field_name, value in payload.values.items():
+            integration_key = f"{provider_name}.{field_name}"
+            if integration_key not in FIELD_BY_KEY:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "integration_not_found",
+                        "provider": provider_name,
+                        "field": field_name,
+                        "integration_key": integration_key,
+                        "message": f"Unknown field '{field_name}' for provider '{provider_name}'",
+                    },
+                )
+            if value is not None and not isinstance(value, str):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "error": "validation_failed",
+                        "provider": provider_name,
+                        "field": field_name,
+                        "integration_key": integration_key,
+                        "message": "Field value must be a string or null",
+                    },
+                )
+            updates[integration_key] = value
+    return updates
 
 
 def _build_integrations_response(*, include_secrets: bool = False) -> IntegrationsResponse:
@@ -100,6 +158,28 @@ def update_integrations(request: IntegrationsBulkUpdateRequest) -> IntegrationsR
             detail={"error": "validation_failed", "message": str(exc)},
         ) from exc
 
+    return _build_integrations_response(include_secrets=False)
+
+
+@router.patch("/integrations", response_model=IntegrationsResponse)
+def patch_integrations(request: IntegrationsProviderBulkUpdateRequest) -> IntegrationsResponse:
+    """Partially update integration settings by provider payload."""
+    updates = _validate_provider_payloads(request.providers)
+    try:
+        runtime_integration_settings.update_many(updates)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "message": str(exc)},
+        ) from exc
+
+    logger.info(
+        "Integration settings updated",
+        extra={
+            "changed_fields": sorted(updates.keys()),
+            "source": "settings.patch_integrations",
+        },
+    )
     return _build_integrations_response(include_secrets=False)
 
 
@@ -327,11 +407,24 @@ def update_prowlarr_settings(request: ProwlarrSettingsUpdateRequest) -> Prowlarr
     if url is not None and not url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "invalid_url"},
+            detail={"error": "validation_failed", "field": "url", "message": "url cannot be blank"},
+        )
+    if url is not None and not _is_valid_http_url(url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "url", "message": "url must be a valid http(s) URL"},
+        )
+    if api_key is not None and len(api_key) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "api_key", "message": "api_key must be at least 8 characters"},
         )
 
     runtime_service_settings.update_prowlarr(url=url, api_key=api_key or None)
     _refresh_prowlarr_provider()
+    changed_fields = sorted(fields_set.intersection({"url", "api_key"}))
+    if changed_fields:
+        logger.info("Prowlarr settings updated", extra={"changed_fields": changed_fields})
     snapshot = runtime_service_settings.prowlarr_snapshot()
     return ProwlarrSettingsResponse(
         url=snapshot.url,
@@ -358,7 +451,22 @@ def update_qbittorrent_settings(
     if url is not None and not url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "invalid_url"},
+            detail={"error": "validation_failed", "field": "url", "message": "url cannot be blank"},
+        )
+    if url is not None and not _is_valid_http_url(url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "url", "message": "url must be a valid http(s) URL"},
+        )
+    if username is not None and not username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "username", "message": "username cannot be blank"},
+        )
+    if password is not None and len(password) < 4:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "password", "message": "password must be at least 4 characters"},
         )
 
     runtime_service_settings.update_qbittorrent(
@@ -367,6 +475,9 @@ def update_qbittorrent_settings(
         password=password,
     )
     _refresh_prowlarr_provider()
+    changed_fields = sorted(fields_set.intersection({"url", "username", "password"}))
+    if changed_fields:
+        logger.info("qBittorrent settings updated", extra={"changed_fields": changed_fields})
     snapshot = runtime_service_settings.qbittorrent_snapshot()
     return QbittorrentSettingsResponse(
         url=snapshot.url,
@@ -391,13 +502,21 @@ def update_download_settings(
     if default_dir is not None and not default_dir:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "invalid_default_dir"},
+            detail={"error": "validation_failed", "field": "default_dir", "message": "default_dir cannot be blank"},
+        )
+    if allowed_dirs is not None and not allowed_dirs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "validation_failed", "field": "allowed_dirs", "message": "allowed_dirs cannot be empty"},
         )
 
     runtime_service_settings.update_downloads(
         allowed_dirs=allowed_dirs,
         default_dir=default_dir,
     )
+    changed_fields = sorted(fields_set.intersection({"allowed_dirs", "default_dir"}))
+    if changed_fields:
+        logger.info("Download settings updated", extra={"changed_fields": changed_fields})
     snapshot = runtime_service_settings.download_snapshot()
     return DownloadSettingsResponse(
         allowed_dirs=snapshot.allowed_dirs,

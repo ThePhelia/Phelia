@@ -60,3 +60,53 @@ def test_update_integration_returns_validation_error(monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "validation_failed"
+
+
+def test_patch_integrations_accepts_partial_provider_updates(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    captured: dict[str, str | None] = {}
+
+    def update_many(values):
+        captured.update(values)
+        return True
+
+    monkeypatch.setattr(settings_endpoints.runtime_integration_settings, "update_many", update_many)
+
+    client = TestClient(app)
+    response = client.patch(
+        "/settings/integrations",
+        json={
+            "providers": {
+                "tmdb": {"values": {"api_key": "1234567890abcdef"}},
+                "musicbrainz": {"values": {"contact": "me@example.com"}},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "tmdb.api_key": "1234567890abcdef",
+        "musicbrainz.contact": "me@example.com",
+    }
+
+
+def test_patch_integrations_rejects_unknown_provider_field():
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    client = TestClient(app)
+    response = client.patch(
+        "/settings/integrations",
+        json={"providers": {"tmdb": {"values": {"unknown": "value"}}}},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "error": "integration_not_found",
+        "provider": "tmdb",
+        "field": "unknown",
+        "integration_key": "tmdb.unknown",
+        "message": "Unknown field 'unknown' for provider 'tmdb'",
+    }

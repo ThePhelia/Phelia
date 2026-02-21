@@ -83,7 +83,7 @@ services:
       - downloads:/downloads
       - music:/music
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-8121}:8121"
     healthcheck:
       test:
         [
@@ -156,7 +156,7 @@ services:
     env_file:
       - ../env/web.env
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:${API_PORT:-8000}/api/v1}
+      VITE_API_BASE: ${VITE_API_BASE:-/api/v1}
       VITE_WS_BASE: ${VITE_WS_BASE:-ws://localhost:${API_PORT:-8000}}
     ports:
       - "${WEB_PORT:-5173}:80"

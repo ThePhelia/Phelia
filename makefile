@@ -12,7 +12,7 @@ rebuild:
 	$(COMPOSE) up -d
 
 down:
-	$(COMPOSE) down
+	$(COMPOSE) down --remove-orphans
 
 down-v:
 	$(COMPOSE) down -v

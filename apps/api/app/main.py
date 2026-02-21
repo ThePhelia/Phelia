@@ -111,7 +111,7 @@ async def startup_event():
         await _autoload_jackett_api_key()
         jackett_settings = runtime_service_settings.jackett_settings()
         search_registry.register(
-            JackettProvider(jackett_settings, logger=logging.getLogger("phelia.jackett"))
+            JackettProvider(jackett_settings, logger=logging.getLogger("phelia.search.jackett"))
         )
     except Exception:
         logger.exception("Error initializing Jackett search provider")

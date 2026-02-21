@@ -1,12 +1,12 @@
 # Phelia
 
-Phelia is a modular media automation stack that mirrors the capabilities of Sonarr/Radarr while staying plugin-friendly.
+Phelia is a modular media automation stack that mirrors the capabilities of Sonarr/Radarr.
 It is organised as a Python monorepo with a FastAPI core, a metadata proxy, and a Vite-based web UI.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/phelia-plugins/phelia.git
+git clone https://github.com/phelia/phelia.git
 cd phelia
 make up
 ```

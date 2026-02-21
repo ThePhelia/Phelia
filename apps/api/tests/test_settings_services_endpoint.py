@@ -109,3 +109,36 @@ def test_discover_prowlarr_api_key_failure_includes_manual_hint(monkeypatch):
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "prowlarr_api_key_discovery_failed"
     assert "manual_entry_hint" in response.json()["detail"]
+
+
+def test_get_services_autoloads_api_key_when_missing(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    monkeypatch.setattr(settings_endpoints, "_autoload_prowlarr_api_key", lambda: None)
+    monkeypatch.setattr(
+        settings_endpoints.runtime_service_settings,
+        "prowlarr_snapshot",
+        lambda: Snapshot(url="http://prowlarr.local:9696", api_key="fetched-key"),
+    )
+
+    class QbSnapshot:
+        url = "http://qbittorrent:8080"
+        username = "admin"
+        password = None
+
+    class DownloadSnapshot:
+        allowed_dirs = ["/downloads"]
+        default_dir = "/downloads"
+
+    monkeypatch.setattr(settings_endpoints.runtime_service_settings, "qbittorrent_snapshot", lambda: QbSnapshot())
+    monkeypatch.setattr(settings_endpoints.runtime_service_settings, "download_snapshot", lambda: DownloadSnapshot())
+
+    client = TestClient(app)
+    response = client.get("/settings/services")
+
+    assert response.status_code == 200
+    assert response.json()["prowlarr"] == {
+        "url": "http://prowlarr.local:9696",
+        "api_key_configured": True,
+    }

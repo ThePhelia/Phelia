@@ -92,6 +92,32 @@ def test_patch_integrations_accepts_partial_provider_updates(monkeypatch):
     }
 
 
+def test_patch_integrations_partial_update_preserves_existing_secrets(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    persisted_values = {
+        "tmdb.api_key": "existing-secret-value",
+        "musicbrainz.contact": "old@example.com",
+    }
+
+    def update_many(values):
+        persisted_values.update(values)
+        return True
+
+    monkeypatch.setattr(settings_endpoints.runtime_integration_settings, "update_many", update_many)
+
+    client = TestClient(app)
+    response = client.patch(
+        "/settings/integrations",
+        json={"providers": {"musicbrainz": {"values": {"contact": "new@example.com"}}}},
+    )
+
+    assert response.status_code == 200
+    assert persisted_values["tmdb.api_key"] == "existing-secret-value"
+    assert persisted_values["musicbrainz.contact"] == "new@example.com"
+
+
 def test_patch_integrations_rejects_unknown_provider_field():
     app = FastAPI()
     app.include_router(settings_endpoints.router, prefix="")
@@ -109,4 +135,22 @@ def test_patch_integrations_rejects_unknown_provider_field():
         "field": "unknown",
         "integration_key": "tmdb.unknown",
         "message": "Unknown field 'unknown' for provider 'tmdb'",
+    }
+
+
+def test_patch_integrations_rejects_empty_provider_payload():
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    client = TestClient(app)
+    response = client.patch(
+        "/settings/integrations",
+        json={"providers": {"tmdb": {"values": {}}}},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "error": "validation_failed",
+        "provider": "tmdb",
+        "message": "Provider payload must include at least one field",
     }

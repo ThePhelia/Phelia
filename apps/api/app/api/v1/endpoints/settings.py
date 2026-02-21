@@ -162,7 +162,7 @@ def _refresh_jackett_provider() -> None:
     try:
         settings = runtime_service_settings.jackett_settings()
         search_registry.register(
-            JackettProvider(settings, logger=logging.getLogger("phelia.jackett"))
+            JackettProvider(settings, logger=logging.getLogger("phelia.search.jackett"))
         )
     except Exception:
         logger.exception("Failed to refresh Jackett provider settings")

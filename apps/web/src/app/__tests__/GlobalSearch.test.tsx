@@ -60,7 +60,7 @@ describe("GlobalSearch", () => {
     vi.useRealTimers();
   });
 
-  it("allows keyboard navigation across results", async () => {
+  it("uses filtered keyboard navigation and opens highlighted item on enter", async () => {
     vi.useFakeTimers();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
@@ -76,14 +76,41 @@ describe("GlobalSearch", () => {
 
     expect(screen.getByText("The Matrix")).toBeInTheDocument();
 
-    await user.keyboard("{ArrowDown}{Enter}");
+    await user.click(screen.getAllByText(/^movie$/i)[0]);
+    await user.click(input);
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
-    expect(navigateMock).toHaveBeenCalledWith("/details/music/a2?provider=discogs", {
+    expect(navigateMock).toHaveBeenCalledWith("/details/movie/m1?provider=tmdb", {
       state: { backgroundLocation: { pathname: "/", key: "test" } },
     });
 
     const stored = localStorage.getItem("phelia:recent-searches");
     expect(stored && JSON.parse(stored)).toContain("Matrix");
+  });
+
+  it("clamps highlight and gracefully no-ops enter when filtered list becomes empty", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    renderWithProviders(<GlobalSearch />);
+
+    const input = screen.getByPlaceholderText(/search/i);
+    await user.click(input);
+    await user.type(input, "Matrix");
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+    });
+
+    await user.keyboard("{ArrowDown}");
+    await user.click(screen.getByText(/^tv$/i));
+
+    expect(screen.getByText(/no results found/i)).toBeInTheDocument();
+
+    await user.click(input);
+    await user.keyboard("{Enter}");
+    expect(navigateMock).not.toHaveBeenCalled();
+
   });
 
   it("shows recent searches when available", async () => {

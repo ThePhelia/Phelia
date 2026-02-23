@@ -68,6 +68,10 @@ function GlobalSearch() {
     setHighlight(0);
   }, [kind, debounced]);
 
+  useEffect(() => {
+    setHighlight((prev) => Math.min(prev, Math.max(filteredResults.length - 1, 0)));
+  }, [filteredResults.length]);
+
   const visible = open && (debounced.length > 1 || recent.length > 0);
 
   const handleSubmit = (item?: MetaSearchItem) => {
@@ -115,12 +119,13 @@ function GlobalSearch() {
           onBlur={handleInputBlur}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
+            const maxIndex = Math.max(filteredResults.length - 1, 0);
             if (event.key === 'ArrowDown') {
               event.preventDefault();
-              setHighlight((prev) => Math.min(prev + 1, Math.max(results.length - 1, 0)));
+              setHighlight((prev) => Math.min(prev + 1, maxIndex));
             } else if (event.key === 'ArrowUp') {
               event.preventDefault();
-              setHighlight((prev) => Math.max(prev - 1, 0));
+              setHighlight((prev) => Math.max(Math.min(prev - 1, maxIndex), 0));
             } else if (event.key === 'Enter') {
               event.preventDefault();
               handleSubmit();

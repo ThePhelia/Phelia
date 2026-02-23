@@ -25,7 +25,9 @@ import { useTheme } from '@/app/components/ThemeProvider';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
+import { LocalErrorBoundary } from '@/app/components/LocalErrorBoundary';
 import type { ProwlarrIndexer, ProwlarrIndexerTemplate } from '@/app/lib/types';
+import { normalizeStringList, safeString, safeTrimmedString } from '@/app/utils/safe';
 
 function formatProviderLabel(provider: string): string {
   return provider
@@ -121,6 +123,10 @@ function ApiKeyManagement() {
     );
   }
 
+  if (!apiKeys.length) {
+    return <p className="text-sm text-muted-foreground">No API key providers are available.</p>;
+  }
+
   return (
     <div className="space-y-4">
       {apiKeys.map((apiKey) => {
@@ -210,7 +216,7 @@ function parseValidationRule(rule: string): { minLength?: number; regex?: RegExp
 }
 
 function integrationValueError(field: { required: boolean; validation_rule: string; label: string; configured: boolean; masked_at_rest: boolean }, value: string, initialValue: string): string | null {
-  const trimmed = value.trim();
+  const trimmed = safeTrimmedString(value);
   const isMaskedUnchanged = field.masked_at_rest && field.configured && value === initialValue && initialValue === SECRET_MASK;
 
   if (isMaskedUnchanged) return null;
@@ -286,7 +292,7 @@ function IntegrationsPanel() {
         return;
       }
 
-      const trimmed = current.trim();
+      const trimmed = safeTrimmedString(current);
       payload[key] = trimmed ? trimmed : null;
     });
 
@@ -308,6 +314,10 @@ function IntegrationsPanel() {
 
   if (integrationsQuery.isError) {
     return <p className="text-sm text-destructive">Failed to load integrations.</p>;
+  }
+
+  if (!integrations.length) {
+    return <p className="text-sm text-muted-foreground">No integration fields are configured yet.</p>;
   }
 
   return (
@@ -407,8 +417,8 @@ function IntegrationsPanel() {
   );
 }
 
-function parseDirList(value: string): string[] {
-  return value
+function parseDirList(value: unknown): string[] {
+  return safeString(value)
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean);
@@ -422,13 +432,10 @@ function areEqualLists(a: string[], b: string[]): boolean {
 }
 
 function normalizeAllowedDirs(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean);
-  }
   if (typeof value === 'string') {
     return parseDirList(value);
   }
-  return [];
+  return normalizeStringList(value);
 }
 
 
@@ -512,6 +519,23 @@ function IndexersPanel() {
     }
   };
 
+
+  if (indexersQuery.isLoading || templatesQuery.isLoading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (indexersQuery.isError) {
+    return <p className="text-sm text-destructive">Failed to load indexers: {indexersQuery.error.message}</p>;
+  }
+
+  if (templatesQuery.isError) {
+    return <p className="text-sm text-destructive">Failed to load indexer templates: {templatesQuery.error.message}</p>;
+  }
+
+  if (!templates.length && !indexers.length) {
+    return <p className="text-sm text-muted-foreground">No indexer templates or configured indexers were returned.</p>;
+  }
+
   const handleDelete = async (indexer: ProwlarrIndexer) => {
     if (!window.confirm(`Delete indexer "${indexer.name}"? This cannot be undone.`)) return;
     try {
@@ -537,9 +561,6 @@ function IndexersPanel() {
         <h3 className="text-base font-semibold text-foreground">Indexers</h3>
         <p className="text-sm text-muted-foreground">Manage Prowlarr indexers from Phelia.</p>
       </div>
-      {indexersQuery.isError && <p className="text-xs text-destructive">{indexersQuery.error.message}</p>}
-      {templatesQuery.isError && <p className="text-xs text-destructive">{templatesQuery.error.message}</p>}
-
       <div className="rounded-lg border border-border/60 p-3 space-y-2">
         <Label>Add indexer from template</Label>
         <select
@@ -576,6 +597,7 @@ function IndexersPanel() {
       </div>
 
       <div className="space-y-2">
+        {!indexers.length ? <p className="text-sm text-muted-foreground">No indexers configured yet.</p> : null}
         {indexers.map((indexer) => (
           <div key={indexer.id} className="rounded-lg border border-border/60 p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -648,26 +670,34 @@ function ServiceConnections() {
   const qbPasswordConfigured = serviceQuery.data?.qbittorrent?.password_configured ?? false;
   const allowedDirList = parseDirList(allowedDirs);
   const persistedAllowedDirs = normalizeAllowedDirs(serviceQuery.data?.downloads?.allowed_dirs);
+  const persistedDefaultDir = safeString(serviceQuery.data?.downloads?.default_dir);
+  const trimmedDefaultDir = safeTrimmedString(defaultDir);
+  const trimmedProwlarrUrl = safeTrimmedString(prowlarrUrl);
+  const trimmedProwlarrApiKey = safeTrimmedString(prowlarrApiKey);
+  const trimmedQbUrl = safeTrimmedString(qbUrl);
+  const trimmedQbUsername = safeTrimmedString(qbUsername);
+  const trimmedQbPassword = safeTrimmedString(qbPassword);
+
   const downloadsChanged =
-	(serviceQuery.data?.downloads?.default_dir ?? '') !== defaultDir.trim() ||
-	!areEqualLists(allowedDirList, persistedAllowedDirs);
-	
+    persistedDefaultDir !== trimmedDefaultDir ||
+    !areEqualLists(allowedDirList, persistedAllowedDirs);
+
   const prowlarrChanged =
-    prowlarrUrl.trim() !== (serviceQuery.data?.prowlarr?.url ?? '') ||
-    prowlarrApiKey.trim().length > 0;
+    trimmedProwlarrUrl !== safeString(serviceQuery.data?.prowlarr?.url) ||
+    trimmedProwlarrApiKey.length > 0;
   const prowlarrUiUrl = 'http://localhost:9696';
   const qbChanged =
-    qbUrl.trim() !== (serviceQuery.data?.qbittorrent?.url ?? '') ||
-    qbUsername.trim() !== (serviceQuery.data?.qbittorrent?.username ?? '') ||
-    qbPassword.trim().length > 0;
+    trimmedQbUrl !== safeString(serviceQuery.data?.qbittorrent?.url) ||
+    trimmedQbUsername !== safeString(serviceQuery.data?.qbittorrent?.username) ||
+    trimmedQbPassword.length > 0;
 
   const handleProwlarrSave = async () => {
     const payload: { url?: string | null; api_key?: string | null } = {};
-    if (prowlarrUrl.trim()) {
-      payload.url = prowlarrUrl.trim();
+    if (trimmedProwlarrUrl) {
+      payload.url = trimmedProwlarrUrl;
     }
-    if (prowlarrApiKey.trim()) {
-      payload.api_key = prowlarrApiKey.trim();
+    if (trimmedProwlarrApiKey) {
+      payload.api_key = trimmedProwlarrApiKey;
     }
 
     try {
@@ -693,8 +723,9 @@ function ServiceConnections() {
   const handleProwlarrFetchApiKey = async (forceRefresh = false) => {
     setProwlarrFetchStatus('fetching');
     try {
-      const auth = prowlarrAuthUsername.trim()
-        ? { username: prowlarrAuthUsername.trim(), password: prowlarrAuthPassword }
+      const trimmedProwlarrAuthUsername = safeTrimmedString(prowlarrAuthUsername);
+      const auth = trimmedProwlarrAuthUsername
+        ? { username: trimmedProwlarrAuthUsername, password: safeString(prowlarrAuthPassword) }
         : null;
       const response = await discoverProwlarrApiKey.mutateAsync({
         force_refresh: forceRefresh,
@@ -710,14 +741,14 @@ function ServiceConnections() {
 
   const handleQbSave = async () => {
     const payload: { url?: string | null; username?: string | null; password?: string | null } = {};
-    if (qbUrl.trim()) {
-      payload.url = qbUrl.trim();
+    if (trimmedQbUrl) {
+      payload.url = trimmedQbUrl;
     }
-    if (qbUsername.trim()) {
-      payload.username = qbUsername.trim();
+    if (trimmedQbUsername) {
+      payload.username = trimmedQbUsername;
     }
-    if (qbPassword.trim()) {
-      payload.password = qbPassword.trim();
+    if (trimmedQbPassword) {
+      payload.password = trimmedQbPassword;
     }
 
     try {
@@ -743,7 +774,7 @@ function ServiceConnections() {
     try {
       await updateDownloads.mutateAsync({
         allowed_dirs: allowedDirList,
-        default_dir: defaultDir.trim(),
+        default_dir: trimmedDefaultDir,
       });
       toast.success('Download paths updated');
     } catch (error) {
@@ -957,7 +988,7 @@ function ServiceConnections() {
         <Button
           size="sm"
           onClick={handleDownloadSave}
-          disabled={!downloadsChanged || updateDownloads.isPending || !defaultDir.trim()}
+          disabled={!downloadsChanged || updateDownloads.isPending || !trimmedDefaultDir}
         >
           {updateDownloads.isPending ? 'Saving...' : 'Save'}
         </Button>
@@ -1010,12 +1041,18 @@ function SettingsPage() {
               Configure API keys for enhanced metadata and features. TMDB is pre-configured.
             </p>
           </div>
-          <ServiceConnections />
+          <LocalErrorBoundary selectorKey="settings.services.connection-cards" title="Service settings unavailable" description="We hit an unexpected error while rendering service connection controls. Try again or refresh this page.">
+            <ServiceConnections />
+          </LocalErrorBoundary>
           <div className="border-t border-border/60 pt-6">
-            <IndexersPanel />
+            <LocalErrorBoundary selectorKey="settings.services.indexer-table" title="Indexer controls unavailable" description="We couldn't render the indexer list. Refresh and verify Prowlarr is reachable.">
+              <IndexersPanel />
+            </LocalErrorBoundary>
           </div>
           <div className="border-t border-border/60 pt-6">
-            <IntegrationsPanel />
+            <LocalErrorBoundary selectorKey="settings.services.integration-form" title="Integration form unavailable" description="Integration fields failed to render. Refresh and try again.">
+              <IntegrationsPanel />
+            </LocalErrorBoundary>
           </div>
           <div className="border-t border-border/60 pt-6">
             <h3 className="text-base font-semibold text-foreground">Metadata API Keys</h3>
@@ -1023,7 +1060,9 @@ function SettingsPage() {
               Keys are stored in memory and can be updated without restarting the server.
             </p>
           </div>
-          <ApiKeyManagement />
+          <LocalErrorBoundary selectorKey="settings.services.api-key-form" title="API key settings unavailable" description="API key controls crashed while rendering. Refresh and retry your update.">
+            <ApiKeyManagement />
+          </LocalErrorBoundary>
           {capabilities ? <p className="text-xs text-muted-foreground">Phelia version {capabilities.version}</p> : null}
         </TabsContent>
       </Tabs>

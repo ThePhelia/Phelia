@@ -18,6 +18,14 @@ import type {
   ProwlarrApiKeyDiscoveryResponse,
 } from './types';
 import type { MetaDetail, MetaSearchResponse } from '@/app/types/meta';
+import {
+  normalizeApiKeysResponse,
+  normalizeCapabilitiesResponse,
+  normalizeIntegrationSettingsResponse,
+  normalizeProwlarrIndexerTemplatesResponse,
+  normalizeProwlarrIndexersResponse,
+  normalizeServiceSettingsResponse,
+} from './normalizers';
 
 type QueryRecordValue = string | number | boolean | null | undefined;
 
@@ -328,7 +336,7 @@ export function useLibrary() {
 export function useCapabilities() {
   return useQuery<CapabilitiesResponse, Error>({
     queryKey: ['capabilities'],
-    queryFn: () => http<CapabilitiesResponse>('capabilities'),
+    queryFn: async () => normalizeCapabilitiesResponse(await http<unknown>('capabilities')),
     staleTime: 10 * 60_000,
   });
 }
@@ -358,7 +366,7 @@ export function useMutateList() {
 export function useApiKeys() {
   return useQuery({
     queryKey: ['api-keys'],
-    queryFn: () => http<{ api_keys: Array<{ provider: string; configured: boolean; value?: string }> }>('settings/api-keys'),
+    queryFn: async () => normalizeApiKeysResponse(await http<unknown>('settings/api-keys')),
   });
 }
 
@@ -396,7 +404,7 @@ export function useUpdateApiKeys() {
 export function useIntegrationSettings() {
   return useQuery<IntegrationSettingsResponse, Error>({
     queryKey: ['integration-settings'],
-    queryFn: () => http<IntegrationSettingsResponse>('settings/integrations'),
+    queryFn: async () => normalizeIntegrationSettingsResponse(await http<unknown>('settings/integrations')),
   });
 }
 
@@ -438,7 +446,7 @@ export function useUpdateIntegrationField() {
 export function useServiceSettings() {
   return useQuery<ServiceSettingsResponse, Error>({
     queryKey: ['service-settings'],
-    queryFn: () => http<ServiceSettingsResponse>('settings/services'),
+    queryFn: async () => normalizeServiceSettingsResponse(await http<unknown>('settings/services')),
   });
 }
 
@@ -510,14 +518,14 @@ export function useUpdateDownloadSettings() {
 export function useProwlarrIndexers() {
   return useQuery<{ indexers: ProwlarrIndexer[] }, Error>({
     queryKey: ['prowlarr-indexers'],
-    queryFn: () => http('settings/services/prowlarr/indexers'),
+    queryFn: async () => normalizeProwlarrIndexersResponse(await http<unknown>('settings/services/prowlarr/indexers')),
   });
 }
 
 export function useProwlarrIndexerTemplates() {
   return useQuery<{ templates: ProwlarrIndexerTemplate[] }, Error>({
     queryKey: ['prowlarr-indexer-templates'],
-    queryFn: () => http('settings/services/prowlarr/indexer-templates'),
+    queryFn: async () => normalizeProwlarrIndexerTemplatesResponse(await http<unknown>('settings/services/prowlarr/indexer-templates')),
   });
 }
 

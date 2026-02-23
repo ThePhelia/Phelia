@@ -1,4 +1,4 @@
-"""HTTP client for the internal metadata proxy service."""
+"""Provider HTTP clients for metadata lookups."""
 
 from __future__ import annotations
 
@@ -7,77 +7,53 @@ from typing import Any
 
 import httpx
 
-from app.core.config import settings
 from app.core.runtime_integration_settings import runtime_integration_settings
 
 
 class MetadataProxyError(Exception):
-    """Raised when the metadata proxy returns an error payload."""
+    """Raised when an upstream metadata provider returns an error payload."""
 
     def __init__(self, status_code: int, detail: Any) -> None:
-        super().__init__(f"metadata proxy error: {status_code}")
+        super().__init__(f"metadata upstream error: {status_code}")
         self.status_code = status_code
         self.detail = detail
 
 
 class MetadataClient:
-    """Lightweight async client for the metadata proxy."""
+    """Lightweight async client for third-party metadata providers."""
 
+    tmdb_base_url = "https://api.themoviedb.org/3"
+    lastfm_base_url = "https://ws.audioscrobbler.com/2.0/"
+    musicbrainz_base_url = "https://musicbrainz.org/ws/2"
+    fanart_base_url = "https://webservice.fanart.tv/v3"
 
-    def _integration_override_headers(self, provider: str) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        mappings = {
-            "tmdb": ("tmdb.api_key", "x-phelia-tmdb-key"),
-            "omdb": ("omdb.api_key", "x-phelia-omdb-key"),
-            "fanart": ("fanart.api_key", "x-phelia-fanart-key"),
-            "listenbrainz": ("listenbrainz.token", "x-phelia-listenbrainz-token"),
-            "spotify": ("spotify.client_id", "x-phelia-spotify-client-id"),
-            "spotify-secret": ("spotify.client_secret", "x-phelia-spotify-client-secret"),
-        }
-        if provider in mappings:
-            key, header_name = mappings[provider]
-            value = runtime_integration_settings.get(key)
-            if value:
-                headers[header_name] = value
-        if provider == "spotify":
-            secret = runtime_integration_settings.get("spotify.client_secret")
-            if secret:
-                headers["x-phelia-spotify-client-secret"] = secret
-        return headers
-    def __init__(self, base_url: str, *, timeout: float = 10.0) -> None:
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, *, timeout: float = 10.0) -> None:
         self._timeout = httpx.Timeout(timeout, connect=3.0, read=timeout, write=timeout)
         self._limits = httpx.Limits(max_connections=10, max_keepalive_connections=5)
 
-    async def _get(
+    async def _request(
         self,
-        provider: str,
+        base_url: str,
         path: str,
+        *,
         params: dict[str, Any] | None,
-        request_id: str | None,
         headers: dict[str, str] | None = None,
     ) -> Any:
-        url = f"{self.base_url}/{provider}/{path.lstrip('/')}"
+        url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
         req_headers = {"accept": "application/json"}
-        req_headers.update(self._integration_override_headers(provider))
-        if request_id:
-            req_headers["x-request-id"] = request_id
         if headers:
             req_headers.update(headers)
-        async with httpx.AsyncClient(
-            timeout=self._timeout, limits=self._limits
-        ) as client:
+        async with httpx.AsyncClient(timeout=self._timeout, limits=self._limits) as client:
             response = await client.get(url, params=params or {}, headers=req_headers)
         if response.status_code >= 400:
-            detail = self._extract_error(response)
-            raise MetadataProxyError(response.status_code, detail)
+            raise MetadataProxyError(response.status_code, self._extract_error(response))
         return response.json()
 
     @staticmethod
     def _extract_error(response: httpx.Response) -> Any:
         try:
             payload = response.json()
-        except ValueError:  # pragma: no cover - defensive
+        except ValueError:  # pragma: no cover
             payload = response.text
         if isinstance(payload, dict) and "detail" in payload:
             return payload["detail"]
@@ -90,7 +66,15 @@ class MetadataClient:
         *,
         request_id: str | None = None,
     ) -> Any:
-        return await self._get("tmdb", path, params, request_id)
+        api_key = runtime_integration_settings.get("tmdb.api_key")
+        if not api_key:
+            raise MetadataProxyError(503, "tmdb_api_key_missing")
+        payload = dict(params or {})
+        payload["api_key"] = api_key
+        headers = {"accept": "application/json"}
+        if request_id:
+            headers["x-request-id"] = request_id
+        return await self._request(self.tmdb_base_url, path, params=payload, headers=headers)
 
     async def lastfm(
         self,
@@ -99,14 +83,17 @@ class MetadataClient:
         *,
         request_id: str | None = None,
     ) -> Any:
-        payload = dict(params or {})
-        if path and "method" not in payload:
-            payload["method"] = path
-        headers: dict[str, str] = {}
         api_key = runtime_integration_settings.get("lastfm.api_key")
-        if api_key:
-            headers["x-phelia-lastfm-key"] = api_key
-        return await self._get("lastfm", "", payload, request_id, headers=headers)
+        if not api_key:
+            raise MetadataProxyError(503, "lastfm_api_key_missing")
+        payload = dict(params or {})
+        payload.setdefault("method", path)
+        payload["api_key"] = api_key
+        payload["format"] = "json"
+        headers = {"accept": "application/json"}
+        if request_id:
+            headers["x-request-id"] = request_id
+        return await self._request(self.lastfm_base_url, "", params=payload, headers=headers)
 
     async def mb(
         self,
@@ -115,7 +102,16 @@ class MetadataClient:
         *,
         request_id: str | None = None,
     ) -> Any:
-        return await self._get("mb", path, params, request_id)
+        payload = dict(params or {})
+        payload.setdefault("fmt", "json")
+        headers = {
+            "accept": "application/json",
+            "User-Agent": runtime_integration_settings.get("musicbrainz.user_agent")
+            or "Phelia/0.1 (https://example.local)",
+        }
+        if request_id:
+            headers["x-request-id"] = request_id
+        return await self._request(self.musicbrainz_base_url, path, params=payload, headers=headers)
 
     async def fanart(
         self,
@@ -124,11 +120,15 @@ class MetadataClient:
         *,
         request_id: str | None = None,
     ) -> Any:
-        return await self._get("fanart", path, params, request_id)
+        api_key = runtime_integration_settings.get("fanart.api_key")
+        if not api_key:
+            raise MetadataProxyError(503, "fanart_api_key_missing")
+        headers = {"api-key": api_key}
+        if request_id:
+            headers["x-request-id"] = request_id
+        return await self._request(self.fanart_base_url, path, params=params, headers=headers)
 
 
 @lru_cache
 def get_metadata_client() -> MetadataClient:
-    if not settings.METADATA_BASE_URL:
-        raise RuntimeError("METADATA_BASE_URL is not configured")
-    return MetadataClient(str(settings.METADATA_BASE_URL))
+    return MetadataClient()

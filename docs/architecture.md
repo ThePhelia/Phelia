@@ -4,37 +4,26 @@ Phelia ships as a set of loosely coupled services that communicate over HTTP and
 The high-level flow is:
 
 1. **Frontend (Vite/React)** – Presents discovery, library, and automation controls. Talks only to the core API.
-2. **Core API (FastAPI)** – Hosts user flows, search/discovery orchestration, job scheduling, and dispatch to background workers.
-3. **Metadata services** – Movie/TV/music discovery live inside the core today but are earmarked to graduate into their own `apps/metadata_*` services.
-4. **Metadata Proxy** – Centralises outbound calls to TMDB, Fanart, MusicBrainz, Last.fm, etc. Applies caching and rate limiting.
-5. **Proxy Keys** – Planned thin facade that holds external API credentials. All outbound provider calls will go through this service once implemented.
+2. **Core API (FastAPI)** – Hosts user flows, search/discovery orchestration, metadata lookups, job scheduling, and dispatch to background workers.
+3. **Metadata services** – Movie/TV/music discovery currently run inside the core API, with optional future extraction into domain services.
 
 ```text
-Frontend → Core API → Metadata services → Metadata Proxy → Proxy Keys → External providers
+Frontend → Core API → External providers (TMDb/OMDb/Last.fm/MusicBrainz/etc)
 ```
 
 ## Service boundaries
 
-### Core API (`apps/api` → future `apps/core`)
+### Core API (`apps/api`)
 - Exposes REST and websocket endpoints.
-- Owns the database, authentication, downloads orchestration, and settings lifecycle.
-- Dispatches background jobs to Celery workers (`worker`, `beat`).
+- Owns database access, downloads orchestration, and settings lifecycle.
+- Stores integration keys in the server-side secrets store.
+- Performs direct upstream metadata calls.
 
 ### Metadata services (`apps/metadata_*` placeholders)
-- Will encapsulate the per-domain metadata pipelines (movies, TV, music).
-- Continue to source data via the metadata proxy and return aggregated payloads to the core API.
+- Future optional extraction for per-domain metadata pipelines (movies, TV, music).
+- Any extracted services should still receive credentials from backend-managed secrets, never from the browser.
 
-### Metadata Proxy (`services/metadata-proxy`)
-- FastAPI app that fans out to TMDB, Fanart, Last.fm, and MusicBrainz.
-- Provides `/health` plus provider-specific routes.
-- Caches responses and enforces polite rate limits.
+## Notes
 
-### Proxy Keys (`apps/proxy_keys` placeholder)
-- Contract: external provider APIs **must** be accessed via this service; never embed raw keys in code.
-- Will return signed/temporary credentials to upstream services.
-
-## North Star (next month)
-
-- Restore a minimal music metadata MVP powered by the proxy.
-- Continue hardening API and worker reliability for library/download automation.
-- Design and agree on the proxy-keys API contract.
+- The web app is reverse proxied to the API (`/api/v1` → `api:8121`) and never calls TMDb/OMDb directly from the browser.
+- TMDb/OMDb API keys are user-provided via settings and only persisted server-side.

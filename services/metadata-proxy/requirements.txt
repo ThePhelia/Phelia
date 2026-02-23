@@ -1,9 +1,0 @@
-fastapi
-uvicorn[standard]
-httpx
-pydantic
-pydantic-settings
-redis
-orjson
-tenacity
-pytest

@@ -27,7 +27,7 @@ class FakeMetadataClient:
 @pytest.mark.anyio
 async def test_discover_movies_happy_path(monkeypatch):
     payloads = {
-        "search/movie": {
+        "trending/movie/day": {
             "page": 1,
             "total_pages": 5,
             "results": [
@@ -64,13 +64,13 @@ async def test_discover_movies_happy_path(monkeypatch):
     assert data["items"][0]["poster"] == f"{TMDB_IMAGE_BASE}/poster.jpg"
     assert data["items"][0]["year"] == 2023
     assert data["items"][0]["meta"]["source"] == "tmdb"
-    assert fake_client.calls[0][0] == "search/movie"
+    assert fake_client.calls[0][0] == "trending/movie/day"
 
 
 @pytest.mark.anyio
 async def test_discover_tv_happy_path(monkeypatch):
     payloads = {
-        "search/tv": {
+        "tv/popular": {
             "page": 2,
             "total_pages": 2,
             "results": [
@@ -108,7 +108,7 @@ async def test_discover_tv_happy_path(monkeypatch):
     assert data["items"][0]["backdrop"] == f"{TMDB_IMAGE_BASE}/tv_backdrop.jpg"
     assert data["items"][0]["year"] == 2021
     assert data["items"][0]["meta"]["source"] == "tmdb"
-    assert fake_client.calls[0][0] == "search/tv"
+    assert fake_client.calls[0][0] == "tv/popular"
 
 
 @pytest.mark.anyio
@@ -156,6 +156,7 @@ async def test_discover_albums_happy_path(monkeypatch):
     fake_mb = FakeMBClient()
     monkeypatch.setattr(discover, "get_metadata_client", lambda: fake_metadata)
     monkeypatch.setattr(discover, "get_musicbrainz_client", lambda: fake_mb)
+    monkeypatch.setattr(discover, "_musicbrainz_client", lambda: fake_mb)
 
     app = FastAPI()
     app.include_router(discover.router, prefix="/api/v1")
@@ -175,3 +176,26 @@ async def test_discover_albums_happy_path(monkeypatch):
     assert data["items"][0]["year"] == 2005
     assert data["items"][0]["meta"]["source"] == "lastfm"
     assert fake_metadata.calls[0][0] == "chart.gettopalbums"
+
+
+@pytest.mark.anyio
+async def test_discover_movie_requires_tmdb_api_key(monkeypatch):
+    from app.services.metadata.metadata_client import MetadataProxyError
+
+    class MissingKeyClient:
+        async def tmdb(self, path: str, params: dict | None = None, request_id: str | None = None):
+            raise MetadataProxyError(503, "tmdb_api_key_missing")
+
+    monkeypatch.setattr(discover, "get_metadata_client", lambda: MissingKeyClient())
+
+    app = FastAPI()
+    app.include_router(discover.router, prefix="/api/v1")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/discover/movie")
+
+    assert resp.status_code == 400
+    payload = resp.json()
+    assert payload["detail"]["error"] == "missing_key"
+    assert payload["detail"]["code"] == "tmdb_api_key_missing"

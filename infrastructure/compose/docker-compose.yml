@@ -68,7 +68,6 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       QB_URL: http://qbittorrent:8080
       TZ: ${TZ:-Etc/UTC}
-      METADATA_BASE_URL: http://metadata-proxy:8080
     command: ["/app/entrypoint.sh"]
     depends_on:
       db:
@@ -76,8 +75,6 @@ services:
       redis:
         condition: service_healthy
       qbittorrent:
-        condition: service_healthy
-      metadata-proxy:
         condition: service_healthy
     volumes:
       - ../../apps/api:/app
@@ -168,29 +165,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-
-  metadata-proxy:
-    build:
-      context: ../../services/metadata-proxy
-    env_file:
-      - ${METADATA_ENV_FILE:-../env/metadata.env}
-      - ${STACK_ENV_FILE:-../../deploy/.env}
-    expose:
-      - "8080"
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8080/health').getcode()==200 else sys.exit(1)",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
 
 
 volumes:

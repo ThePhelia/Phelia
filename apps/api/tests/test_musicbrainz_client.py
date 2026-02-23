@@ -28,7 +28,7 @@ class ErrorMetadataClient:
 
 
 @pytest.mark.anyio
-async def test_musicbrainz_client_uses_metadata_proxy() -> None:
+async def test_musicbrainz_client_uses_metadata_client() -> None:
     payload = {
         "release-groups": [
             {

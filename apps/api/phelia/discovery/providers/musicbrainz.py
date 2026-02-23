@@ -12,7 +12,6 @@ from .base import Provider
 
 MB_API_ROOT = "https://musicbrainz.org/ws/2"
 MB_USER_AGENT = os.getenv("MB_USER_AGENT", "Phelia/1.0 (https://example.local)")
-METADATA_BASE_URL = os.getenv("METADATA_BASE_URL")
 _RATE_LIMIT = 1.0  # one request per second
 _last_request = 0.0
 _lock = asyncio.Lock()
@@ -33,16 +32,11 @@ class MusicBrainzProvider(Provider):
 
     def __init__(self) -> None:
         self.timeout = float(os.getenv("DISCOVERY_HTTP_TIMEOUT", "8"))
-        self._metadata_base_url = (METADATA_BASE_URL or "").rstrip("/") or None
 
     async def _get(self, path: str, params: Dict[str, str]) -> Dict[str, object]:
         await _rate_limit_wait()
-        if self._metadata_base_url:
-            url = f"{self._metadata_base_url}/mb/{path.lstrip('/')}"
-            headers = {"Accept": "application/json"}
-        else:
-            url = f"{MB_API_ROOT}{path}"
-            headers = {"Accept": "application/json", "User-Agent": MB_USER_AGENT}
+        url = f"{MB_API_ROOT}{path}"
+        headers = {"Accept": "application/json", "User-Agent": MB_USER_AGENT}
         async with httpx.AsyncClient(timeout=self.timeout, headers=headers) as client:
             resp = await client.get(url, params=params)
         if resp.status_code == 503:

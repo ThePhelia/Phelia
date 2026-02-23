@@ -250,12 +250,12 @@ class MetadataRouter:
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "lastfm_not_configured"
+                and detail == "lastfm_api_key_missing"
             ):
                 return None, "not_configured"
             return None, str(detail) if isinstance(detail, str) else "lastfm_error"
         except Exception as exc:
-            # Handle connection errors when metadata-proxy is not available
+            # Handle connection errors when metadata upstream is not available
             error_msg = str(exc)
             if "Name or service not known" in error_msg or "Connection refused" in error_msg:
                 return None, "metadata_service_unavailable"
@@ -327,12 +327,12 @@ class MetadataRouter:
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "tmdb_not_configured"
+                and detail == "tmdb_api_key_missing"
             ):
                 return None, "not_configured"
             return None, str(detail) if isinstance(detail, str) else "tmdb_error"
         except Exception as exc:
-            # Handle connection errors when metadata-proxy is not available
+            # Handle connection errors when metadata upstream is not available
             error_msg = str(exc)
             if "Name or service not known" in error_msg or "Connection refused" in error_msg:
                 return None, "metadata_service_unavailable"
@@ -370,7 +370,7 @@ class MetadataRouter:
             detail = exc.detail or "tmdb_error"
             return None, str(detail) if isinstance(detail, str) else "tmdb_error"
         except Exception as exc:
-            # Handle connection errors when metadata-proxy is not available
+            # Handle connection errors when metadata upstream is not available
             error_msg = str(exc)
             if "Name or service not known" in error_msg or "Connection refused" in error_msg:
                 return None, "metadata_service_unavailable"
@@ -494,7 +494,7 @@ class MetadataRouter:
             else:
                 providers["OMDb"].extra = {"error": "no_imdb_id"}
         else:
-            providers["OMDb"].extra = {"error": "not_configured"}
+            providers["OMDb"].extra = {"error": "omdb_api_key_missing"}
 
         card.providers = list(providers.values())
         if not providers["TMDb"].used:

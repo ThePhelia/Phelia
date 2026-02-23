@@ -194,10 +194,20 @@ async def meta_search(
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "tmdb_not_configured"
+                and detail == "tmdb_api_key_missing"
             ):
-                return []
-            raise HTTPException(status_code=502, detail=detail) from exc
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "missing_key",
+                        "code": "tmdb_api_key_missing",
+                        "message": "TMDb API key is required. Configure it in Settings → Integrations.",
+                    },
+                ) from exc
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "upstream_failure", "code": "tmdb_upstream_failure", "message": str(detail)},
+            ) from exc
         if not isinstance(response, dict):
             return []
         results = response.get("results")
@@ -224,10 +234,20 @@ async def meta_search(
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "tmdb_not_configured"
+                and detail == "tmdb_api_key_missing"
             ):
-                return []
-            raise HTTPException(status_code=502, detail=detail) from exc
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "missing_key",
+                        "code": "tmdb_api_key_missing",
+                        "message": "TMDb API key is required. Configure it in Settings → Integrations.",
+                    },
+                ) from exc
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "upstream_failure", "code": "tmdb_upstream_failure", "message": str(detail)},
+            ) from exc
         if not isinstance(response, dict):
             return []
         results = response.get("results")
@@ -261,7 +281,7 @@ async def meta_search(
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "lastfm_not_configured"
+                and detail == "lastfm_api_key_missing"
             ):
                 return hits
             if exc.status_code == 404:
@@ -292,7 +312,7 @@ async def meta_search(
             if (
                 exc.status_code in {502, 503}
                 and isinstance(detail, str)
-                and detail == "lastfm_not_configured"
+                and detail == "lastfm_api_key_missing"
             ):
                 return hits
             if exc.status_code == 404:
@@ -348,10 +368,20 @@ async def _tmdb_detail(
         if (
             exc.status_code in {502, 503}
             and isinstance(detail, str)
-            and detail == "tmdb_not_configured"
+            and detail == "tmdb_api_key_missing"
         ):
-            raise HTTPException(status_code=502, detail="tmdb_not_configured") from exc
-        raise HTTPException(status_code=502, detail=detail) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_key",
+                    "code": "tmdb_api_key_missing",
+                    "message": "TMDb API key is required. Configure it in Settings → Integrations.",
+                },
+            ) from exc
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "upstream_failure", "code": "tmdb_upstream_failure", "message": str(detail)},
+        ) from exc
 
     if not isinstance(payload, dict):
         raise HTTPException(status_code=502, detail="tmdb_invalid_response")
@@ -452,10 +482,10 @@ async def _fetch_lastfm_album(
         if (
             exc.status_code in {502, 503}
             and isinstance(detail, str)
-            and detail == "lastfm_not_configured"
+            and detail == "lastfm_api_key_missing"
         ):
             raise HTTPException(
-                status_code=502, detail="lastfm_not_configured"
+                status_code=502, detail="lastfm_api_key_missing"
             ) from exc
         raise HTTPException(status_code=502, detail=detail) from exc
 
@@ -563,7 +593,7 @@ async def _discogs_detail(request: Request, provider_id: str) -> MetaDetail:
         try:
             info = await _fetch_lastfm_album(request, artist_name, title)
         except HTTPException as exc:
-            if exc.status_code == 502 and exc.detail == "lastfm_not_configured":
+            if exc.status_code == 502 and exc.detail == "lastfm_api_key_missing":
                 info = None
             else:
                 raise

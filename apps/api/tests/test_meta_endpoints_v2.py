@@ -5,59 +5,53 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.endpoints import meta as meta_endpoints
 
 
-class DummyTMDB:
-    api_key = "test_token"
-
-    async def search_movies(self, query: str, limit: int = 20):
-        return [
-            {
+class DummyMetadataClient:
+    async def tmdb(self, path: str, params: dict | None = None, request_id: str | None = None):
+        if path == "search/movie":
+            return {
+                "results": [
+                    {
+                        "id": 101,
+                        "title": "Blade Runner",
+                        "release_date": "1982-06-25",
+                        "poster_path": "/movie.jpg",
+                        "popularity": 88.0,
+                    }
+                ]
+            }
+        if path == "search/tv":
+            return {
+                "results": [
+                    {
+                        "id": 202,
+                        "name": "Blade Runner 2099",
+                        "first_air_date": "2025-01-01",
+                        "poster_path": "/tv.jpg",
+                        "popularity": 91.0,
+                    }
+                ]
+            }
+        if path == "movie/101":
+            return {
                 "id": 101,
                 "title": "Blade Runner",
                 "release_date": "1982-06-25",
+                "overview": "A replicant hunter faces his past.",
                 "poster_path": "/movie.jpg",
-                "popularity": 88.0,
+                "backdrop_path": "/movie-bg.jpg",
+                "genres": [{"name": "Sci-Fi"}],
+                "runtime": 117,
+                "vote_average": 8.4,
+                "credits": {"cast": [{"name": "Harrison Ford", "character": "Deckard"}]},
             }
-        ]
+        return {"results": []}
 
-    async def search_tv(self, query: str, limit: int = 20):
-        return [
-            {
-                "id": 202,
-                "name": "Blade Runner 2099",
-                "first_air_date": "2025-01-01",
-                "poster_path": "/tv.jpg",
-                "popularity": 91.0,
+    async def lastfm(self, path: str, params: dict | None = None, request_id: str | None = None):
+        return {
+            "album": {
+                "wiki": {"summary": "Award winning score."},
+                "tags": {"tag": [{"name": "Ambient"}]},
             }
-        ]
-
-    async def movie_details(self, tmdb_id: int):
-        return {
-            "id": tmdb_id,
-            "title": "Blade Runner",
-            "release_date": "1982-06-25",
-            "overview": "A replicant hunter faces his past.",
-            "poster_path": "/movie.jpg",
-            "backdrop_path": "/movie-bg.jpg",
-            "genres": [{"name": "Sci-Fi"}],
-            "runtime": 117,
-            "vote_average": 8.4,
-            "credits": {"cast": [{"name": "Harrison Ford", "character": "Deckard"}]},
-        }
-
-    async def tv_details(self, tmdb_id: int):
-        return {
-            "id": tmdb_id,
-            "name": "Blade Runner 2099",
-            "first_air_date": "2025-01-01",
-            "overview": "Series set in the Blade Runner universe.",
-            "poster_path": "/tv.jpg",
-            "backdrop_path": "/tv-bg.jpg",
-            "genres": [{"name": "Sci-Fi"}],
-            "episode_run_time": [55],
-            "vote_average": 7.9,
-            "number_of_seasons": 1,
-            "number_of_episodes": 8,
-            "credits": {"cast": [{"name": "Actor", "character": "Lead"}]},
         }
 
 
@@ -93,32 +87,15 @@ class DummyDiscogs:
         }
 
 
-class DummyLastFM:
-    api_key = "test_lastfm"
-
-    async def search_albums(self, query: str, limit: int = 20):
-        return []
-
-    async def get_album_info(self, artist: str | None, album: str):
-        return {
-            "summary": "Award winning score.",
-            "tags": ["Ambient"],
-            "extra": {},
-        }
-
-
 @pytest.mark.anyio
 async def test_meta_search_returns_mixed_items(monkeypatch):
-    monkeypatch.setattr(meta_endpoints, "_tmdb_client", lambda: DummyTMDB())
+    monkeypatch.setattr(meta_endpoints, "_metadata_client", lambda: DummyMetadataClient())
     monkeypatch.setattr(meta_endpoints, "_discogs_client", lambda: DummyDiscogs())
-    monkeypatch.setattr(meta_endpoints, "_lastfm_client", lambda: DummyLastFM())
 
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/meta/search", params={"q": "blade"})
 
     assert response.status_code == 200
@@ -129,17 +106,13 @@ async def test_meta_search_returns_mixed_items(monkeypatch):
 
 @pytest.mark.anyio
 async def test_meta_detail_movie_builds_canonical(monkeypatch):
-    monkeypatch.setattr(meta_endpoints, "_tmdb_client", lambda: DummyTMDB())
+    monkeypatch.setattr(meta_endpoints, "_metadata_client", lambda: DummyMetadataClient())
 
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get(
-            "/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"}
-        )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"})
 
     assert response.status_code == 200
     detail = response.json()
@@ -152,14 +125,12 @@ async def test_meta_detail_movie_builds_canonical(monkeypatch):
 @pytest.mark.anyio
 async def test_meta_detail_album_includes_tracks(monkeypatch):
     monkeypatch.setattr(meta_endpoints, "_discogs_client", lambda: DummyDiscogs())
-    monkeypatch.setattr(meta_endpoints, "_lastfm_client", lambda: DummyLastFM())
+    monkeypatch.setattr(meta_endpoints, "_metadata_client", lambda: DummyMetadataClient())
 
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             "/meta/detail",
             params={"type": "album", "id": "master:303", "provider": "discogs"},

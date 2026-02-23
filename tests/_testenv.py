@@ -14,7 +14,6 @@ _DEFAULT_ENV = {
     "QB_URL": "http://localhost.test",
     "QB_USER": "test_user",
     "QB_PASS": "dummy_password",
-    "METADATA_BASE_URL": "http://metadata-proxy.test",
 }
 
 for key, value in _DEFAULT_ENV.items():

@@ -167,17 +167,23 @@ async def _discover_video(
         if (
             exc.status_code in {502, 503}
             and isinstance(detail, str)
-            and detail == "tmdb_not_configured"
+            and detail == "tmdb_api_key_missing"
         ):
-            logger.warning(
-                "discover: tmdb not configured for media_type=%s", media_type
-            )
-            payload = None
-        else:
-            logger.exception(
-                "discover: tmdb discovery failed media_type=%s", media_type
-            )
-            raise HTTPException(status_code=502, detail=detail) from exc
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_key",
+                    "code": "tmdb_api_key_missing",
+                    "message": "TMDb API key is required. Configure it in Settings → Integrations.",
+                },
+            ) from exc
+        logger.exception(
+            "discover: tmdb discovery failed media_type=%s", media_type
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "upstream_failure", "code": "tmdb_upstream_failure", "message": str(detail)},
+        ) from exc
     except Exception:
         logger.exception("discover: tmdb discovery failed media_type=%s", media_type)
         payload = None
@@ -220,7 +226,7 @@ async def _discover_albums(
         if (
             exc.status_code in {502, 503}
             and isinstance(detail, str)
-            and detail == "lastfm_not_configured"
+            and detail == "lastfm_api_key_missing"
         ):
             logger.warning("discover: lastfm not configured")
             return _fallback_response("album", page)

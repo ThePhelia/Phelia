@@ -31,7 +31,7 @@
 - Hooks currently run `black --check --diff` and `ruff`.
 - Run smoke tests via:
   ```bash
-  pip install -r apps/api/requirements.txt -r services/metadata-proxy/requirements.txt
+  pip install -r apps/api/requirements.txt
   pytest tests/smoke
   ```
 - For docker smoke coverage, use `./scripts/dev_smoke.sh` (requires Docker and docker compose).

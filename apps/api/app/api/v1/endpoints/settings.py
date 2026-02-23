@@ -232,6 +232,7 @@ def get_api_keys() -> ApiKeysResponse:
     """Get all configured API keys (without exposing the actual values)."""
     api_keys = []
     provider_field_map = {
+        "tmdb": "tmdb.api_key",
         "omdb": "omdb.api_key",
         "discogs": "discogs.token_or_key",
         "lastfm": "lastfm.api_key",
@@ -257,6 +258,7 @@ def get_api_keys() -> ApiKeysResponse:
 def get_api_key(provider: str) -> ApiKeyResponse:
     """Get configuration status for a specific API key provider."""
     provider_field_map = {
+        "tmdb": "tmdb.api_key",
         "omdb": "omdb.api_key",
         "discogs": "discogs.token_or_key",
         "lastfm": "lastfm.api_key",
@@ -284,6 +286,7 @@ def get_api_key(provider: str) -> ApiKeyResponse:
 def update_api_key(provider: str, request: ApiKeyUpdateRequest) -> ApiKeyResponse:
     """Update an API key for a specific provider."""
     provider_field_map = {
+        "tmdb": "tmdb.api_key",
         "omdb": "omdb.api_key",
         "discogs": "discogs.token_or_key",
         "lastfm": "lastfm.api_key",
@@ -314,6 +317,7 @@ def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysResponse:
     """Bulk update multiple API keys."""
     # Validate all providers exist before updating any
     provider_field_map = {
+        "tmdb": "tmdb.api_key",
         "omdb": "omdb.api_key",
         "discogs": "discogs.token_or_key",
         "lastfm": "lastfm.api_key",

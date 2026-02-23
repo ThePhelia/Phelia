@@ -3,7 +3,6 @@
 ## KEEP
 - `apps/api` – FastAPI backend and Celery workers
 - `apps/web` – Vite/React frontend (needs relocation later)
-- `services/metadata-proxy` – shared metadata facade
 - `scripts/dev_smoke.sh` – local docker smoke stack (now points to `infrastructure/compose/docker-compose.yml`)
 - `tests/` – existing backend suite plus new smoke coverage
 - `makefile` & `pyproject.toml` – build/test plumbing

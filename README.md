@@ -1,7 +1,7 @@
 # Phelia
 
 Phelia is a modular media automation stack that mirrors the capabilities of Sonarr/Radarr.
-It is organised as a Python monorepo with a FastAPI core, a metadata proxy, and a Vite-based web UI.
+It is organised as a Python monorepo with a FastAPI core, a FastAPI metadata backend, and a Vite-based web UI.
 
 ## Quick start
 

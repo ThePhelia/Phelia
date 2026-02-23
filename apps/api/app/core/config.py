@@ -12,13 +12,9 @@ codebase.
 
 from __future__ import annotations
 
-import logging
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import AnyHttpUrl, ValidationError, Field, AliasChoices, parse_obj_as
+from pydantic import AnyHttpUrl, ValidationError, Field, AliasChoices
 
-
-log = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -96,19 +92,8 @@ class Settings(BaseSettings):
     # We ship a sensible default that complies with their etiquette.
     MB_USER_AGENT: str = "Phelia/0.1 (https://example.local)"
 
-    METADATA_BASE_URL: AnyHttpUrl | None = None
-
     def finalize(self) -> None:
-        env = (self.APP_ENV or "").lower()
-        if not self.METADATA_BASE_URL:
-            if env in {"prod", "production"}:
-                raise RuntimeError("METADATA_BASE_URL is required in production")
-            default_url = "http://metadata-proxy:8000"
-            self.METADATA_BASE_URL = parse_obj_as(AnyHttpUrl, default_url)
-            log.warning(
-                "METADATA_BASE_URL not set; using dev default: %s",
-                self.METADATA_BASE_URL,
-            )
+        return None
 
 
 try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from typing import Any, Iterable, Literal
 
@@ -35,6 +36,7 @@ from app.services.metadata.providers.discogs import DiscogsClient
 
 
 public_router = APIRouter(tags=["metadata"])
+logger = logging.getLogger(__name__)
 
 
 def _metadata_client():
@@ -263,11 +265,23 @@ async def meta_search(
     async def _albums() -> list[tuple[float, MetaSearchItem]]:
         hits: list[tuple[float, MetaSearchItem]] = []
         if discogs.token:
-            results = await discogs.search_albums(q, limit=limit)
-            for result in results:
-                mapped = _discogs_search_item(result)
-                if mapped:
-                    hits.append(mapped)
+            try:
+                results = await discogs.search_albums(q, limit=limit)
+            except Exception as exc:  # pragma: no cover - network/upstream variability
+                logger.warning(
+                    "meta_search_provider_failure",
+                    extra={
+                        "provider": "discogs",
+                        "query": q,
+                        "error": str(exc),
+                    },
+                    exc_info=True,
+                )
+            else:
+                for result in results:
+                    mapped = _discogs_search_item(result)
+                    if mapped:
+                        hits.append(mapped)
         if hits:
             return hits
 
@@ -286,7 +300,17 @@ async def meta_search(
                 return hits
             if exc.status_code == 404:
                 return hits
-            raise HTTPException(status_code=502, detail=detail) from exc
+            logger.warning(
+                "meta_search_provider_failure",
+                extra={
+                    "provider": "lastfm",
+                    "query": q,
+                    "error": str(detail),
+                    "status_code": exc.status_code,
+                },
+                exc_info=True,
+            )
+            return hits
         if not isinstance(response, dict):
             return hits
         results = response.get("results")
@@ -317,7 +341,17 @@ async def meta_search(
                 return hits
             if exc.status_code == 404:
                 return hits
-            raise HTTPException(status_code=502, detail=detail) from exc
+            logger.warning(
+                "meta_search_provider_failure",
+                extra={
+                    "provider": "lastfm",
+                    "query": q,
+                    "error": str(detail),
+                    "status_code": exc.status_code,
+                },
+                exc_info=True,
+            )
+            return hits
         if not isinstance(response, dict):
             return hits
         topalbums = response.get("topalbums")
@@ -332,7 +366,31 @@ async def meta_search(
                 hits.append(mapped)
         return hits
 
-    movie_task, tv_task, album_task = await asyncio.gather(_movies(), _tv(), _albums())
+    gathered = await asyncio.gather(
+        _movies(), _tv(), _albums(), return_exceptions=True
+    )
+
+    provider_names = ("tmdb", "tmdb", "album")
+    task_results: list[list[tuple[float, MetaSearchItem]]] = []
+    for provider_name, result in zip(provider_names, gathered, strict=False):
+        if isinstance(result, Exception):
+            if isinstance(result, HTTPException) and result.status_code in {400, 422}:
+                raise result
+            log_provider = "lastfm" if provider_name == "album" else provider_name
+            logger.warning(
+                "meta_search_provider_failure",
+                extra={
+                    "provider": log_provider,
+                    "query": q,
+                    "error": str(result),
+                },
+                exc_info=True,
+            )
+            task_results.append([])
+            continue
+        task_results.append(result)
+
+    movie_task, tv_task, album_task = task_results
     combined = _dedupe(movie_task + tv_task + album_task)
     combined.sort(key=lambda item: item[0], reverse=True)
     limited = [item for _, item in combined[:limit]]

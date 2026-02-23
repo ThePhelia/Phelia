@@ -6,7 +6,9 @@ from app.api.v1.endpoints import meta as meta_endpoints
 
 
 class DummyMetadataClient:
-    async def tmdb(self, path: str, params: dict | None = None, request_id: str | None = None):
+    async def tmdb(
+        self, path: str, params: dict | None = None, request_id: str | None = None
+    ):
         if path == "search/movie":
             return {
                 "results": [
@@ -42,17 +44,30 @@ class DummyMetadataClient:
                 "genres": [{"name": "Sci-Fi"}],
                 "runtime": 117,
                 "vote_average": 8.4,
-                "credits": {"cast": [{"name": "Harrison Ford", "character": "Deckard"}]},
+                "credits": {
+                    "cast": [{"name": "Harrison Ford", "character": "Deckard"}]
+                },
             }
         return {"results": []}
 
-    async def lastfm(self, path: str, params: dict | None = None, request_id: str | None = None):
+    async def lastfm(
+        self, path: str, params: dict | None = None, request_id: str | None = None
+    ):
         return {
             "album": {
                 "wiki": {"summary": "Award winning score."},
                 "tags": {"tag": [{"name": "Ambient"}]},
             }
         }
+
+
+class TmdbFailureMetadataClient(DummyMetadataClient):
+    async def tmdb(
+        self, path: str, params: dict | None = None, request_id: str | None = None
+    ):
+        if path in {"search/movie", "search/tv"}:
+            raise meta_endpoints.MetadataProxyError(502, "tmdb_unavailable")
+        return await super().tmdb(path, params=params, request_id=request_id)
 
 
 class DummyDiscogs:
@@ -95,7 +110,9 @@ async def test_meta_search_returns_mixed_items(monkeypatch):
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get("/meta/search", params={"q": "blade"})
 
     assert response.status_code == 200
@@ -105,14 +122,72 @@ async def test_meta_search_returns_mixed_items(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_meta_search_tmdb_failure_still_returns_discogs_album(monkeypatch):
+    monkeypatch.setattr(
+        meta_endpoints, "_metadata_client", lambda: TmdbFailureMetadataClient()
+    )
+    monkeypatch.setattr(meta_endpoints, "_discogs_client", lambda: DummyDiscogs())
+
+    app = FastAPI()
+    app.include_router(meta_endpoints.router, prefix="/meta")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/meta/search", params={"q": "blade"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"]
+    assert {item["type"] for item in payload["items"]} == {"album"}
+    album = payload["items"][0]
+    assert album["provider"] == "discogs"
+    assert album["id"] == "master:303"
+    assert album["title"] == "Blade Runner"
+
+
+@pytest.mark.anyio
+async def test_meta_search_provider_failure_preserves_successful_item_schema(monkeypatch):
+    monkeypatch.setattr(
+        meta_endpoints, "_metadata_client", lambda: TmdbFailureMetadataClient()
+    )
+    monkeypatch.setattr(meta_endpoints, "_discogs_client", lambda: DummyDiscogs())
+
+    app = FastAPI()
+    app.include_router(meta_endpoints.router, prefix="/meta")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/meta/search", params={"q": "blade"})
+
+    assert response.status_code == 200
+    album = response.json()["items"][0]
+    assert set(album.keys()) == {
+        "type",
+        "provider",
+        "id",
+        "title",
+        "subtitle",
+        "year",
+        "poster",
+        "extra",
+    }
+
+
+@pytest.mark.anyio
 async def test_meta_detail_movie_builds_canonical(monkeypatch):
     monkeypatch.setattr(meta_endpoints, "_metadata_client", lambda: DummyMetadataClient())
 
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"})
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/meta/detail", params={"type": "movie", "id": "101", "provider": "tmdb"}
+        )
 
     assert response.status_code == 200
     detail = response.json()
@@ -130,7 +205,9 @@ async def test_meta_detail_album_includes_tracks(monkeypatch):
     app = FastAPI()
     app.include_router(meta_endpoints.router, prefix="/meta")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.get(
             "/meta/detail",
             params={"type": "album", "id": "master:303", "provider": "discogs"},

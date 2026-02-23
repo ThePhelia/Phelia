@@ -15,25 +15,27 @@ const {
   updateIndexerMutate,
   deleteIndexerMutate,
   testIndexerMutate,
+  patchIntegrationProvidersMutate,
 } = vi.hoisted(() => {
-  const capabilitiesState = { data: { version: '1.2.3', services: { torrent_search: false } }, isLoading: false };
+  const capabilitiesState = { data: { version: '1.2.3', services: { torrent_search: false } }, isLoading: false, isPending: false };
   const integrationSettingsState = {
     data: {
       integrations: [{ key: 'tmdb.api_key', label: 'TMDb API Key', required: false, masked_at_rest: true, validation_rule: 'min_length:16', configured: true, value: '••••••••' }],
       providers: [{ id: 'tmdb', name: 'TMDb', description: 'Movie metadata.', enabled: true, configured: true }],
     },
-    isLoading: false, isError: false, error: null as Error | null, refetch: vi.fn(),
+    isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn(),
   };
-  const prowlarrIndexersState = { data: { indexers: [{ id: 1, name: 'Demo Indexer', enable: true, implementation_name: 'Cardigann', fields: [{ name: 'baseUrl', label: 'Base Url', value: 'https://old.example' }] }] }, isLoading: false, isError: false, error: null as Error | null };
-  const prowlarrTemplatesState = { data: { templates: [{ id: 10, name: 'Template', fields: [{ name: 'baseUrl', label: 'Base Url', value: '' }] }] }, isLoading: false, isError: false, error: null as Error | null };
+  const prowlarrIndexersState = { data: { indexers: [{ id: 1, name: 'Demo Indexer', enable: true, implementation_name: 'Cardigann', fields: [{ name: 'baseUrl', label: 'Base Url', value: 'https://old.example' }] }] }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
+  const prowlarrTemplatesState = { data: { templates: [{ id: 10, name: 'Template', fields: [{ name: 'baseUrl', label: 'Base Url', value: '' }] }] }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
   const updateProwlarrMutate = vi.fn();
   const discoverProwlarrApiKeyMutate = vi.fn();
   const createIndexerMutate = vi.fn();
   const updateIndexerMutate = vi.fn();
   const deleteIndexerMutate = vi.fn();
   const testIndexerMutate = vi.fn();
-  const serviceSettingsState = { data: { prowlarr: { url: 'http://prowlarr:9696', api_key_configured: false }, qbittorrent: { url: 'http://qbittorrent:8080', username: 'admin', password_configured: false }, downloads: { allowed_dirs: ['/downloads', '/music'], default_dir: '/downloads' } }, isLoading: false, isError: false, error: null as Error | null };
-  return { capabilitiesState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateProwlarrMutate, discoverProwlarrApiKeyMutate, createIndexerMutate, updateIndexerMutate, deleteIndexerMutate, testIndexerMutate };
+  const patchIntegrationProvidersMutate = vi.fn();
+  const serviceSettingsState = { data: { prowlarr: { url: 'http://prowlarr:9696', api_key_configured: false }, qbittorrent: { url: 'http://qbittorrent:8080', username: 'admin', password_configured: false }, downloads: { allowed_dirs: ['/downloads', '/music'], default_dir: '/downloads' } }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
+  return { capabilitiesState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateProwlarrMutate, discoverProwlarrApiKeyMutate, createIndexerMutate, updateIndexerMutate, deleteIndexerMutate, testIndexerMutate, patchIntegrationProvidersMutate };
 });
 
 vi.mock('@/app/lib/api', () => ({
@@ -44,6 +46,7 @@ vi.mock('@/app/lib/api', () => ({
   useUpdateQbittorrentSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDownloadSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useIntegrationSettings: () => integrationSettingsState,
+  usePatchIntegrationProviders: () => ({ mutateAsync: patchIntegrationProvidersMutate, isPending: false }),
   useProwlarrIndexers: () => prowlarrIndexersState,
   useProwlarrIndexerTemplates: () => prowlarrTemplatesState,
   useCreateProwlarrIndexer: () => ({ mutateAsync: createIndexerMutate, isPending: false }),
@@ -54,9 +57,8 @@ vi.mock('@/app/lib/api', () => ({
 
 describe('SettingsPage sidebar layout', () => {
   beforeEach(() => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true }) as any;
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    updateProwlarrMutate.mockReset(); discoverProwlarrApiKeyMutate.mockReset(); createIndexerMutate.mockReset(); updateIndexerMutate.mockReset(); deleteIndexerMutate.mockReset(); testIndexerMutate.mockReset();
+    updateProwlarrMutate.mockReset(); discoverProwlarrApiKeyMutate.mockReset(); createIndexerMutate.mockReset(); updateIndexerMutate.mockReset(); deleteIndexerMutate.mockReset(); testIndexerMutate.mockReset(); patchIntegrationProvidersMutate.mockReset();
     discoverProwlarrApiKeyMutate.mockResolvedValue({ message: 'Fetched and saved API key from Prowlarr.' });
   });
 
@@ -72,7 +74,7 @@ describe('SettingsPage sidebar layout', () => {
     await user.click(screen.getByRole('button', { name: 'Clear field' }));
     await user.type(integrationInput, '1234567890123456');
     await user.click(screen.getAllByRole('button', { name: /^Save$/ })[0]);
-    expect(global.fetch).toHaveBeenCalled();
+    expect(patchIntegrationProvidersMutate).toHaveBeenCalledWith({ providers: { tmdb: { enabled: true, values: { api_key: '1234567890123456' } } } });
   });
 
   it('shows unsaved indicator when section is dirty', async () => {

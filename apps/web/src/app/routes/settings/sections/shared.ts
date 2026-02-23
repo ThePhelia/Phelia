@@ -15,3 +15,10 @@ export function parseValidationRule(rule: string): { minLength?: number; regex?:
   }
   return {};
 }
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'Request failed. Please try again.';
+}

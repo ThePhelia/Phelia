@@ -424,6 +424,22 @@ export function useUpdateIntegrationSettings() {
   });
 }
 
+export function usePatchIntegrationProviders() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    IntegrationSettingsResponse,
+    Error,
+    { providers: Record<string, { enabled?: boolean; values?: Record<string, string | null> }> }
+  >({
+    mutationFn: (data) => http('settings/integrations', { method: 'PATCH', json: data }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['integration-settings'] });
+      void queryClient.invalidateQueries({ queryKey: ['capabilities'] });
+    },
+  });
+}
+
 export function useUpdateIntegrationField() {
   const queryClient = useQueryClient();
 

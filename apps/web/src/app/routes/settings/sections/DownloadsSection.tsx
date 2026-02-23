@@ -5,6 +5,7 @@ import { Label } from '@/app/components/ui/label';
 import { useServiceSettings, useUpdateDownloadSettings } from '@/app/lib/api';
 import { normalizeStringList, safeString, safeTrimmedString } from '@/app/utils/safe';
 import { toast } from 'sonner';
+import { getErrorMessage } from './shared';
 
 const parseDirList = (value: string) => value.split(/[\n,]/).map((i) => i.trim()).filter(Boolean);
 const equal = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
@@ -30,9 +31,25 @@ export function DownloadsSection({ onDirtyChange }: { onDirtyChange: (d: boolean
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const save = async () => {
-    await updateDownloads.mutateAsync({ allowed_dirs: parsedAllowed, default_dir: trimmedDefault || null });
-    toast.success('Downloads settings updated');
+    try {
+      await updateDownloads.mutateAsync({ allowed_dirs: parsedAllowed, default_dir: trimmedDefault || null });
+      toast.success('Downloads settings updated');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
   };
+
+  if (serviceQuery.isPending) {
+    return <p className="text-sm text-muted-foreground">Loading download settings…</p>;
+  }
+
+  if (serviceQuery.isError) {
+    return <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+      <p className="font-medium">Failed to load download settings.</p>
+      <p className="text-muted-foreground">{getErrorMessage(serviceQuery.error)}</p>
+      <Button className="mt-2" variant="outline" onClick={() => serviceQuery.refetch()}>Retry</Button>
+    </div>;
+  }
 
   return <div className="space-y-3">
     <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Downloads</h2>{dirty ? <span className="text-xs rounded bg-amber-100 px-2 py-1">Unsaved changes</span> : null}</div>

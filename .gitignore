@@ -29,6 +29,7 @@ coverage.xml
 !.env.example
 !*/env/*.env.example
 !infrastructure/env/web.env
+!infrastructure/compose/.env
 deploy/.env
 
 /apps/web/node_modules

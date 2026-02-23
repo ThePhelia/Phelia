@@ -126,6 +126,7 @@ services:
       - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
+      - prowlarr_config:/mnt/prowlarr_config:ro
 
   beat:
     build:
@@ -148,7 +149,7 @@ services:
         condition: service_started
     volumes:
       - ../../apps/api:/app
-
+      - prowlarr_config:/mnt/prowlarr_config:ro
   web:
     build:
       context: ../../apps/web

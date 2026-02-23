@@ -10,7 +10,7 @@ def test_runtime_integrations_migrate_legacy_flat_keys(tmp_path):
 
     assert runtime.get("tmdb.api_key") == "legacy-tmdb-api-key-1234"
     section = store.load_section("integrations")
-    assert section["tmdb.api_key"] == "legacy-tmdb-api-key-1234"
+    assert section["values"]["tmdb.api_key"] == "legacy-tmdb-api-key-1234"
 
 
 def test_runtime_integrations_mask_secret_values(tmp_path):

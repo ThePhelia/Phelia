@@ -11,11 +11,13 @@ from . import ProviderConfig, create_router
 TMDB_TTL = 60 * 60 * 12  # 12 hours
 
 
-def _tmdb_params(_: Request, __: str, settings) -> list[tuple[str, str]]:
+def _tmdb_params(request: Request, __: str, settings) -> list[tuple[str, str]]:
     params: list[tuple[str, str]] = []
-    if not settings.tmdb_api_key:
+    override_key = request.headers.get("x-phelia-tmdb-key")
+    api_key = override_key or settings.tmdb_api_key
+    if not api_key:
         raise HTTPException(status_code=503, detail="tmdb_not_configured")
-    params.append(("api_key", settings.tmdb_api_key))
+    params.append(("api_key", api_key))
     return params
 
 

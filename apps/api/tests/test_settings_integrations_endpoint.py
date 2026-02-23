@@ -27,19 +27,19 @@ def test_get_integrations_masks_secrets(monkeypatch):
     response = client.get("/settings/integrations")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "integrations": [
-            {
-                "key": "tmdb.api_key",
-                "label": "TMDb API Key",
-                "required": False,
-                "masked_at_rest": True,
-                "validation_rule": "min_length:16",
-                "configured": True,
-                "value": "••••••••",
-            }
-        ]
-    }
+    payload = response.json()
+    assert payload["integrations"] == [
+        {
+            "key": "tmdb.api_key",
+            "label": "TMDb API Key",
+            "required": False,
+            "masked_at_rest": True,
+            "validation_rule": "min_length:16",
+            "configured": True,
+            "value": "••••••••",
+        }
+    ]
+    assert "providers" in payload
 
 
 def test_update_integration_returns_validation_error(monkeypatch):
@@ -80,7 +80,7 @@ def test_patch_integrations_accepts_partial_provider_updates(monkeypatch):
         json={
             "providers": {
                 "tmdb": {"values": {"api_key": "1234567890abcdef"}},
-                "musicbrainz": {"values": {"contact": "me@example.com"}},
+                "musicbrainz": {"values": {"user_agent": "Phelia/1.0 (dev@example.com)"}},
             }
         },
     )
@@ -88,7 +88,7 @@ def test_patch_integrations_accepts_partial_provider_updates(monkeypatch):
     assert response.status_code == 200
     assert captured == {
         "tmdb.api_key": "1234567890abcdef",
-        "musicbrainz.contact": "me@example.com",
+        "musicbrainz.user_agent": "Phelia/1.0 (dev@example.com)",
     }
 
 
@@ -98,7 +98,7 @@ def test_patch_integrations_partial_update_preserves_existing_secrets(monkeypatc
 
     persisted_values = {
         "tmdb.api_key": "existing-secret-value",
-        "musicbrainz.contact": "old@example.com",
+        "musicbrainz.user_agent": "old-agent",
     }
 
     def update_many(values):
@@ -110,12 +110,12 @@ def test_patch_integrations_partial_update_preserves_existing_secrets(monkeypatc
     client = TestClient(app)
     response = client.patch(
         "/settings/integrations",
-        json={"providers": {"musicbrainz": {"values": {"contact": "new@example.com"}}}},
+        json={"providers": {"musicbrainz": {"values": {"user_agent": "new-agent"}}}},
     )
 
     assert response.status_code == 200
     assert persisted_values["tmdb.api_key"] == "existing-secret-value"
-    assert persisted_values["musicbrainz.contact"] == "new@example.com"
+    assert persisted_values["musicbrainz.user_agent"] == "new-agent"
 
 
 def test_patch_integrations_rejects_unknown_provider_field():

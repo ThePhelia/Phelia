@@ -45,7 +45,7 @@ class LocalErrorBoundaryInner extends Component<BoundaryProps, BoundaryState> {
       <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
         <p className="text-sm font-medium text-destructive">{this.props.title}</p>
         <p className="text-xs text-muted-foreground">{this.props.description}</p>
-        <Button size="sm" variant="outline" onClick={this.handleRetry}>Try again</Button>
+        <Button size="sm" variant="outline" onClick={this.handleRetry}>Retry</Button>
       </div>
     );
   }

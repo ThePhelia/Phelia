@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.core.runtime_settings import runtime_settings
+from app.core.runtime_integration_settings import runtime_integration_settings
 
 
 class MetadataProxyError(Exception):
@@ -23,6 +23,27 @@ class MetadataProxyError(Exception):
 class MetadataClient:
     """Lightweight async client for the metadata proxy."""
 
+
+    def _integration_override_headers(self, provider: str) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        mappings = {
+            "tmdb": ("tmdb.api_key", "x-phelia-tmdb-key"),
+            "omdb": ("omdb.api_key", "x-phelia-omdb-key"),
+            "fanart": ("fanart.api_key", "x-phelia-fanart-key"),
+            "listenbrainz": ("listenbrainz.token", "x-phelia-listenbrainz-token"),
+            "spotify": ("spotify.client_id", "x-phelia-spotify-client-id"),
+            "spotify-secret": ("spotify.client_secret", "x-phelia-spotify-client-secret"),
+        }
+        if provider in mappings:
+            key, header_name = mappings[provider]
+            value = runtime_integration_settings.get(key)
+            if value:
+                headers[header_name] = value
+        if provider == "spotify":
+            secret = runtime_integration_settings.get("spotify.client_secret")
+            if secret:
+                headers["x-phelia-spotify-client-secret"] = secret
+        return headers
     def __init__(self, base_url: str, *, timeout: float = 10.0) -> None:
         self.base_url = base_url.rstrip("/")
         self._timeout = httpx.Timeout(timeout, connect=3.0, read=timeout, write=timeout)
@@ -38,6 +59,7 @@ class MetadataClient:
     ) -> Any:
         url = f"{self.base_url}/{provider}/{path.lstrip('/')}"
         req_headers = {"accept": "application/json"}
+        req_headers.update(self._integration_override_headers(provider))
         if request_id:
             req_headers["x-request-id"] = request_id
         if headers:
@@ -81,7 +103,7 @@ class MetadataClient:
         if path and "method" not in payload:
             payload["method"] = path
         headers: dict[str, str] = {}
-        api_key = runtime_settings.get("lastfm")
+        api_key = runtime_integration_settings.get("lastfm.api_key")
         if api_key:
             headers["x-phelia-lastfm-key"] = api_key
         return await self._get("lastfm", "", payload, request_id, headers=headers)

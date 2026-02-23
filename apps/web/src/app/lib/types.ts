@@ -206,8 +206,17 @@ export interface IntegrationField {
   value: string | null;
 }
 
+export interface IntegrationProvider {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  configured: boolean;
+}
+
 export interface IntegrationSettingsResponse {
   integrations: IntegrationField[];
+  providers: IntegrationProvider[];
 }
 
 

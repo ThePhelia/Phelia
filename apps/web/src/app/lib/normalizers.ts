@@ -1,6 +1,7 @@
 import type {
   CapabilitiesResponse,
   IntegrationField,
+  IntegrationProvider,
   IntegrationSettingsResponse,
   ProwlarrIndexer,
   ProwlarrIndexerField,
@@ -134,6 +135,20 @@ export function normalizeServiceSettingsResponse(input: unknown): ServiceSetting
   };
 }
 
+
+function normalizeIntegrationProvider(input: unknown): IntegrationProvider | null {
+  const record = toRecord(input);
+  const id = toString(record.id);
+  if (!id) return null;
+  return {
+    id,
+    name: toString(record.name, id),
+    description: toString(record.description),
+    enabled: toBoolean(record.enabled),
+    configured: toBoolean(record.configured),
+  };
+}
+
 function normalizeIntegrationField(input: unknown): IntegrationField | null {
   const record = toRecord(input);
   const key = toString(record.key);
@@ -153,10 +168,12 @@ function normalizeIntegrationField(input: unknown): IntegrationField | null {
 export function normalizeIntegrationSettingsResponse(input: unknown): IntegrationSettingsResponse {
   const record = toRecord(input);
   const integrations = Array.isArray(record.integrations) ? record.integrations : [];
+  const providers = Array.isArray(record.providers) ? record.providers : [];
   return {
     integrations: integrations
       .map(normalizeIntegrationField)
       .filter((field): field is IntegrationField => Boolean(field)),
+    providers: providers.map(normalizeIntegrationProvider).filter((provider): provider is IntegrationProvider => Boolean(provider)),
   };
 }
 

@@ -22,78 +22,82 @@ class IntegrationFieldSpec:
     secret: bool = True
 
 
+@dataclass(frozen=True, slots=True)
+class IntegrationProviderSpec:
+    id: str
+    name: str
+    description: str
+    fields: tuple[str, ...]
+
+
 INTEGRATION_FIELDS: tuple[IntegrationFieldSpec, ...] = (
+    IntegrationFieldSpec("tmdb.api_key", "TMDb API Key", False, True, "min_length:16"),
+    IntegrationFieldSpec("omdb.api_key", "OMDb API Key", False, True, "min_length:8"),
+    IntegrationFieldSpec("lastfm.api_key", "Last.fm API Key", False, True, "min_length:8"),
+    IntegrationFieldSpec("listenbrainz.token", "ListenBrainz Token", False, True, "min_length:8"),
+    IntegrationFieldSpec("fanart.api_key", "Fanart API Key", False, True, "min_length:8"),
+    IntegrationFieldSpec("deezer.api_key", "Deezer API Key", False, True, "min_length:8"),
+    IntegrationFieldSpec("spotify.client_id", "Spotify Client ID", False, True, "min_length:8"),
+    IntegrationFieldSpec("spotify.client_secret", "Spotify Client Secret", False, True, "min_length:8"),
+    IntegrationFieldSpec("discogs.token_or_key", "Discogs Token or API Key", False, True, "min_length:8"),
+    IntegrationFieldSpec("musicbrainz.client_id", "MusicBrainz Client ID", False, True, "min_length:2"),
+    IntegrationFieldSpec("musicbrainz.client_secret", "MusicBrainz Client Secret", False, True, "min_length:2"),
     IntegrationFieldSpec(
-        key="tmdb.api_key",
-        label="TMDb API Key",
-        required=False,
-        masked_at_rest=True,
-        validation_rule="min_length:16",
+        "musicbrainz.user_agent",
+        "MusicBrainz User Agent",
+        False,
+        False,
+        r"regex:^[A-Za-z0-9][A-Za-z0-9 ._\-/()@:+]{1,127}$",
+        False,
     ),
-    IntegrationFieldSpec(
-        key="discogs.token_or_key",
-        label="Discogs Token or API Key",
-        required=False,
-        masked_at_rest=True,
-        validation_rule="min_length:8",
-    ),
-    IntegrationFieldSpec(
-        key="musicbrainz.client_name",
-        label="MusicBrainz Client Name",
-        required=True,
-        masked_at_rest=False,
-        validation_rule=r"regex:^[A-Za-z0-9][A-Za-z0-9 ._-]{1,63}$",
-        secret=False,
-    ),
-    IntegrationFieldSpec(
-        key="musicbrainz.client_version",
-        label="MusicBrainz Client Version",
-        required=True,
-        masked_at_rest=False,
-        validation_rule=r"regex:^v?\d+(?:\.\d+){0,2}(?:[-+][A-Za-z0-9._-]+)?$",
-        secret=False,
-    ),
-    IntegrationFieldSpec(
-        key="musicbrainz.contact",
-        label="MusicBrainz Contact URL or Email",
-        required=True,
-        masked_at_rest=False,
-        validation_rule=r"regex:^(https?://\S+|[^\s@]+@[^\s@]+\.[^\s@]+)$",
-        secret=False,
+)
+
+INTEGRATION_PROVIDERS: tuple[IntegrationProviderSpec, ...] = (
+    IntegrationProviderSpec("tmdb", "TMDb", "Movie and TV metadata and artwork.", ("tmdb.api_key",)),
+    IntegrationProviderSpec("omdb", "OMDb", "IMDb ratings and movie metadata fallback.", ("omdb.api_key",)),
+    IntegrationProviderSpec("lastfm", "Last.fm", "Music tags and popularity metadata.", ("lastfm.api_key",)),
+    IntegrationProviderSpec("listenbrainz", "ListenBrainz", "Listening history and artist insights.", ("listenbrainz.token",)),
+    IntegrationProviderSpec("fanart", "Fanart.tv", "Additional images and artwork.", ("fanart.api_key",)),
+    IntegrationProviderSpec("deezer", "Deezer", "Music discovery metadata enrichment.", ("deezer.api_key",)),
+    IntegrationProviderSpec("spotify", "Spotify", "Spotify metadata integration.", ("spotify.client_id", "spotify.client_secret")),
+    IntegrationProviderSpec("discogs", "Discogs", "Album and artist metadata enrichment.", ("discogs.token_or_key",)),
+    IntegrationProviderSpec(
+        "musicbrainz",
+        "MusicBrainz",
+        "MusicBrainz search and release metadata.",
+        ("musicbrainz.client_id", "musicbrainz.client_secret", "musicbrainz.user_agent"),
     ),
 )
 
 FIELD_BY_KEY = {field.key: field for field in INTEGRATION_FIELDS}
+PROVIDER_BY_ID = {provider.id: provider for provider in INTEGRATION_PROVIDERS}
 
 LEGACY_KEY_MAP = {
     "tmdb.api_key": ("tmdb", "TMDB_API_KEY"),
+    "omdb.api_key": ("omdb", "OMDB_API_KEY"),
+    "lastfm.api_key": ("lastfm", "LASTFM_API_KEY"),
+    "listenbrainz.token": ("listenbrainz", "LISTENBRAINZ_TOKEN"),
+    "fanart.api_key": ("fanart", "FANART_API_KEY"),
+    "deezer.api_key": ("deezer", "DEEZER_API_KEY"),
+    "spotify.client_id": ("spotify_client_id", "SPOTIFY_CLIENT_ID"),
+    "spotify.client_secret": ("spotify_client_secret", "SPOTIFY_CLIENT_SECRET"),
     "discogs.token_or_key": ("discogs", "DISCOGS_TOKEN"),
+    "musicbrainz.user_agent": ("musicbrainz_user_agent", "MB_USER_AGENT"),
 }
-
-
-def _parse_musicbrainz_user_agent(value: str | None) -> tuple[str | None, str | None, str | None]:
-    if not value:
-        return None, None, None
-    match = re.match(r"\s*([^/]+)/([^\s]+)\s*\(([^)]+)\)\s*", value)
-    if not match:
-        return value.strip() or None, None, None
-    return (part.strip() or None for part in match.groups())
 
 
 def _validate(field: IntegrationFieldSpec, value: str | None) -> str | None:
     cleaned = value.strip() if isinstance(value, str) else None
     if not cleaned:
         return None
-    if field.key == "tmdb.api_key" and len(cleaned) < 16:
-        raise ValueError("tmdb.api_key must be at least 16 characters")
-    if field.key == "discogs.token_or_key" and len(cleaned) < 8:
-        raise ValueError("discogs.token_or_key must be at least 8 characters")
-    if field.key == "musicbrainz.client_name" and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{1,63}", cleaned):
-        raise ValueError("musicbrainz.client_name must be 2-64 chars and start with alphanumeric")
-    if field.key == "musicbrainz.client_version" and not re.fullmatch(r"v?\d+(?:\.\d+){0,2}(?:[-+][A-Za-z0-9._-]+)?", cleaned):
-        raise ValueError("musicbrainz.client_version must look like 1.0 or v1.0.0")
-    if field.key == "musicbrainz.contact" and not re.fullmatch(r"(https?://\S+|[^\s@]+@[^\s@]+\.[^\s@]+)", cleaned):
-        raise ValueError("musicbrainz.contact must be an email or URL")
+    if field.validation_rule.startswith("min_length:"):
+        min_length = int(field.validation_rule.split(":", maxsplit=1)[1])
+        if len(cleaned) < min_length:
+            raise ValueError(f"{field.key} must be at least {min_length} characters")
+    if field.validation_rule.startswith("regex:"):
+        pattern = field.validation_rule.split(":", maxsplit=1)[1]
+        if not re.fullmatch(pattern, cleaned):
+            raise ValueError(f"{field.key} format is invalid")
     return cleaned
 
 
@@ -102,23 +106,22 @@ class RuntimeIntegrationSettings:
         self._lock = RLock()
         self._store = store or get_secrets_store()
         self._values: dict[str, str | None] = {}
+        self._enabled: dict[str, bool] = {}
         self.reset_to_defaults()
 
-    def _defaults(self) -> dict[str, str | None]:
+    def _defaults(self) -> tuple[dict[str, str | None], dict[str, bool]]:
         defaults = {field.key: None for field in INTEGRATION_FIELDS}
+        enabled = {provider.id: False for provider in INTEGRATION_PROVIDERS}
+
         for field_key, (_, env_name) in LEGACY_KEY_MAP.items():
             env = os.environ.get(env_name)
             if env is None:
                 env = getattr(settings, env_name, None)
             defaults[field_key] = env.strip() if isinstance(env, str) and env.strip() else None
 
-        mb_name, mb_version, mb_contact = _parse_musicbrainz_user_agent(
-            os.environ.get("MB_USER_AGENT") or getattr(settings, "MB_USER_AGENT", None)
-        )
-        defaults["musicbrainz.client_name"] = mb_name
-        defaults["musicbrainz.client_version"] = mb_version
-        defaults["musicbrainz.contact"] = mb_contact
-        return defaults
+        for provider in INTEGRATION_PROVIDERS:
+            enabled[provider.id] = any(defaults.get(key) for key in provider.fields)
+        return defaults, enabled
 
     def _legacy_store_migration(self, values: dict[str, str | None]) -> dict[str, str | None]:
         migrated: dict[str, str | None] = {}
@@ -131,22 +134,32 @@ class RuntimeIntegrationSettings:
 
     def reset_to_defaults(self) -> None:
         with self._lock:
-            values = self._defaults()
+            values, enabled = self._defaults()
             persisted = self._store.load_section(_INTEGRATIONS_SECTION)
             if isinstance(persisted, dict):
+                for key, value in persisted.get("values", {}).items() if isinstance(persisted.get("values"), dict) else []:
+                    if key in FIELD_BY_KEY and isinstance(value, str) and value.strip():
+                        values[key] = value.strip()
+                for provider_id, value in persisted.get("enabled", {}).items() if isinstance(persisted.get("enabled"), dict) else []:
+                    if provider_id in PROVIDER_BY_ID:
+                        enabled[provider_id] = bool(value)
                 for key, value in persisted.items():
                     if key in FIELD_BY_KEY and isinstance(value, str) and value.strip():
                         values[key] = value.strip()
             migrated = self._legacy_store_migration(values)
             self._values = values
+            self._enabled = enabled
             if migrated or not persisted:
                 self._persist()
 
     def _persist(self) -> None:
         payload = {
-            key: value
-            for key, value in self._values.items()
-            if isinstance(value, str) and value.strip()
+            "values": {
+                key: value
+                for key, value in self._values.items()
+                if isinstance(value, str) and value.strip()
+            },
+            "enabled": dict(self._enabled),
         }
         self._store.save_section(_INTEGRATIONS_SECTION, payload)
 
@@ -172,6 +185,20 @@ class RuntimeIntegrationSettings:
             changed |= self.set(key, value)
         return changed
 
+    def provider_enabled(self, provider_id: str) -> bool:
+        with self._lock:
+            return bool(self._enabled.get(provider_id, False))
+
+    def set_provider_enabled(self, provider_id: str, enabled: bool) -> bool:
+        if provider_id not in PROVIDER_BY_ID:
+            raise KeyError(provider_id)
+        with self._lock:
+            if self._enabled.get(provider_id) == enabled:
+                return False
+            self._enabled[provider_id] = enabled
+            self._persist()
+            return True
+
     def describe(self, *, include_secrets: bool = False) -> dict[str, dict[str, str | bool | None]]:
         with self._lock:
             result: dict[str, dict[str, str | bool | None]] = {}
@@ -190,21 +217,33 @@ class RuntimeIntegrationSettings:
                 }
             return result
 
-    def musicbrainz_user_agent(self) -> str | None:
+    def provider_catalog(self) -> list[dict[str, str | bool]]:
+        described = self.describe(include_secrets=False)
         with self._lock:
-            name = self._values.get("musicbrainz.client_name")
-            version = self._values.get("musicbrainz.client_version")
-            contact = self._values.get("musicbrainz.contact")
-            if name and version and contact:
-                return f"{name}/{version} ({contact})"
-            return None
+            catalog: list[dict[str, str | bool]] = []
+            for provider in INTEGRATION_PROVIDERS:
+                configured = any(bool(self._values.get(key)) for key in provider.fields)
+                catalog.append(
+                    {
+                        "id": provider.id,
+                        "name": provider.name,
+                        "description": provider.description,
+                        "enabled": bool(self._enabled.get(provider.id, False)),
+                        "configured": configured,
+                    }
+                )
+            return catalog
 
 
 runtime_integration_settings = RuntimeIntegrationSettings()
 
 __all__ = [
     "IntegrationFieldSpec",
+    "IntegrationProviderSpec",
     "INTEGRATION_FIELDS",
+    "INTEGRATION_PROVIDERS",
+    "FIELD_BY_KEY",
+    "PROVIDER_BY_ID",
     "RuntimeIntegrationSettings",
     "runtime_integration_settings",
 ]

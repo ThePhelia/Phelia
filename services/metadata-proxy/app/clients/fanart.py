@@ -11,10 +11,12 @@ from . import ProviderConfig, create_router
 FANART_TTL = 60 * 60 * 24 * 7  # 7 days
 
 
-def _fanart_params(_: Request, __: str, settings) -> list[tuple[str, str]]:
-    if not settings.fanart_api_key:
+def _fanart_params(request: Request, __: str, settings) -> list[tuple[str, str]]:
+    override_key = request.headers.get("x-phelia-fanart-key")
+    api_key = override_key or settings.fanart_api_key
+    if not api_key:
         raise HTTPException(status_code=503, detail="fanart_not_configured")
-    return [("api_key", settings.fanart_api_key)]
+    return [("api_key", api_key)]
 
 
 def _fanart_headers(_: Request, __: str, ___) -> dict[str, str]:

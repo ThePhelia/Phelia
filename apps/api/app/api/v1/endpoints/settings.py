@@ -10,9 +10,9 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from app.core.runtime_settings import runtime_settings
 from app.core.runtime_integration_settings import (
     FIELD_BY_KEY,
+    PROVIDER_BY_ID,
     runtime_integration_settings,
 )
 from app.core.runtime_service_settings import runtime_service_settings
@@ -38,6 +38,7 @@ class IntegrationFieldResponse(BaseModel):
 
 class IntegrationsResponse(BaseModel):
     integrations: list[IntegrationFieldResponse]
+    providers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IntegrationUpdateRequest(BaseModel):
@@ -50,6 +51,7 @@ class IntegrationsBulkUpdateRequest(BaseModel):
 
 class ProviderIntegrationUpdateRequest(BaseModel):
     values: dict[str, str | None]
+    enabled: bool | None = None
 
 
 class IntegrationsProviderBulkUpdateRequest(BaseModel):
@@ -65,10 +67,20 @@ def _is_valid_http_url(value: str) -> bool:
 
 def _validate_provider_payloads(
     providers: dict[str, ProviderIntegrationUpdateRequest],
-) -> dict[str, str | None]:
+) -> tuple[dict[str, str | None], dict[str, bool]]:
     updates: dict[str, str | None] = {}
+    enabled_updates: dict[str, bool] = {}
     for provider_name, payload in providers.items():
+        if provider_name not in PROVIDER_BY_ID:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "provider_not_found", "provider": provider_name},
+            )
+        if payload.enabled is not None:
+            enabled_updates[provider_name] = payload.enabled
         if not payload.values:
+            if payload.enabled is not None:
+                continue
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -102,7 +114,7 @@ def _validate_provider_payloads(
                     },
                 )
             updates[integration_key] = value
-    return updates
+    return updates, enabled_updates
 
 
 def _build_integrations_response(*, include_secrets: bool = False) -> IntegrationsResponse:
@@ -111,7 +123,7 @@ def _build_integrations_response(*, include_secrets: bool = False) -> Integratio
         IntegrationFieldResponse(key=key, **payload)
         for key, payload in described.items()
     ]
-    return IntegrationsResponse(integrations=fields)
+    return IntegrationsResponse(integrations=fields, providers=runtime_integration_settings.provider_catalog())
 
 
 @router.get("/integrations", response_model=IntegrationsResponse)
@@ -165,9 +177,12 @@ def update_integrations(request: IntegrationsBulkUpdateRequest) -> IntegrationsR
 @router.patch("/integrations", response_model=IntegrationsResponse)
 def patch_integrations(request: IntegrationsProviderBulkUpdateRequest) -> IntegrationsResponse:
     """Partially update integration settings by provider payload."""
-    updates = _validate_provider_payloads(request.providers)
+    updates, enabled_updates = _validate_provider_payloads(request.providers)
     try:
-        runtime_integration_settings.update_many(updates)
+        if updates:
+            runtime_integration_settings.update_many(updates)
+        for provider_id, enabled in enabled_updates.items():
+            runtime_integration_settings.set_provider_enabled(provider_id, enabled)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -178,6 +193,7 @@ def patch_integrations(request: IntegrationsProviderBulkUpdateRequest) -> Integr
         "Integration settings updated",
         extra={
             "changed_fields": sorted(updates.keys()),
+            "changed_enabled": enabled_updates,
             "source": "settings.patch_integrations",
         },
     )
@@ -208,8 +224,18 @@ class ApiKeysUpdateRequest(BaseModel):
 def get_api_keys() -> ApiKeysResponse:
     """Get all configured API keys (without exposing the actual values)."""
     api_keys = []
-    for provider in runtime_settings.supported_providers():
-        configured = runtime_settings.is_configured(provider)
+    provider_field_map = {
+        "omdb": "omdb.api_key",
+        "discogs": "discogs.token_or_key",
+        "lastfm": "lastfm.api_key",
+        "listenbrainz": "listenbrainz.token",
+        "fanart": "fanart.api_key",
+        "deezer": "deezer.api_key",
+        "spotify_client_id": "spotify.client_id",
+        "spotify_client_secret": "spotify.client_secret",
+    }
+    for provider, field_key in provider_field_map.items():
+        configured = bool(runtime_integration_settings.get(field_key))
         api_keys.append(
             ApiKeyResponse(
                 provider=provider,
@@ -223,13 +249,23 @@ def get_api_keys() -> ApiKeysResponse:
 @router.get("/api-keys/{provider}", response_model=ApiKeyResponse)
 def get_api_key(provider: str) -> ApiKeyResponse:
     """Get configuration status for a specific API key provider."""
-    if provider not in runtime_settings.supported_providers():
+    provider_field_map = {
+        "omdb": "omdb.api_key",
+        "discogs": "discogs.token_or_key",
+        "lastfm": "lastfm.api_key",
+        "listenbrainz": "listenbrainz.token",
+        "fanart": "fanart.api_key",
+        "deezer": "deezer.api_key",
+        "spotify_client_id": "spotify.client_id",
+        "spotify_client_secret": "spotify.client_secret",
+    }
+    if provider not in provider_field_map:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "provider_not_found", "provider": provider},
         )
 
-    configured = runtime_settings.is_configured(provider)
+    configured = bool(runtime_integration_settings.get(provider_field_map[provider]))
     return ApiKeyResponse(
         provider=provider,
         configured=configured,
@@ -240,14 +276,24 @@ def get_api_key(provider: str) -> ApiKeyResponse:
 @router.post("/api-keys/{provider}", response_model=ApiKeyResponse)
 def update_api_key(provider: str, request: ApiKeyUpdateRequest) -> ApiKeyResponse:
     """Update an API key for a specific provider."""
-    if provider not in runtime_settings.supported_providers():
+    provider_field_map = {
+        "omdb": "omdb.api_key",
+        "discogs": "discogs.token_or_key",
+        "lastfm": "lastfm.api_key",
+        "listenbrainz": "listenbrainz.token",
+        "fanart": "fanart.api_key",
+        "deezer": "deezer.api_key",
+        "spotify_client_id": "spotify.client_id",
+        "spotify_client_secret": "spotify.client_secret",
+    }
+    if provider not in provider_field_map:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "provider_not_found", "provider": provider},
         )
 
-    runtime_settings.set(provider, request.value)
-    configured = runtime_settings.is_configured(provider)
+    runtime_integration_settings.set(provider_field_map[provider], request.value)
+    configured = bool(runtime_integration_settings.get(provider_field_map[provider]))
 
     return ApiKeyResponse(
         provider=provider,
@@ -260,20 +306,32 @@ def update_api_key(provider: str, request: ApiKeyUpdateRequest) -> ApiKeyRespons
 def update_api_keys(request: ApiKeysUpdateRequest) -> ApiKeysResponse:
     """Bulk update multiple API keys."""
     # Validate all providers exist before updating any
+    provider_field_map = {
+        "omdb": "omdb.api_key",
+        "discogs": "discogs.token_or_key",
+        "lastfm": "lastfm.api_key",
+        "listenbrainz": "listenbrainz.token",
+        "fanart": "fanart.api_key",
+        "deezer": "deezer.api_key",
+        "spotify_client_id": "spotify.client_id",
+        "spotify_client_secret": "spotify.client_secret",
+    }
     for provider in request.api_keys.keys():
-        if provider not in runtime_settings.supported_providers():
+        if provider not in provider_field_map:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"error": "provider_not_found", "provider": provider},
             )
 
     # Update all keys
-    runtime_settings.update_many(request.api_keys)
+    runtime_integration_settings.update_many(
+        {provider_field_map[provider]: value for provider, value in request.api_keys.items()}
+    )
 
     # Return updated status
     api_keys = []
-    for provider in runtime_settings.supported_providers():
-        configured = runtime_settings.is_configured(provider)
+    for provider, field_key in provider_field_map.items():
+        configured = bool(runtime_integration_settings.get(field_key))
         api_keys.append(
             ApiKeyResponse(
                 provider=provider,

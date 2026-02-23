@@ -5,11 +5,12 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Iterable, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.schemas.discover import DiscoverItem, SearchResponse
 from app.schemas.media import EnrichedCard
 from app.services.search.registry import search_registry
+from app.services.prowlarr_client import ProwlarrApiError
 from app.ext.interfaces import SearchProvider
 
 
@@ -311,7 +312,26 @@ async def search(
     provider: SearchProvider = Depends(get_provider),
 ) -> SearchResponse:
     fetch_limit = limit * page
-    cards, meta = await provider.search(q, limit=fetch_limit, kind=kind)
+    try:
+        cards, meta = await provider.search(q, limit=fetch_limit, kind=kind)
+    except ProwlarrApiError as exc:
+        error_code = (exc.details or {}).get("error") if isinstance(exc.details, dict) else None
+        if error_code == "prowlarr_api_key_missing":
+            raise HTTPException(
+                status_code=status.HTTP_424_FAILED_DEPENDENCY,
+                detail={"error": "prowlarr_api_key_missing"},
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error": "prowlarr_request_failed",
+                "prowlarr": {
+                    "status": exc.status_code if exc.status_code > 0 else None,
+                    "reason": exc.message,
+                },
+            },
+        ) from exc
     items: list[DiscoverItem] = []
     for card in cards:
         item = _card_to_discover_item(card)

@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.endpoints.search import get_provider, router
 from app.ext.interfaces import ProviderDescriptor, SearchProvider
 from app.schemas.media import EnrichedCard
+from app.services.prowlarr_client import ProwlarrApiError
 
 
 class DummyProvider(SearchProvider):
@@ -150,3 +151,64 @@ async def test_search_sources_use_prowlarr_metadata():
     assert source["provider"] == "prowlarr"
     assert source["tracker"] == "IndexerA"
     assert source["seeders"] == 12
+
+
+class ErrorProvider(SearchProvider):
+    slug = "prowlarr"
+    name = "Prowlarr"
+
+    def __init__(self, error: ProwlarrApiError):
+        self.error = error
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            slug=self.slug,
+            name=self.name,
+            kind="search",
+            configured=True,
+            healthy=False,
+        )
+
+    async def search(self, query: str, *, limit: int, kind: str):
+        raise self.error
+
+
+@pytest.mark.anyio
+async def test_search_maps_prowlarr_not_found_to_bad_gateway():
+    provider = ErrorProvider(
+        ProwlarrApiError(
+            status_code=404,
+            message="Prowlarr search request failed.",
+            details={"status": 404, "reason": "Not Found"},
+        )
+    )
+    app = build_app(provider)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/search", params={"q": "example"})
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert payload["detail"]["error"] == "prowlarr_request_failed"
+    assert payload["detail"]["prowlarr"]["status"] == 404
+
+
+@pytest.mark.anyio
+async def test_search_returns_missing_api_key_error_code():
+    provider = ErrorProvider(
+        ProwlarrApiError(
+            status_code=424,
+            message="Prowlarr API key is not configured.",
+            details={"error": "prowlarr_api_key_missing"},
+        )
+    )
+    app = build_app(provider)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/search", params={"q": "example"})
+
+    assert response.status_code == 424
+    payload = response.json()
+    assert payload["detail"]["error"] == "prowlarr_api_key_missing"

@@ -1,4 +1,4 @@
-"""Search provider implementation backed by Prowlarr Torznab."""
+"""Search provider implementation backed by Prowlarr JSON search API."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ import httpx
 from app.ext.interfaces import ProviderDescriptor, SearchProvider
 from app.schemas.media import EnrichedCard, EnrichedProvider
 from app.services.metadata.classifier import Classifier
+from app.services.prowlarr_client import ProwlarrApiError
 
-from .normalizer import NormalizedResult, parse_torznab
+from .normalizer import NormalizedResult
 from .qbit_client import TorrentClientAdapter
 from .settings import ProwlarrSettings
 
@@ -20,7 +21,7 @@ class ProwlarrProvider(SearchProvider):
     """Prowlarr-backed torrent search provider."""
 
     slug = "prowlarr"
-    name = "Prowlarr Torznab"
+    name = "Prowlarr"
 
     def __init__(
         self,
@@ -70,31 +71,47 @@ class ProwlarrProvider(SearchProvider):
         _ = kind  # currently unused; search delegates query directly
         api_key = self._settings.prowlarr_api_key
         if not api_key:
-            raise RuntimeError("Prowlarr API key is not configured")
+            raise ProwlarrApiError(
+                status_code=424,
+                message="Prowlarr API key is not configured.",
+                details={"error": "prowlarr_api_key_missing"},
+            )
 
-        url = f"{self._settings.prowlarr_url}/api/v2.0/indexers/all/results/torznab/api"
+        url = f"{self._settings.prowlarr_url}/api/v1/search"
         params = {
             "apikey": api_key,
-            "t": "search",
-            "q": query,
+            "type": "search",
+            "query": query,
         }
-        if self._settings.category_filters:
-            params["cat"] = ",".join(self._settings.category_filters)
-        if limit:
-            params["limit"] = str(limit)
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(url, params=params)
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
             self._last_health = "error"
-            self._logger.error("Prowlarr search failed for %s: %s", query, exc)
-            raise
+            status_code = exc.response.status_code if exc.response is not None else 502
+            reason = exc.response.reason_phrase if exc.response is not None else "HTTP error"
+            self._logger.warning(
+                "Prowlarr search failed",
+                extra={"status_code": status_code, "reason": reason, "query": query},
+            )
+            raise ProwlarrApiError(
+                status_code=status_code,
+                message="Prowlarr search request failed.",
+                details={"status": status_code, "reason": reason or "HTTP error"},
+            ) from exc
+        except httpx.RequestError as exc:
+            self._last_health = "error"
+            self._logger.warning("Prowlarr search unavailable", extra={"query": query})
+            raise ProwlarrApiError(
+                status_code=502,
+                message="Unable to reach Prowlarr.",
+                details={"status": None, "reason": str(exc.__class__.__name__)},
+            ) from exc
 
-        payload = response.text
-
-        results = parse_torznab(payload)
+        payload = response.json()
+        results = self._normalize_results(payload)
         filtered = self._filter_results(results)
 
         cards: list[EnrichedCard] = []
@@ -112,6 +129,54 @@ class ProwlarrProvider(SearchProvider):
             },
         }
         return cards, meta
+
+    def _normalize_results(self, payload: Any) -> list[NormalizedResult]:
+        if not isinstance(payload, list):
+            return []
+
+        normalized: list[NormalizedResult] = []
+        for entry in payload:
+            if not isinstance(entry, dict):
+                continue
+
+            categories = entry.get("categories")
+            if not isinstance(categories, list):
+                categories = []
+
+            normalized.append(
+                NormalizedResult(
+                    title=str(entry.get("title") or "Untitled").strip() or "Untitled",
+                    guid=self._as_str(entry.get("guid")),
+                    link=self._as_str(entry.get("link") or entry.get("downloadUrl")),
+                    magnet=self._as_str(entry.get("magnetUrl") or entry.get("magnet")),
+                    torrent_url=self._as_str(
+                        entry.get("downloadUrl") or entry.get("torrentUrl") or entry.get("link")
+                    ),
+                    enclosure_length=None,
+                    categories=[str(item) for item in categories if isinstance(item, (str, int))],
+                    indexer=self._as_str(entry.get("indexer") or entry.get("indexerName")),
+                    size=self._as_int(entry.get("size")),
+                    seeders=self._as_int(entry.get("seeders")),
+                    peers=self._as_int(entry.get("peers") or entry.get("leechers")),
+                    attributes={},
+                    description=self._as_str(entry.get("description")),
+                )
+            )
+        return normalized
+
+    @staticmethod
+    def _as_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _as_str(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
     def _filter_results(
         self, results: Sequence[NormalizedResult]

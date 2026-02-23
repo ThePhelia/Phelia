@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from threading import RLock
 from typing import Optional
+import xml.etree.ElementTree as ET
 
 from app.core.config import settings
 from app.core.secure_store import SecretsStore, get_secrets_store
@@ -14,6 +16,32 @@ from app.services.search.prowlarr.settings import ProwlarrSettings
 
 def _normalize_url(value: str) -> str:
     return value.rstrip("/")
+
+
+_PROWLARR_CONFIG_XML_PATHS: tuple[Path, ...] = (
+    Path("/mnt/prowlarr_config/config.xml"),
+    Path("/config/config.xml"),
+)
+
+
+def _read_prowlarr_api_key_from_volume() -> str | None:
+    """Best-effort read of Prowlarr ApiKey from a shared config.xml volume.
+
+    Intended for docker-compose setups where the API/worker container can mount
+    Prowlarr's /config volume read-only. Never logs the key.
+    """
+    for path in _PROWLARR_CONFIG_XML_PATHS:
+        try:
+            root = ET.parse(path).getroot()
+            key = root.findtext("ApiKey")
+            if isinstance(key, str) and key.strip():
+                return key.strip()
+        except FileNotFoundError:
+            continue
+        except Exception:
+            # Corrupt/partial file, permission issues, etc. Treat as not found.
+            continue
+    return None
 
 
 def _parse_list(value: object) -> list[str]:
@@ -41,7 +69,7 @@ def _normalize_dirs(values: Iterable[str]) -> list[str]:
 @dataclass(frozen=True)
 class ProwlarrRuntimeSnapshot:
     url: str
-    api_key: Optional[str]
+    api_key: str | None
     allowlist: list[str]
     blocklist: list[str]
     category_filters: list[str]
@@ -62,14 +90,29 @@ class DownloadRuntimeSnapshot:
 
 
 class RuntimeServiceSettings:
-    """Manage service configuration that can be updated at runtime."""
+    """A small in-process runtime snapshot of external service settings.
 
-    def __init__(self, store: SecretsStore | None = None) -> None:
+    Values can come from:
+    - ENV / settings module defaults
+    - secure store (persisted secrets)
+    - UI updates (persisted via secure store)
+    """
+
+    def __init__(self, store: SecretsStore) -> None:
+        self._store = store
         self._lock = RLock()
-        self._prowlarr: ProwlarrRuntimeSnapshot
-        self._qbittorrent: QbittorrentRuntimeSnapshot
-        self._downloads: DownloadRuntimeSnapshot
-        self._store = store or get_secrets_store()
+
+        self._prowlarr = ProwlarrRuntimeSnapshot(
+            url="",
+            api_key=None,
+            allowlist=[],
+            blocklist=[],
+            category_filters=[],
+            minimum_seeders=0,
+        )
+        self._qbittorrent = QbittorrentRuntimeSnapshot(url="", username="", password="")
+        self._downloads = DownloadRuntimeSnapshot(allowed_dirs=[], default_dir="/downloads")
+
         self.reset_to_env()
 
     def reset_to_env(self) -> None:
@@ -87,26 +130,35 @@ class RuntimeServiceSettings:
             qb_url_store = self._store.get("qbittorrent_url")
             qb_username_store = self._store.get("qbittorrent_username")
             qb_password = self._store.get("qbittorrent_password")
+
             if not isinstance(prowlarr_key, str) or not prowlarr_key.strip():
                 prowlarr_key = getattr(settings, "PROWLARR_API_KEY", None) or None
+                if not prowlarr_key:
+                    prowlarr_key = _read_prowlarr_api_key_from_volume()
                 if prowlarr_key:
                     self._store.set("prowlarr_api_key", prowlarr_key)
             elif self._store.get("prowlarr_api_key") != prowlarr_key:
                 self._store.set("prowlarr_api_key", prowlarr_key)
+
             if isinstance(qb_url_store, str) and qb_url_store.strip():
                 qb_url = _normalize_url(qb_url_store)
+
             if isinstance(qb_username_store, str) and qb_username_store.strip():
                 qb_username = qb_username_store.strip()
+
             if not isinstance(qb_password, str):
                 qb_password = getattr(settings, "QB_PASS", "") or ""
+
             if qb_url:
                 self._store.set("qbittorrent_url", qb_url)
             if qb_username:
                 self._store.set("qbittorrent_username", qb_username)
+
             self._store.set_many(
                 {"qbittorrent_password": qb_password},
                 allow_empty_keys={"qbittorrent_password"},
             )
+
             self._prowlarr = ProwlarrRuntimeSnapshot(
                 url=prowlarr_url,
                 api_key=prowlarr_key,
@@ -120,10 +172,12 @@ class RuntimeServiceSettings:
                 username=qb_username,
                 password=qb_password,
             )
+
             allowed_dirs = _normalize_dirs(_parse_list(settings.ALLOWED_SAVE_DIRS))
             default_dir = str(settings.DEFAULT_SAVE_DIR).strip() or "/downloads"
             if default_dir not in allowed_dirs:
                 allowed_dirs = [default_dir, *allowed_dirs]
+
             self._downloads = DownloadRuntimeSnapshot(
                 allowed_dirs=allowed_dirs,
                 default_dir=default_dir,
@@ -162,21 +216,24 @@ class RuntimeServiceSettings:
     def update_prowlarr(self, *, url: Optional[str] = None, api_key: Optional[str] = None) -> bool:
         with self._lock:
             snapshot = self._prowlarr
-            new_url = snapshot.url if url is None else _normalize_url(url)
-            new_api_key = snapshot.api_key if api_key is None else (api_key or None)
             updated = ProwlarrRuntimeSnapshot(
-                url=new_url,
-                api_key=new_api_key,
-                allowlist=list(snapshot.allowlist),
-                blocklist=list(snapshot.blocklist),
-                category_filters=list(snapshot.category_filters),
+                url=_normalize_url(url) if isinstance(url, str) and url.strip() else snapshot.url,
+                api_key=api_key if isinstance(api_key, str) and api_key.strip() else snapshot.api_key,
+                allowlist=snapshot.allowlist,
+                blocklist=snapshot.blocklist,
+                category_filters=snapshot.category_filters,
                 minimum_seeders=snapshot.minimum_seeders,
             )
-            if updated == snapshot:
-                return False
+            changed = updated != snapshot
             self._prowlarr = updated
-            self._persist()
-            return True
+
+            if changed:
+                if updated.url:
+                    self._store.set("prowlarr_url", updated.url)
+                if updated.api_key:
+                    self._store.set("prowlarr_api_key", updated.api_key)
+
+            return changed
 
     def update_qbittorrent(
         self,
@@ -188,87 +245,67 @@ class RuntimeServiceSettings:
         with self._lock:
             snapshot = self._qbittorrent
             updated = QbittorrentRuntimeSnapshot(
-                url=snapshot.url if url is None else _normalize_url(url),
-                username=snapshot.username if username is None else (username or ""),
-                password=snapshot.password if password is None else (password or ""),
+                url=_normalize_url(url) if isinstance(url, str) and url.strip() else snapshot.url,
+                username=username.strip() if isinstance(username, str) and username.strip() else snapshot.username,
+                password=password if isinstance(password, str) else snapshot.password,
             )
-            if updated == snapshot:
-                return False
+            changed = updated != snapshot
             self._qbittorrent = updated
-            self._persist()
-            return True
 
-    def update_downloads(
-        self,
-        *,
-        allowed_dirs: Optional[list[str]] = None,
-        default_dir: Optional[str] = None,
-    ) -> bool:
+            if changed:
+                if updated.url:
+                    self._store.set("qbittorrent_url", updated.url)
+                if updated.username:
+                    self._store.set("qbittorrent_username", updated.username)
+                if isinstance(password, str):
+                    self._store.set_many(
+                        {"qbittorrent_password": password},
+                        allow_empty_keys={"qbittorrent_password"},
+                    )
+            return changed
+
+    def update_downloads(self, *, allowed_dirs: list[str], default_dir: str) -> bool:
         with self._lock:
             snapshot = self._downloads
-            current_allowed = snapshot.allowed_dirs
-            current_default = snapshot.default_dir
-            if allowed_dirs is not None:
-                current_allowed = _normalize_dirs(allowed_dirs)
-            if default_dir is not None:
-                default_dir = default_dir.strip()
-                if default_dir:
-                    current_default = default_dir
-            if current_default not in current_allowed:
-                current_allowed = [current_default, *current_allowed]
-            updated = DownloadRuntimeSnapshot(
-                allowed_dirs=current_allowed,
-                default_dir=current_default,
-            )
-            if updated == snapshot:
-                return False
+            allowed_dirs = _normalize_dirs(allowed_dirs)
+            default_dir = default_dir.strip() or "/downloads"
+            if default_dir not in allowed_dirs:
+                allowed_dirs = [default_dir, *allowed_dirs]
+            updated = DownloadRuntimeSnapshot(allowed_dirs=allowed_dirs, default_dir=default_dir)
+            changed = updated != snapshot
             self._downloads = updated
-            return True
+            return changed
 
-    def _persist(self) -> None:
-        payload = {
-            "prowlarr_api_key": self._prowlarr.api_key,
-            "qbittorrent_url": self._qbittorrent.url,
-            "qbittorrent_username": self._qbittorrent.username,
-            "qbittorrent_password": self._qbittorrent.password,
-        }
-        self._store.set_many(
-            payload, allow_empty_keys={"qbittorrent_password"}
-        )
+    def snapshot_for_api(self) -> dict[str, object]:
+        with self._lock:
+            self._refresh_qbittorrent_from_store()
+            return {
+                "prowlarr_url": self._prowlarr.url,
+                "prowlarr_api_key": self._prowlarr.api_key,
+                "qbittorrent_url": self._qbittorrent.url,
+                "qbittorrent_username": self._qbittorrent.username,
+                "downloads_allowed_dirs": list(self._downloads.allowed_dirs),
+                "downloads_default_dir": self._downloads.default_dir,
+            }
 
     def _refresh_qbittorrent_from_store(self) -> None:
+        qb_url_store = self._store.get("qbittorrent_url")
+        qb_username_store = self._store.get("qbittorrent_username")
+        qb_password = self._store.get("qbittorrent_password")
+
         snapshot = self._qbittorrent
-        qb_url = snapshot.url
-        qb_username = snapshot.username
-        qb_password = snapshot.password
-        stored_url = self._store.get("qbittorrent_url")
-        stored_username = self._store.get("qbittorrent_username")
-        stored_password = self._store.get("qbittorrent_password")
-        if isinstance(stored_url, str) and stored_url.strip():
-            qb_url = _normalize_url(stored_url)
-        if isinstance(stored_username, str) and stored_username.strip():
-            qb_username = stored_username.strip()
-        if isinstance(stored_password, str):
-            qb_password = stored_password
-        updated = QbittorrentRuntimeSnapshot(
-            url=qb_url,
-            username=qb_username,
-            password=qb_password,
-        )
-        if updated != snapshot:
-            self._qbittorrent = updated
+        url = snapshot.url
+        username = snapshot.username
+        password = snapshot.password
 
-    def is_allowed_save_dir(self, save_dir: str) -> bool:
-        with self._lock:
-            return save_dir in self._downloads.allowed_dirs
+        if isinstance(qb_url_store, str) and qb_url_store.strip():
+            url = _normalize_url(qb_url_store)
+        if isinstance(qb_username_store, str) and qb_username_store.strip():
+            username = qb_username_store.strip()
+        if isinstance(qb_password, str):
+            password = qb_password
+
+        self._qbittorrent = QbittorrentRuntimeSnapshot(url=url, username=username, password=password)
 
 
-runtime_service_settings = RuntimeServiceSettings()
-
-__all__ = [
-    "runtime_service_settings",
-    "RuntimeServiceSettings",
-    "ProwlarrRuntimeSnapshot",
-    "QbittorrentRuntimeSnapshot",
-    "DownloadRuntimeSnapshot",
-]
+runtime_service_settings = RuntimeServiceSettings(get_secrets_store())

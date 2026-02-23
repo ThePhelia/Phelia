@@ -37,6 +37,29 @@ function formatProviderLabel(provider: string): string {
     .join(' ');
 }
 
+const API_KEY_HELP_TEXT: Record<string, string> = {
+  tmdb: 'Used for movie and TV metadata lookups and posters.',
+  omdb: 'Used for IMDb ratings and fallback movie metadata.',
+  fanart: 'Used for additional artwork and background images.',
+  discogs: 'Used for album and artist metadata enrichment.',
+  lastfm: 'Used for tags, scrobble-style metadata, and popularity signals.',
+  listenbrainz: 'Used for listening history and related artist data.',
+  deezer: 'Used for music discovery metadata.',
+  spotify: 'Used for Spotify music metadata fields.',
+  prowlarr: 'Used to authenticate indexer API calls through Prowlarr.',
+};
+
+function getApiKeyHelpText(provider: string): string {
+  const normalized = provider.toLowerCase();
+  if (normalized in API_KEY_HELP_TEXT) return API_KEY_HELP_TEXT[normalized];
+  if (normalized.includes('tmdb')) return API_KEY_HELP_TEXT.tmdb;
+  if (normalized.includes('spotify')) return API_KEY_HELP_TEXT.spotify;
+  if (normalized.includes('prowlarr')) return API_KEY_HELP_TEXT.prowlarr;
+  if (normalized.includes('token')) return 'Paste the full provider token exactly as issued.';
+  if (normalized.includes('secret')) return 'Paste the full secret value exactly as issued.';
+  return 'Paste the full value provided by this service.';
+}
+
 function ApiKeyManagement() {
   const apiKeysQuery = useApiKeys();
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -128,7 +151,7 @@ function ApiKeyManagement() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {apiKeys.map((apiKey) => {
         const { provider, configured } = apiKey;
         const label = formatProviderLabel(provider);
@@ -137,7 +160,7 @@ function ApiKeyManagement() {
         const isSaving = savingProvider === provider;
         
         return (
-          <div key={provider} className="space-y-2">
+          <div key={provider} className="space-y-2 rounded-lg border border-border/60 p-3">
             <div className="flex items-center justify-between">
               <Label htmlFor={`api-key-${provider}`} className="text-sm font-medium text-foreground">
                 {label} API Key
@@ -179,16 +202,8 @@ function ApiKeyManagement() {
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {provider === 'omdb' && 'OMDb API key for IMDb ratings and metadata'}
-              {provider === 'discogs' && 'Discogs token for music metadata'}
-              {provider === 'lastfm' && 'Last.fm API key for music scrobbling and tags'}
-              {provider === 'listenbrainz' && 'ListenBrainz token for music listening data'}
-              {provider === 'spotify_client_id' && 'Spotify Client ID for music metadata'}
-              {provider === 'spotify_client_secret' && 'Spotify Client Secret for music metadata'}
-              {provider === 'fanart' && 'Fanart.tv API key for additional artwork and images'}
-              {provider === 'deezer' && 'Deezer API key for music discovery and metadata'}
-            </p>
+
+            <p className="text-xs text-muted-foreground">{getApiKeyHelpText(provider)}</p>
           </div>
         );
       })}
@@ -321,10 +336,10 @@ function IntegrationsPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">Integrations</h3>
-        <p className="text-sm text-muted-foreground">Manage provider integration credentials and metadata from backend schema.</p>
+        <h3 className="text-base font-semibold text-foreground">Provider API Keys</h3>
+        <p className="text-sm text-muted-foreground">Paste credentials for metadata services (including TMDB) and save once.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -349,7 +364,7 @@ function IntegrationsPanel() {
         const displayType = isSecret && !revealed[field.key] ? 'password' : 'text';
 
         return (
-          <div key={field.key} className="space-y-2">
+          <div key={field.key} className="space-y-2 rounded-lg border border-border/60 p-3">
             <div className="flex items-center justify-between">
               <Label htmlFor={`integration-${field.key}`}>{field.label}</Label>
               <span className="text-xs text-muted-foreground">
@@ -400,7 +415,7 @@ function IntegrationsPanel() {
             {error ? (
               <p className="text-xs text-destructive">{error}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">Validation: {field.validation_rule}</p>
+              <p className="text-xs text-muted-foreground">{getApiKeyHelpText(field.key.split('.')[0] ?? field.key)}</p>
             )}
           </div>
         );
@@ -556,7 +571,7 @@ function IndexersPanel() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <h3 className="text-base font-semibold text-foreground">Indexers</h3>
         <p className="text-sm text-muted-foreground">Manage Prowlarr indexers from Phelia.</p>
@@ -645,7 +660,6 @@ function ServiceConnections() {
   const updateDownloads = useUpdateDownloadSettings();
 
   const [prowlarrUrl, setProwlarrUrl] = useState('');
-  const [prowlarrApiKey, setProwlarrApiKey] = useState('');
   const [prowlarrAuthUsername, setProwlarrAuthUsername] = useState('');
   const [prowlarrAuthPassword, setProwlarrAuthPassword] = useState('');
   const [prowlarrFetchStatus, setProwlarrFetchStatus] = useState<'idle' | 'fetching' | 'success' | 'failed'>('idle');
@@ -673,7 +687,6 @@ function ServiceConnections() {
   const persistedDefaultDir = safeString(serviceQuery.data?.downloads?.default_dir);
   const trimmedDefaultDir = safeTrimmedString(defaultDir);
   const trimmedProwlarrUrl = safeTrimmedString(prowlarrUrl);
-  const trimmedProwlarrApiKey = safeTrimmedString(prowlarrApiKey);
   const trimmedQbUrl = safeTrimmedString(qbUrl);
   const trimmedQbUsername = safeTrimmedString(qbUsername);
   const trimmedQbPassword = safeTrimmedString(qbPassword);
@@ -683,8 +696,7 @@ function ServiceConnections() {
     !areEqualLists(allowedDirList, persistedAllowedDirs);
 
   const prowlarrChanged =
-    trimmedProwlarrUrl !== safeString(serviceQuery.data?.prowlarr?.url) ||
-    trimmedProwlarrApiKey.length > 0;
+    trimmedProwlarrUrl !== safeString(serviceQuery.data?.prowlarr?.url);
   const prowlarrUiUrl = 'http://localhost:9696';
   const qbChanged =
     trimmedQbUrl !== safeString(serviceQuery.data?.qbittorrent?.url) ||
@@ -692,31 +704,16 @@ function ServiceConnections() {
     trimmedQbPassword.length > 0;
 
   const handleProwlarrSave = async () => {
-    const payload: { url?: string | null; api_key?: string | null } = {};
+    const payload: { url?: string | null } = {};
     if (trimmedProwlarrUrl) {
       payload.url = trimmedProwlarrUrl;
-    }
-    if (trimmedProwlarrApiKey) {
-      payload.api_key = trimmedProwlarrApiKey;
     }
 
     try {
       await updateProwlarr.mutateAsync(payload);
       toast.success('Prowlarr settings updated');
-      setProwlarrApiKey('');
     } catch (error) {
       toast.error('Failed to update Prowlarr settings');
-    }
-  };
-
-  const handleProwlarrClear = async () => {
-    try {
-      await updateProwlarr.mutateAsync({ api_key: null });
-      toast.success('Prowlarr API key cleared');
-      setProwlarrApiKey('');
-      setProwlarrFetchStatus('idle');
-    } catch (error) {
-      toast.error('Failed to clear Prowlarr API key');
     }
   };
 
@@ -807,7 +804,7 @@ function ServiceConnections() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-foreground">Prowlarr</h3>
-            <p className="text-sm text-muted-foreground">Configure the Prowlarr URL and API key.</p>
+            <p className="text-sm text-muted-foreground">Configure the Prowlarr URL.</p>
           </div>
           <span className="text-xs text-muted-foreground">
             {prowlarrConfigured ? 'API key configured' : 'API key missing'}
@@ -823,17 +820,6 @@ function ServiceConnections() {
             disabled={updateProwlarr.isPending}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="prowlarr-api-key">Prowlarr API Key</Label>
-          <Input
-            id="prowlarr-api-key"
-            type="password"
-            value={prowlarrApiKey}
-            onChange={(e) => setProwlarrApiKey(e.target.value)}
-            placeholder={prowlarrConfigured ? 'Enter new API key to replace' : 'Enter API key'}
-            disabled={updateProwlarr.isPending}
-          />
-        </div>
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">API key discovery</p>
@@ -841,7 +827,7 @@ function ServiceConnections() {
               {prowlarrFetchStatus === 'fetching' ? 'Fetching…' : prowlarrFetchStatus === 'success' ? 'Success' : prowlarrFetchStatus === 'failed' ? 'Failed' : 'Idle'}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">Automatically fetch from Prowlarr config endpoint. Manual API key entry remains available as fallback.</p>
+          <p className="text-xs text-muted-foreground">Automatically fetch from the Prowlarr config endpoint.</p>
           <div className="grid gap-2 md:grid-cols-2">
             <Input
               value={prowlarrAuthUsername}
@@ -882,16 +868,6 @@ function ServiceConnections() {
           >
             {updateProwlarr.isPending ? 'Saving...' : 'Save'}
           </Button>
-          {prowlarrConfigured && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleProwlarrClear}
-              disabled={updateProwlarr.isPending}
-            >
-              Clear API key
-            </Button>
-          )}
         </div>
       </div>
 
@@ -1038,7 +1014,11 @@ function SettingsPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Connected Services</h2>
             <p className="text-sm text-muted-foreground">
-              Configure API keys for enhanced metadata and features. TMDB is pre-configured.
+<<<<<<< ours
+              Configure service connections and paste API keys for metadata providers, including TMDB.
+=======
+              Configure services and paste API keys in one place. TMDB is included below with the other providers.
+>>>>>>> theirs
             </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.connection-cards" title="Service settings unavailable" description="We hit an unexpected error while rendering service connection controls. Try again or refresh this page.">

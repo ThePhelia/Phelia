@@ -259,6 +259,15 @@ function IntegrationsPanel() {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
   const integrations = integrationsQuery.data?.integrations ?? [];
+  const orderedIntegrations = useMemo(
+    () => [...integrations].sort((a, b) => {
+      const aTmdb = a.key.startsWith('tmdb.') ? 0 : 1;
+      const bTmdb = b.key.startsWith('tmdb.') ? 0 : 1;
+      if (aTmdb !== bTmdb) return aTmdb - bTmdb;
+      return a.label.localeCompare(b.label);
+    }),
+    [integrations],
+  );
 
   useEffect(() => {
     const nextValues: Record<string, string> = {};
@@ -356,7 +365,7 @@ function IntegrationsPanel() {
         })}
       </div>
 
-      {integrations.map((field) => {
+      {orderedIntegrations.map((field) => {
         const value = values[field.key] ?? '';
         const dirty = touched[field.key] && value !== (initialValues[field.key] ?? '');
         const error = fieldErrors[field.key];
@@ -382,7 +391,7 @@ function IntegrationsPanel() {
                   setValues((prev) => ({ ...prev, [field.key]: next }));
                   setTouched((prev) => ({ ...prev, [field.key]: true }));
                 }}
-                placeholder={field.configured ? 'Leave unchanged or provide replacement' : 'Enter value'}
+                placeholder={field.configured ? 'Paste a new value to replace the current one' : 'Paste API key / token'}
                 disabled={updateIntegrations.isPending}
                 className="flex-1"
               />
@@ -1014,12 +1023,7 @@ function SettingsPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Connected Services</h2>
             <p className="text-sm text-muted-foreground">
-<<<<<<< ours
-              Configure service connections and paste API keys for metadata providers, including TMDB.
-=======
-              Configure services and paste API keys in one place. TMDB is included below with the other providers.
->>>>>>> theirs
-            </p>
+              Configure services and paste API keys in one place. TMDB is included below with the other providers.            </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.connection-cards" title="Service settings unavailable" description="We hit an unexpected error while rendering service connection controls. Try again or refresh this page.">
             <ServiceConnections />
@@ -1037,7 +1041,7 @@ function SettingsPage() {
           <div className="border-t border-border/60 pt-6">
             <h3 className="text-base font-semibold text-foreground">Metadata API Keys</h3>
             <p className="text-sm text-muted-foreground">
-              Keys are stored in memory and can be updated without restarting the server.
+              These optional keys are direct provider entries. Paste full values and save per row.
             </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.api-key-form" title="API key settings unavailable" description="API key controls crashed while rendering. Refresh and retry your update.">

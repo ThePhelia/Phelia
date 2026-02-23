@@ -60,7 +60,7 @@ services:
       context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-../env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -83,14 +83,14 @@ services:
       - downloads:/downloads
       - music:/music
     ports:
-      - "${API_PORT:-8121}:8121"
+      - "${API_PORT:-8121}:${API_PORT:-8121}"
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/api/v1/healthz').getcode()==200 else sys.exit(1)"
+          "import os,urllib.request,sys; p=os.getenv('API_PORT','8121'); sys.exit(0) if urllib.request.urlopen(f'http://localhost:{p}/api/v1/healthz').getcode()==200 else sys.exit(1)"
         ]
       interval: 10s
       timeout: 5s
@@ -104,7 +104,7 @@ services:
       context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-../env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -129,7 +129,7 @@ services:
       context: ../../apps/api
       dockerfile: Dockerfile
     env_file:
-      - ${API_ENV_FILE:-../env/api.env.example}
+      - ${API_ENV_FILE:-../env/api.env}
     environment:
       DATABASE_URL: postgresql+psycopg2://${DB_USER:-phelia}:${DB_PASS:-phelia}@db:5432/${DB_NAME:-phelia}
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -168,7 +168,7 @@ services:
     build:
       context: ../../services/metadata-proxy
     env_file:
-      - ${METADATA_ENV_FILE:-../env/metadata.env.example}
+      - ${METADATA_ENV_FILE:-../env/metadata.env}
       - ${STACK_ENV_FILE:-../../deploy/.env}
     expose:
       - "8080"

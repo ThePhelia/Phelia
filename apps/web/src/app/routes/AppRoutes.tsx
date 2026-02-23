@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 
 import AppShell from '@/app/components/AppShell';
+import PageErrorBoundary from '@/app/components/PageErrorBoundary';
 import { reportFrontendRuntimeError } from '@/app/lib/telemetry';
 import DetailDialogRoute from '@/app/routes/details/DetailDialogRoute';
 import LoadingView from '@/app/routes/LoadingView';

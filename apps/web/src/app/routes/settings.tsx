@@ -37,6 +37,29 @@ function formatProviderLabel(provider: string): string {
     .join(' ');
 }
 
+const API_KEY_HELP_TEXT: Record<string, string> = {
+  tmdb: 'Used for movie and TV metadata lookups and posters.',
+  omdb: 'Used for IMDb ratings and fallback movie metadata.',
+  fanart: 'Used for additional artwork and background images.',
+  discogs: 'Used for album and artist metadata enrichment.',
+  lastfm: 'Used for tags, scrobble-style metadata, and popularity signals.',
+  listenbrainz: 'Used for listening history and related artist data.',
+  deezer: 'Used for music discovery metadata.',
+  spotify: 'Used for Spotify music metadata fields.',
+  prowlarr: 'Used to authenticate indexer API calls through Prowlarr.',
+};
+
+function getApiKeyHelpText(provider: string): string {
+  const normalized = provider.toLowerCase();
+  if (normalized in API_KEY_HELP_TEXT) return API_KEY_HELP_TEXT[normalized];
+  if (normalized.includes('tmdb')) return API_KEY_HELP_TEXT.tmdb;
+  if (normalized.includes('spotify')) return API_KEY_HELP_TEXT.spotify;
+  if (normalized.includes('prowlarr')) return API_KEY_HELP_TEXT.prowlarr;
+  if (normalized.includes('token')) return 'Paste the full provider token exactly as issued.';
+  if (normalized.includes('secret')) return 'Paste the full secret value exactly as issued.';
+  return 'Paste the full value provided by this service.';
+}
+
 function ApiKeyManagement() {
   const apiKeysQuery = useApiKeys();
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -128,7 +151,7 @@ function ApiKeyManagement() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {apiKeys.map((apiKey) => {
         const { provider, configured } = apiKey;
         const label = formatProviderLabel(provider);
@@ -137,7 +160,7 @@ function ApiKeyManagement() {
         const isSaving = savingProvider === provider;
         
         return (
-          <div key={provider} className="space-y-2">
+          <div key={provider} className="space-y-2 rounded-lg border border-border/60 p-3">
             <div className="flex items-center justify-between">
               <Label htmlFor={`api-key-${provider}`} className="text-sm font-medium text-foreground">
                 {label} API Key
@@ -179,16 +202,7 @@ function ApiKeyManagement() {
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {provider === 'omdb' && 'OMDb API key for IMDb ratings and metadata'}
-              {provider === 'discogs' && 'Discogs token for music metadata'}
-              {provider === 'lastfm' && 'Last.fm API key for music scrobbling and tags'}
-              {provider === 'listenbrainz' && 'ListenBrainz token for music listening data'}
-              {provider === 'spotify_client_id' && 'Spotify Client ID for music metadata'}
-              {provider === 'spotify_client_secret' && 'Spotify Client Secret for music metadata'}
-              {provider === 'fanart' && 'Fanart.tv API key for additional artwork and images'}
-              {provider === 'deezer' && 'Deezer API key for music discovery and metadata'}
-            </p>
+            <p className="text-xs text-muted-foreground">{getApiKeyHelpText(provider)}</p>
           </div>
         );
       })}
@@ -244,6 +258,15 @@ function IntegrationsPanel() {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
 
   const integrations = integrationsQuery.data?.integrations ?? [];
+  const orderedIntegrations = useMemo(
+    () => [...integrations].sort((a, b) => {
+      const aTmdb = a.key.startsWith('tmdb.') ? 0 : 1;
+      const bTmdb = b.key.startsWith('tmdb.') ? 0 : 1;
+      if (aTmdb !== bTmdb) return aTmdb - bTmdb;
+      return a.label.localeCompare(b.label);
+    }),
+    [integrations],
+  );
 
   useEffect(() => {
     const nextValues: Record<string, string> = {};
@@ -321,10 +344,10 @@ function IntegrationsPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">Integrations</h3>
-        <p className="text-sm text-muted-foreground">Manage provider integration credentials and metadata from backend schema.</p>
+        <h3 className="text-base font-semibold text-foreground">Provider API Keys</h3>
+        <p className="text-sm text-muted-foreground">Paste each provider key exactly as issued, then click Save Integrations. TMDB is listed first.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -341,7 +364,7 @@ function IntegrationsPanel() {
         })}
       </div>
 
-      {integrations.map((field) => {
+      {orderedIntegrations.map((field) => {
         const value = values[field.key] ?? '';
         const dirty = touched[field.key] && value !== (initialValues[field.key] ?? '');
         const error = fieldErrors[field.key];
@@ -349,7 +372,7 @@ function IntegrationsPanel() {
         const displayType = isSecret && !revealed[field.key] ? 'password' : 'text';
 
         return (
-          <div key={field.key} className="space-y-2">
+          <div key={field.key} className="space-y-2 rounded-lg border border-border/60 p-3">
             <div className="flex items-center justify-between">
               <Label htmlFor={`integration-${field.key}`}>{field.label}</Label>
               <span className="text-xs text-muted-foreground">
@@ -367,7 +390,7 @@ function IntegrationsPanel() {
                   setValues((prev) => ({ ...prev, [field.key]: next }));
                   setTouched((prev) => ({ ...prev, [field.key]: true }));
                 }}
-                placeholder={field.configured ? 'Leave unchanged or provide replacement' : 'Enter value'}
+                placeholder={field.configured ? 'Paste a new value to replace the current one' : 'Paste API key / token'}
                 disabled={updateIntegrations.isPending}
                 className="flex-1"
               />
@@ -400,7 +423,7 @@ function IntegrationsPanel() {
             {error ? (
               <p className="text-xs text-destructive">{error}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">Validation: {field.validation_rule}</p>
+              <p className="text-xs text-muted-foreground">{getApiKeyHelpText(field.key.split('.')[0] ?? field.key)}</p>
             )}
           </div>
         );
@@ -556,7 +579,7 @@ function IndexersPanel() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <h3 className="text-base font-semibold text-foreground">Indexers</h3>
         <p className="text-sm text-muted-foreground">Manage Prowlarr indexers from Phelia.</p>
@@ -1038,7 +1061,7 @@ function SettingsPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Connected Services</h2>
             <p className="text-sm text-muted-foreground">
-              Configure API keys for enhanced metadata and features. TMDB is pre-configured.
+              Configure services and paste API keys in one place. TMDB is included below with the other providers.
             </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.connection-cards" title="Service settings unavailable" description="We hit an unexpected error while rendering service connection controls. Try again or refresh this page.">
@@ -1057,7 +1080,7 @@ function SettingsPage() {
           <div className="border-t border-border/60 pt-6">
             <h3 className="text-base font-semibold text-foreground">Metadata API Keys</h3>
             <p className="text-sm text-muted-foreground">
-              Keys are stored in memory and can be updated without restarting the server.
+              These optional keys are direct provider entries. Paste full values and save per row.
             </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.api-key-form" title="API key settings unavailable" description="API key controls crashed while rendering. Refresh and retry your update.">

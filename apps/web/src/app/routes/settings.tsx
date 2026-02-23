@@ -202,6 +202,7 @@ function ApiKeyManagement() {
                 </Button>
               )}
             </div>
+
             <p className="text-xs text-muted-foreground">{getApiKeyHelpText(provider)}</p>
           </div>
         );
@@ -347,7 +348,7 @@ function IntegrationsPanel() {
     <div className="space-y-3">
       <div className="space-y-1">
         <h3 className="text-base font-semibold text-foreground">Provider API Keys</h3>
-        <p className="text-sm text-muted-foreground">Paste each provider key exactly as issued, then click Save Integrations. TMDB is listed first.</p>
+        <p className="text-sm text-muted-foreground">Paste credentials for metadata services (including TMDB) and save once.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -668,7 +669,6 @@ function ServiceConnections() {
   const updateDownloads = useUpdateDownloadSettings();
 
   const [prowlarrUrl, setProwlarrUrl] = useState('');
-  const [prowlarrApiKey, setProwlarrApiKey] = useState('');
   const [prowlarrAuthUsername, setProwlarrAuthUsername] = useState('');
   const [prowlarrAuthPassword, setProwlarrAuthPassword] = useState('');
   const [prowlarrFetchStatus, setProwlarrFetchStatus] = useState<'idle' | 'fetching' | 'success' | 'failed'>('idle');
@@ -696,7 +696,6 @@ function ServiceConnections() {
   const persistedDefaultDir = safeString(serviceQuery.data?.downloads?.default_dir);
   const trimmedDefaultDir = safeTrimmedString(defaultDir);
   const trimmedProwlarrUrl = safeTrimmedString(prowlarrUrl);
-  const trimmedProwlarrApiKey = safeTrimmedString(prowlarrApiKey);
   const trimmedQbUrl = safeTrimmedString(qbUrl);
   const trimmedQbUsername = safeTrimmedString(qbUsername);
   const trimmedQbPassword = safeTrimmedString(qbPassword);
@@ -706,8 +705,7 @@ function ServiceConnections() {
     !areEqualLists(allowedDirList, persistedAllowedDirs);
 
   const prowlarrChanged =
-    trimmedProwlarrUrl !== safeString(serviceQuery.data?.prowlarr?.url) ||
-    trimmedProwlarrApiKey.length > 0;
+    trimmedProwlarrUrl !== safeString(serviceQuery.data?.prowlarr?.url);
   const prowlarrUiUrl = 'http://localhost:9696';
   const qbChanged =
     trimmedQbUrl !== safeString(serviceQuery.data?.qbittorrent?.url) ||
@@ -715,31 +713,16 @@ function ServiceConnections() {
     trimmedQbPassword.length > 0;
 
   const handleProwlarrSave = async () => {
-    const payload: { url?: string | null; api_key?: string | null } = {};
+    const payload: { url?: string | null } = {};
     if (trimmedProwlarrUrl) {
       payload.url = trimmedProwlarrUrl;
-    }
-    if (trimmedProwlarrApiKey) {
-      payload.api_key = trimmedProwlarrApiKey;
     }
 
     try {
       await updateProwlarr.mutateAsync(payload);
       toast.success('Prowlarr settings updated');
-      setProwlarrApiKey('');
     } catch (error) {
       toast.error('Failed to update Prowlarr settings');
-    }
-  };
-
-  const handleProwlarrClear = async () => {
-    try {
-      await updateProwlarr.mutateAsync({ api_key: null });
-      toast.success('Prowlarr API key cleared');
-      setProwlarrApiKey('');
-      setProwlarrFetchStatus('idle');
-    } catch (error) {
-      toast.error('Failed to clear Prowlarr API key');
     }
   };
 
@@ -830,7 +813,7 @@ function ServiceConnections() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-foreground">Prowlarr</h3>
-            <p className="text-sm text-muted-foreground">Configure the Prowlarr URL and API key.</p>
+            <p className="text-sm text-muted-foreground">Configure the Prowlarr URL.</p>
           </div>
           <span className="text-xs text-muted-foreground">
             {prowlarrConfigured ? 'API key configured' : 'API key missing'}
@@ -846,17 +829,6 @@ function ServiceConnections() {
             disabled={updateProwlarr.isPending}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="prowlarr-api-key">Prowlarr API Key</Label>
-          <Input
-            id="prowlarr-api-key"
-            type="password"
-            value={prowlarrApiKey}
-            onChange={(e) => setProwlarrApiKey(e.target.value)}
-            placeholder={prowlarrConfigured ? 'Enter new API key to replace' : 'Enter API key'}
-            disabled={updateProwlarr.isPending}
-          />
-        </div>
         <div className="space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">API key discovery</p>
@@ -864,7 +836,7 @@ function ServiceConnections() {
               {prowlarrFetchStatus === 'fetching' ? 'Fetching…' : prowlarrFetchStatus === 'success' ? 'Success' : prowlarrFetchStatus === 'failed' ? 'Failed' : 'Idle'}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">Automatically fetch from Prowlarr config endpoint. Manual API key entry remains available as fallback.</p>
+          <p className="text-xs text-muted-foreground">Automatically fetch from the Prowlarr config endpoint.</p>
           <div className="grid gap-2 md:grid-cols-2">
             <Input
               value={prowlarrAuthUsername}
@@ -905,16 +877,6 @@ function ServiceConnections() {
           >
             {updateProwlarr.isPending ? 'Saving...' : 'Save'}
           </Button>
-          {prowlarrConfigured && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleProwlarrClear}
-              disabled={updateProwlarr.isPending}
-            >
-              Clear API key
-            </Button>
-          )}
         </div>
       </div>
 
@@ -1061,8 +1023,7 @@ function SettingsPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Connected Services</h2>
             <p className="text-sm text-muted-foreground">
-              Configure services and paste API keys in one place. TMDB is included below with the other providers.
-            </p>
+              Configure services and paste API keys in one place. TMDB is included below with the other providers.            </p>
           </div>
           <LocalErrorBoundary selectorKey="settings.services.connection-cards" title="Service settings unavailable" description="We hit an unexpected error while rendering service connection controls. Try again or refresh this page.">
             <ServiceConnections />

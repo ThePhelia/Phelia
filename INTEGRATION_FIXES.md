@@ -125,3 +125,6 @@ All reported functionality is now working correctly:
 - ✅ **Error handling**: Improved resilience and error reporting
 
 The system is ready for use with all core integrations functional!
+## Prowlarr API Key Auto-Discovery (Docker Compose)
+
+Phelia now auto-discovers the Prowlarr API key by reading `config.xml` from the shared `prowlarr_config` Docker volume, mounted read-only into the API container at `/mnt/prowlarr_config`. Discovery still attempts existing HTTP endpoints first, then falls back to volume parsing for reliable defaults in compose deployments; non-docker installs can still set `PROWLARR_API_KEY` manually when volume access is unavailable.

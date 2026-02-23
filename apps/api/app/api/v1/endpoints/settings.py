@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
+import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -22,6 +24,11 @@ from app.services.search.registry import search_registry
 
 
 logger = logging.getLogger(__name__)
+
+_PROWLARR_CONFIG_XML_PATHS = (
+    Path("/mnt/prowlarr_config/config.xml"),
+    Path("/config/config.xml"),
+)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -481,13 +488,50 @@ def _extract_prowlarr_api_key(payload: Any) -> str | None:
     return None
 
 
+def _read_prowlarr_api_key_from_config_xml(path: Path) -> str | None:
+    try:
+        root = ET.parse(path).getroot()
+    except FileNotFoundError:
+        logger.info("Prowlarr volume discovery path missing", extra={"path": str(path)})
+        return None
+    except ET.ParseError as exc:
+        logger.warning(
+            "Prowlarr volume discovery failed to parse XML",
+            extra={"path": str(path), "error": f"{type(exc).__name__}: {exc}"},
+        )
+        return None
+    except OSError as exc:
+        logger.warning(
+            "Prowlarr volume discovery failed reading config",
+            extra={"path": str(path), "error": f"{type(exc).__name__}: {exc}"},
+        )
+        return None
+
+    api_key = root.findtext("ApiKey")
+    if isinstance(api_key, str) and api_key.strip():
+        logger.info("Prowlarr volume discovery succeeded", extra={"path": str(path)})
+        return api_key.strip()
+    logger.info("Prowlarr volume discovery missing ApiKey", extra={"path": str(path)})
+    return None
+
+
+def _discover_prowlarr_api_key_from_volume() -> tuple[str | None, str | None]:
+    for path in _PROWLARR_CONFIG_XML_PATHS:
+        api_key = _read_prowlarr_api_key_from_config_xml(path)
+        if api_key:
+            return api_key, str(path)
+    return None, None
+
+
 def _discover_prowlarr_api_key(
     *,
     force_refresh: bool = False,
     auth: ProwlarrApiKeyDiscoveryAuthContext | None = None,
 ) -> tuple[str | None, bool]:
     snapshot = runtime_service_settings.prowlarr_snapshot()
+    logger.info("Prowlarr API key discovery started", extra={"prowlarr_url": snapshot.url})
     if snapshot.api_key and not force_refresh:
+        logger.info("Prowlarr API key discovery finished using cached key")
         return snapshot.api_key, True
     request_auth = None
     if auth is not None and auth.username.strip():
@@ -497,7 +541,14 @@ def _discover_prowlarr_api_key(
         try:
             response = httpx.get(url, timeout=5.0, auth=request_auth)
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Prowlarr HTTP discovery failed",
+                extra={
+                    "url": url,
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            )
             continue
         try:
             payload = response.json()
@@ -507,7 +558,22 @@ def _discover_prowlarr_api_key(
         if api_key:
             if runtime_service_settings.update_prowlarr(api_key=api_key):
                 _refresh_prowlarr_provider()
+            logger.info("Prowlarr API key discovery finished", extra={"source": "http", "url": url})
             return api_key, False
+    api_key, config_path = _discover_prowlarr_api_key_from_volume()
+    if api_key:
+        if runtime_service_settings.update_prowlarr(api_key=api_key):
+            _refresh_prowlarr_provider()
+        logger.info(
+            "Prowlarr API key discovery finished",
+            extra={"source": "volume", "path": config_path},
+        )
+        return api_key, False
+
+    logger.warning(
+        "Prowlarr API key discovery failed",
+        extra={"prowlarr_url": snapshot.url, "volume_paths": [str(path) for path in _PROWLARR_CONFIG_XML_PATHS]},
+    )
     return None, False
 
 

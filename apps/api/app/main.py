@@ -4,9 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import asyncio
 import logging
-from typing import Any
 
-import httpx
 import redis.asyncio as redis
 from sqlalchemy.exc import IntegrityError
 
@@ -35,44 +33,6 @@ def load_provider_credentials(_db) -> None:
     """Placeholder hook to preload provider credentials at startup."""
     return None
 
-
-def _extract_prowlarr_api_key(payload: Any) -> str | None:
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            if isinstance(key, str) and key.lower().replace("_", "") == "apikey":
-                if isinstance(value, str) and value.strip():
-                    return value.strip()
-            candidate = _extract_prowlarr_api_key(value)
-            if candidate:
-                return candidate
-    elif isinstance(payload, list):
-        for value in payload:
-            candidate = _extract_prowlarr_api_key(value)
-            if candidate:
-                return candidate
-    return None
-
-
-async def _autoload_prowlarr_api_key() -> None:
-    snapshot = runtime_service_settings.prowlarr_snapshot()
-    if snapshot.api_key:
-        return
-    for path in ("/api/v1/config/host", "/api/v2.0/server/config"):
-        url = f"{snapshot.url.rstrip('/')}" + path
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(url)
-            response.raise_for_status()
-        except httpx.HTTPError:
-            continue
-        try:
-            payload = response.json()
-        except ValueError:
-            continue
-        api_key = _extract_prowlarr_api_key(payload)
-        if api_key:
-            runtime_service_settings.update_prowlarr(api_key=api_key)
-            return
 
 
 app = FastAPI(title="Phelia", version="0.1.0")
@@ -115,7 +75,7 @@ async def startup_event():
         logger.exception("Error loading provider credentials")
 
     try:
-        await _autoload_prowlarr_api_key()
+        settings_endpoints._autoload_prowlarr_api_key()
         prowlarr_settings = runtime_service_settings.prowlarr_settings()
         search_registry.register(
             ProwlarrProvider(prowlarr_settings, logger=logging.getLogger("phelia.search.prowlarr"))

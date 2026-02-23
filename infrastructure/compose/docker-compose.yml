@@ -83,6 +83,8 @@ services:
       - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
+      # Read-only access for API key auto-discovery from Prowlarr config.xml
+      - prowlarr_config:/mnt/prowlarr_config:ro
     ports:
       - "${API_PORT:-8121}:${API_PORT:-8121}"
     healthcheck:

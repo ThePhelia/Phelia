@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from app.core.runtime_settings import RuntimeProviderSettings
 from app.core.secure_store import EncryptedKeyStore, SecretsStore
 
@@ -31,3 +33,19 @@ def test_runtime_settings_update_does_not_erase_other_keys(tmp_path):
     reloaded = RuntimeProviderSettings(store=SecretsStore(EncryptedKeyStore(secret="test-secret", path=path)))
     assert reloaded.get("lastfm") == "gamma"
     assert reloaded.get("listenbrainz") == "beta"
+
+
+def test_concurrent_saves_do_not_raise_when_writing_same_file(tmp_path):
+    path = tmp_path / "secrets.json.enc"
+
+    def write_value(index: int):
+        store = EncryptedKeyStore(secret="test-secret", path=path)
+        store.save({"value": index})
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(write_value, i) for i in range(40)]
+        for future in futures:
+            future.result()
+
+    loaded = EncryptedKeyStore(secret="test-secret", path=path).load()
+    assert "value" in loaded

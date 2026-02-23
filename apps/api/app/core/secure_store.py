@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -117,10 +118,20 @@ class EncryptedKeyStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         serialized = json.dumps(data, ensure_ascii=False).encode("utf-8")
         encrypted = fernet.encrypt(serialized)
-        temp_path = self.path.with_suffix(self.path.suffix + ".tmp")
-        temp_path.write_bytes(encrypted)
-        os.chmod(temp_path, 0o600)
-        temp_path.replace(self.path)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f"{self.path.name}.", suffix=".tmp", dir=self.path.parent
+        )
+        temp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as tmp_file:
+                tmp_file.write(encrypted)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, self.path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink(missing_ok=True)
 
     def load_section(self, section: str) -> dict[str, Any]:
         data = self.load()

@@ -90,6 +90,17 @@ def qb_login_ok() -> bool | None:
                 )
                 return False
 
+            if body_lower.startswith("fails") or "bad credentials" in body_lower:
+                log.error(
+                    "qBittorrent login failed due to invalid credentials (status=%s, body=%r, url=%s, user=%s)."
+                    " Stopping retries to avoid WebUI IP ban; update QBIT_USERNAME/QBIT_PASSWORD and restart.",
+                    resp.status_code,
+                    body,
+                    url,
+                    user,
+                )
+                return False
+
             if resp.status_code == 401 or "fails due to bad credentials" in body_lower:
                 log.warning(
                     "qBittorrent login rejected (status=%s, body=%r) [attempt %d/%d, url=%s, user=%s]."

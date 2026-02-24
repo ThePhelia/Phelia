@@ -14,33 +14,17 @@ make up
 The default `docker compose` stack exposes the API on http://localhost:8000 and the web UI on http://localhost:5173.
 Environment overrides stay under `deploy/.env`; compose manifests live in `infrastructure/compose/`.
 
-### qBittorrent Compose wiring
+### qBittorrent + secrets persistence
 
-```yaml
-# docker-compose.yml (excerpt – for reference only)
-services:
-  qbittorrent:
-    image: linuxserver/qbittorrent:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - WEBUI_PORT=8080
-      # Set initial credentials via the container image or config file
-    volumes:
-      - qb_config:/config
-  api:
-    build: .
-    environment:
-      - QBIT_URL=http://qbittorrent:8080
-      - QBIT_USERNAME=admin
-      - QBIT_PASSWORD=adminadmin
-      - ADMIN_EMAIL=dev@example.com
-      - ADMIN_PASSWORD=dev
-    depends_on:
-      - qbittorrent
-```
+The compose stack now persists all integration settings and qBittorrent config via named volumes:
 
-Ensure the API talks to qBittorrent via the Docker service name (`http://qbittorrent:8080`) and that the supplied credentials match the qBittorrent configuration. When deploying behind a reverse proxy or Cloudflare, add `WebUI\\HostHeaderValidation=false` to `qBittorrent.conf` if the login probe is blocked.
+- `qbittorrent_config` → qBittorrent `/config` (WebUI credentials and app settings)
+- `prowlarr_config` → Prowlarr `/config` (mounted read-only to API/worker for API key discovery)
+- `app_data` → shared app secrets store at `/data/secrets.json.enc` (mounted into API, worker, beat)
+
+`docker compose down` keeps volumes. `docker compose down -v` **deletes all named volumes** and wipes persisted settings/keys.
+
+Prowlarr API key entry is optional in normal compose setups: when `prowlarr_config` is mounted, the backend auto-discovers the API key from `config.xml` and stores it in the shared encrypted secrets store.
 
 ## Local development
 

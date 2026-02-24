@@ -208,3 +208,63 @@ def test_discover_prowlarr_api_key_failure_when_http_and_volume_missing(monkeypa
     assert response.status_code == 400
     assert response.json()["detail"]["error"] == "prowlarr_api_key_discovery_failed"
     assert "manual_entry_hint" in response.json()["detail"]
+
+
+def test_qbittorrent_test_endpoint_maps_auth_failure(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    class QbSnapshot:
+        url = "http://qbittorrent:8080"
+        username = "admin"
+        password = "bad"
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def login(self):
+            raise settings_endpoints.QbittorrentLoginError(
+                "AUTH_FAILED", "bad creds", status_code=403
+            )
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(settings_endpoints.runtime_service_settings, "qbittorrent_snapshot", lambda: QbSnapshot())
+    monkeypatch.setattr(settings_endpoints, "QbClient", FakeClient)
+
+    client = TestClient(app)
+    response = client.post("/settings/services/qbittorrent/test")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["error"] == "qbittorrent_auth_failed"
+
+
+def test_qbittorrent_test_endpoint_success(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    class QbSnapshot:
+        url = "http://qbittorrent:8080"
+        username = "admin"
+        password = "ok"
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def login(self):
+            return None
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(settings_endpoints.runtime_service_settings, "qbittorrent_snapshot", lambda: QbSnapshot())
+    monkeypatch.setattr(settings_endpoints, "QbClient", FakeClient)
+
+    client = TestClient(app)
+    response = client.post("/settings/services/qbittorrent/test")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}

@@ -63,7 +63,7 @@ async def test_login_fails_without_cookie():
 
 
 @pytest.mark.anyio
-async def test_login_fails_on_non_200():
+async def test_login_maps_403_to_auth_failed():
     response = _response(403, "Forbidden")
     qb = QbClient("http://qb", "user", "pass")
     dummy = DummyAsyncClient(response)
@@ -73,4 +73,4 @@ async def test_login_fails_on_non_200():
     with pytest.raises(QbittorrentLoginError) as excinfo:
         await qb.login()
 
-    assert excinfo.value.code == "HTTP_STATUS"
+    assert excinfo.value.code == "AUTH_FAILED"

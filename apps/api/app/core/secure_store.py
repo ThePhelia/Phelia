@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STORE_PATH = Path("/data/secrets.json.enc")
 STORE_ENV_VAR = "PHELIA_API_KEYS_PATH"
+STORE_ENV_FALLBACK = "SECRETS_STORE_PATH"
 MASTER_KEY_ENV = "APP_SECRET_KEY"
 MASTER_KEY_FILE_ENV = "APP_SECRET_KEY_FILE"
 
@@ -28,7 +29,7 @@ LEGACY_PLAINTEXT_SUFFIXES = (".json", ".api_keys.json", ".api_keys")
 
 
 def _default_store_path() -> Path:
-    override = os.environ.get(STORE_ENV_VAR)
+    override = os.environ.get(STORE_ENV_VAR) or os.environ.get(STORE_ENV_FALLBACK)
     if override:
         return Path(override).expanduser()
     return DEFAULT_STORE_PATH

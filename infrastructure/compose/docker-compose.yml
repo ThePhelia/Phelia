@@ -29,8 +29,11 @@ services:
     environment:
       WEBUI_PORT: 8080
       TZ: ${TZ:-Etc/UTC}
+      QB_USER: ${QB_USER:-admin}
+      QB_PASS: ${QB_PASS:-change-me-now}
     volumes:
-      - qb_config:/config
+      - qbittorrent_config:/config
+      - ./qb-bootstrap.sh:/custom-cont-init.d/10-qb-bootstrap.sh:ro
       - downloads:/downloads
       - music:/music
     ports:
@@ -68,6 +71,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       QB_URL: http://qbittorrent:8080
       TZ: ${TZ:-Etc/UTC}
+      PHELIA_API_KEYS_PATH: /data/secrets.json.enc
+      SECRETS_STORE_PATH: /data/secrets.json.enc
+      QB_USER: ${QB_USER:-admin}
+      QB_PASS: ${QB_PASS:-change-me-now}
     command: ["/app/entrypoint.sh"]
     depends_on:
       db:
@@ -80,7 +87,7 @@ services:
       - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
-      # Read-only access for API key auto-discovery from Prowlarr config.xml
+      - app_data:/data
       - prowlarr_config:/mnt/prowlarr_config:ro
     ports:
       - "${API_PORT:-8121}:${API_PORT:-8121}"
@@ -97,8 +104,6 @@ services:
       retries: 30
       start_period: 30s
 
-
-
   worker:
     build:
       context: ../../apps/api
@@ -111,6 +116,10 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       QB_URL: http://qbittorrent:8080
       TZ: ${TZ:-Etc/UTC}
+      PHELIA_API_KEYS_PATH: /data/secrets.json.enc
+      SECRETS_STORE_PATH: /data/secrets.json.enc
+      QB_USER: ${QB_USER:-admin}
+      QB_PASS: ${QB_PASS:-change-me-now}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","worker","-l","info","-O","fair"]
     depends_on:
       redis:
@@ -123,6 +132,7 @@ services:
       - ../../apps/api:/app
       - downloads:/downloads
       - music:/music
+      - app_data:/data
       - prowlarr_config:/mnt/prowlarr_config:ro
 
   beat:
@@ -136,6 +146,10 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       TZ: ${TZ:-Etc/UTC}
+      PHELIA_API_KEYS_PATH: /data/secrets.json.enc
+      SECRETS_STORE_PATH: /data/secrets.json.enc
+      QB_USER: ${QB_USER:-admin}
+      QB_PASS: ${QB_PASS:-change-me-now}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","beat","-l","info"]
     depends_on:
       redis:
@@ -146,7 +160,9 @@ services:
         condition: service_started
     volumes:
       - ../../apps/api:/app
+      - app_data:/data
       - prowlarr_config:/mnt/prowlarr_config:ro
+
   web:
     build:
       context: ../../apps/web
@@ -166,11 +182,11 @@ services:
       api:
         condition: service_healthy
 
-
 volumes:
   db_data:
   redis_data:
-  qb_config:
+  qbittorrent_config:
   prowlarr_config:
+  app_data:
   downloads:
   music:

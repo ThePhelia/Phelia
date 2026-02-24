@@ -79,7 +79,7 @@ def test_enqueue_download_url_success(monkeypatch):
         async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, _follow_redirects=False):
+        async def get(self, url, follow_redirects=False):
             class R:
                 is_redirect = False
                 headers = {}
@@ -175,7 +175,7 @@ def test_enqueue_download_redirect_to_magnet(monkeypatch):
         async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, _follow_redirects=False):
+        async def get(self, url, follow_redirects=False):
             class R:
                 is_redirect = True
                 headers = {"Location": "magnet:?xt=urn:btih:abcd"}
@@ -233,7 +233,7 @@ def test_enqueue_download_redirect_unexpected_scheme(monkeypatch, caplog):
         async def __aexit__(self, _exc_type, _exc, _tb):
             pass
 
-        async def get(self, url, _follow_redirects=False):
+        async def get(self, url, follow_redirects=False):
             self.calls += 1
             if self.calls == 1:
 
@@ -328,3 +328,30 @@ def test_pick_candidate_prefers_hash():
     )
     cand = tasks._pick_candidate(stats, d)
     assert cand["hash"].lower() == "bbb222"
+
+
+def test_qb_client_uses_runtime_service_credentials(monkeypatch):
+    class Snap:
+        url = "http://qbittorrent:8080"
+        username = "persisted-user"
+        password = "persisted-pass"
+
+    monkeypatch.setattr(tasks.runtime_service_settings, "qbittorrent_snapshot", lambda: Snap())
+
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, base_url, username, password):
+            captured["base_url"] = base_url
+            captured["username"] = username
+            captured["password"] = password
+
+    monkeypatch.setattr(tasks, "QbClient", FakeClient)
+
+    tasks._qb()
+
+    assert captured == {
+        "base_url": "http://qbittorrent:8080",
+        "username": "persisted-user",
+        "password": "persisted-pass",
+    }

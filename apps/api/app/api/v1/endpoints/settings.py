@@ -18,6 +18,7 @@ from app.core.runtime_integration_settings import (
     runtime_integration_settings,
 )
 from app.core.runtime_service_settings import runtime_service_settings
+from app.services.bt.qbittorrent import QbClient, QbittorrentLoginError
 from app.services.search.prowlarr.provider import ProwlarrProvider
 from app.services.prowlarr_client import ProwlarrApiError, ProwlarrClient
 from app.services.search.registry import search_registry
@@ -390,6 +391,10 @@ class QbittorrentSettingsUpdateRequest(BaseModel):
     url: str | None = None
     username: str | None = None
     password: str | None = None
+
+
+class QbittorrentTestResponse(BaseModel):
+    ok: bool
 
 
 class DownloadSettingsResponse(BaseModel):
@@ -811,6 +816,41 @@ def update_qbittorrent_settings(
         username=snapshot.username,
         password_configured=bool(snapshot.password),
     )
+
+
+@router.post("/services/qbittorrent/test", response_model=QbittorrentTestResponse)
+async def test_qbittorrent_settings() -> QbittorrentTestResponse:
+    snapshot = runtime_service_settings.qbittorrent_snapshot()
+    client = QbClient(snapshot.url, snapshot.username, snapshot.password)
+    try:
+        await client.login()
+    except QbittorrentLoginError as exc:
+        logger.warning(
+            "qBittorrent test login failed status=%s host=%s",
+            exc.status_code,
+            snapshot.url,
+        )
+        if exc.status_code == 403 or exc.code == "AUTH_FAILED":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "qbittorrent_auth_failed",
+                    "hint": "Check qBittorrent WebUI credentials or reset from Settings",
+                },
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"error": "qbittorrent_unavailable", "hint": "Cannot reach qBittorrent"},
+        ) from exc
+    except httpx.RequestError as exc:
+        logger.warning("qBittorrent test request error host=%s", snapshot.url)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"error": "qbittorrent_unavailable", "hint": "Cannot reach qBittorrent"},
+        ) from exc
+    finally:
+        await client.close()
+    return QbittorrentTestResponse(ok=True)
 
 
 @router.post("/services/downloads", response_model=DownloadSettingsResponse)

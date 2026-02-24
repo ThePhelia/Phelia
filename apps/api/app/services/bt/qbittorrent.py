@@ -91,6 +91,12 @@ class QbClient:
             r.status_code,
             body_snippet,
         )
+        if r.status_code == 403:
+            raise QbittorrentLoginError(
+                "AUTH_FAILED",
+                "qBittorrent auth rejected",
+                status_code=r.status_code,
+            )
         if r.status_code != 200:
             raise QbittorrentLoginError(
                 "HTTP_STATUS",

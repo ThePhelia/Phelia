@@ -49,3 +49,17 @@ def test_concurrent_saves_do_not_raise_when_writing_same_file(tmp_path):
 
     loaded = EncryptedKeyStore(secret="test-secret", path=path).load()
     assert "value" in loaded
+
+
+def test_store_path_env_fallback(monkeypatch, tmp_path):
+    from app.core import secure_store
+
+    path = tmp_path / "shared.enc"
+    monkeypatch.setenv("SECRETS_STORE_PATH", str(path))
+    monkeypatch.delenv("PHELIA_API_KEYS_PATH", raising=False)
+
+    store = secure_store.SecretsStore(secure_store.EncryptedKeyStore(secret="test-secret", path=secure_store._default_store_path()))
+    store.set("tmdb.api_key", "abc1234567890123")
+
+    reloaded = secure_store.SecretsStore(secure_store.EncryptedKeyStore(secret="test-secret", path=secure_store._default_store_path()))
+    assert reloaded.get("tmdb.api_key") == "abc1234567890123"

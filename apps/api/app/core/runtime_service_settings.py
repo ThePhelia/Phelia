@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -52,6 +53,15 @@ def _parse_list(value: object) -> list[str]:
     else:
         items = str(value).replace(",", "\n").splitlines()
     return [item.strip() for item in items if str(item).strip()]
+
+
+def _ensure_qb_password(store: SecretsStore) -> str:
+    existing = store.get("qbittorrent_password")
+    if isinstance(existing, str) and existing:
+        return existing
+    generated = secrets.token_urlsafe(24)
+    store.set_many({"qbittorrent_password": generated}, allow_empty_keys={"qbittorrent_password"})
+    return generated
 
 
 def _normalize_dirs(values: Iterable[str]) -> list[str]:
@@ -147,7 +157,10 @@ class RuntimeServiceSettings:
                 qb_username = qb_username_store.strip()
 
             if not isinstance(qb_password, str):
-                qb_password = getattr(settings, "QB_PASS", "") or ""
+                env_password = getattr(settings, "QB_PASS", "") or ""
+                qb_password = env_password if env_password else _ensure_qb_password(self._store)
+            elif not qb_password:
+                qb_password = _ensure_qb_password(self._store)
 
             if qb_url:
                 self._store.set("qbittorrent_url", qb_url)
@@ -281,7 +294,7 @@ class RuntimeServiceSettings:
             self._refresh_qbittorrent_from_store()
             return {
                 "prowlarr_url": self._prowlarr.url,
-                "prowlarr_api_key": self._prowlarr.api_key,
+                "prowlarr_api_key_configured": bool(self._prowlarr.api_key),
                 "qbittorrent_url": self._qbittorrent.url,
                 "qbittorrent_username": self._qbittorrent.username,
                 "downloads_allowed_dirs": list(self._downloads.allowed_dirs),

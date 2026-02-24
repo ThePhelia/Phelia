@@ -113,6 +113,36 @@ describe("GlobalSearch", () => {
 
   });
 
+
+  it("does not persist whitespace-only queries to recent searches", async () => {
+    vi.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    useMetaSearchMock.mockImplementation((q: string) => {
+      if (!q || q.trim().length <= 1) {
+        return { data: undefined, isFetching: false };
+      }
+      return {
+        data: { items: results },
+        isFetching: false,
+      };
+    });
+
+    renderWithProviders(<GlobalSearch />);
+
+    const input = screen.getByPlaceholderText(/search/i);
+    await user.click(input);
+    await user.type(input, "   ");
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+    });
+
+    await user.keyboard("{Enter}");
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem("phelia:recent-searches")).toBeNull();
+  });
+
   it("shows recent searches when available", async () => {
     localStorage.setItem("phelia:recent-searches", JSON.stringify(["Alien"]));
     useMetaSearchMock.mockImplementation(() => ({ data: undefined, isFetching: false }));

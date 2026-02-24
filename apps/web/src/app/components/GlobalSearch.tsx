@@ -78,10 +78,11 @@ function GlobalSearch() {
     const list = filteredResults;
     const next = item ?? list[highlight];
     if (!next) return;
+    const normalizedQuery = query.trim();
     const dest = `/details/${next.type === 'album' ? 'music' : next.type}/${next.id}?provider=${next.provider}`;
     navigate(dest, { state: { backgroundLocation: location } });
-    const updated = [query, ...recent.filter((value) => value !== query && value.trim())]
-      .filter(Boolean)
+    const updated = [normalizedQuery, ...recent.filter((value) => value.trim() !== normalizedQuery)]
+      .filter((value) => value.trim().length > 0)
       .slice(0, 8);
     setRecent(updated);
     saveRecent(updated);

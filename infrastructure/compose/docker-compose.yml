@@ -88,6 +88,7 @@ services:
       - downloads:/downloads
       - music:/music
       - app_data:/data
+      - qbittorrent_config:/mnt/qbittorrent_config:ro
       - prowlarr_config:/mnt/prowlarr_config:ro
     ports:
       - "${API_PORT:-8121}:${API_PORT:-8121}"
@@ -133,6 +134,7 @@ services:
       - downloads:/downloads
       - music:/music
       - app_data:/data
+      - qbittorrent_config:/mnt/qbittorrent_config:ro
       - prowlarr_config:/mnt/prowlarr_config:ro
 
   beat:
@@ -161,6 +163,7 @@ services:
     volumes:
       - ../../apps/api:/app
       - app_data:/data
+      - qbittorrent_config:/mnt/qbittorrent_config:ro
       - prowlarr_config:/mnt/prowlarr_config:ro
 
   web:

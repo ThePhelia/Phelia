@@ -1,7 +1,9 @@
 from __future__ import annotations
 import logging
+import os
 from pathlib import Path
 import re
+import subprocess
 from typing import Dict, List, Optional
 
 import httpx
@@ -43,6 +45,40 @@ def _read_temporary_password_from_logs() -> str | None:
         if temporary_password:
             return temporary_password
     return None
+
+
+def _read_temporary_password_from_container_logs() -> str | None:
+    names_csv = os.getenv("QBIT_CONTAINER_NAMES", "qbittorrent,qbittorrent-1")
+    container_names = [name.strip() for name in names_csv.split(",") if name.strip()]
+    if not container_names:
+        return None
+
+    for container_name in container_names:
+        try:
+            result = subprocess.run(
+                ["docker", "logs", "--tail", "200", container_name],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            return None
+        except Exception:
+            continue
+        if result.returncode != 0:
+            continue
+
+        combined_logs = "\n".join(
+            text for text in (result.stdout, result.stderr) if text
+        )
+        temporary_password = _extract_temporary_password(combined_logs)
+        if temporary_password:
+            return temporary_password
+    return None
+
+
+def _read_temporary_password() -> str | None:
+    return _read_temporary_password_from_logs() or _read_temporary_password_from_container_logs()
 
 
 class QbittorrentLoginError(RuntimeError):
@@ -156,7 +192,7 @@ class QbClient:
         )
 
     async def _try_temporary_password_fallback(self, *, headers: dict[str, str]) -> bool:
-        temporary_password = _read_temporary_password_from_logs()
+        temporary_password = _read_temporary_password()
         if not temporary_password or temporary_password == self.password:
             return False
 

@@ -93,7 +93,7 @@ async def test_login_uses_temporary_password_from_logs(monkeypatch):
         saved["password"] = password
 
     monkeypatch.setattr(
-        "app.services.bt.qbittorrent._read_temporary_password_from_logs",
+        "app.services.bt.qbittorrent._read_temporary_password",
         lambda: "temp-pass",
     )
     monkeypatch.setattr(
@@ -105,3 +105,33 @@ async def test_login_uses_temporary_password_from_logs(monkeypatch):
 
     assert qb.password == "temp-pass"
     assert saved["password"] == "temp-pass"
+
+
+def test_read_temporary_password_prefers_file_logs(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.bt.qbittorrent._read_temporary_password_from_logs",
+        lambda: "from-files",
+    )
+    monkeypatch.setattr(
+        "app.services.bt.qbittorrent._read_temporary_password_from_container_logs",
+        lambda: "from-container",
+    )
+
+    from app.services.bt.qbittorrent import _read_temporary_password
+
+    assert _read_temporary_password() == "from-files"
+
+
+def test_read_temporary_password_falls_back_to_container_logs(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.bt.qbittorrent._read_temporary_password_from_logs",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "app.services.bt.qbittorrent._read_temporary_password_from_container_logs",
+        lambda: "from-container",
+    )
+
+    from app.services.bt.qbittorrent import _read_temporary_password
+
+    assert _read_temporary_password() == "from-container"

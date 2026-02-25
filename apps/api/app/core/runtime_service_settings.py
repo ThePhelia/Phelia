@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import configparser
+import hashlib
+import logging
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +18,9 @@ from app.core.secure_store import SecretsStore, get_secrets_store
 from app.services.search.prowlarr.settings import ProwlarrSettings
 
 
+log = logging.getLogger(__name__)
+
+
 def _normalize_url(value: str) -> str:
     return value.rstrip("/")
 
@@ -23,6 +29,17 @@ _PROWLARR_CONFIG_XML_PATHS: tuple[Path, ...] = (
     Path("/mnt/prowlarr_config/config.xml"),
     Path("/config/config.xml"),
 )
+
+_QBITTORRENT_CONFIG_PATHS: tuple[Path, ...] = (
+    Path("/mnt/qbittorrent_config/qBittorrent/qBittorrent.conf"),
+    Path("/config/qBittorrent/qBittorrent.conf"),
+)
+
+
+@dataclass(frozen=True)
+class QbittorrentVolumeAuth:
+    username: str | None
+    password_fingerprint: str | None
 
 
 def _read_prowlarr_api_key_from_volume() -> str | None:
@@ -53,6 +70,42 @@ def _parse_list(value: object) -> list[str]:
     else:
         items = str(value).replace(",", "\n").splitlines()
     return [item.strip() for item in items if str(item).strip()]
+
+
+def _read_qbittorrent_auth_from_volume() -> QbittorrentVolumeAuth | None:
+    """Best-effort read of qBittorrent WebUI auth settings from mounted config."""
+
+    for path in _QBITTORRENT_CONFIG_PATHS:
+        try:
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.optionxform = str
+            with path.open("r", encoding="utf-8") as fh:
+                parser.read_file(fh)
+            if not parser.has_section("Preferences"):
+                continue
+            section = parser["Preferences"]
+            username = section.get("WebUI\\Username")
+            normalized_username = username.strip() if isinstance(username, str) and username.strip() else None
+            password_config = None
+            for key in ("WebUI\\Password_PBKDF2", "WebUI\\Password_ha1"):
+                value = section.get(key)
+                if isinstance(value, str) and value.strip():
+                    password_config = value.strip()
+                    break
+            password_fingerprint = (
+                hashlib.sha256(password_config.encode("utf-8")).hexdigest()
+                if password_config
+                else None
+            )
+            return QbittorrentVolumeAuth(
+                username=normalized_username,
+                password_fingerprint=password_fingerprint,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+    return None
 
 
 def _ensure_qb_password(store: SecretsStore) -> str:
@@ -140,6 +193,8 @@ class RuntimeServiceSettings:
             qb_url_store = self._store.get("qbittorrent_url")
             qb_username_store = self._store.get("qbittorrent_username")
             qb_password = self._store.get("qbittorrent_password")
+            qb_password_fingerprint_store = self._store.get("qbittorrent_password_fingerprint")
+            qb_volume_auth = _read_qbittorrent_auth_from_volume()
 
             if not isinstance(prowlarr_key, str) or not prowlarr_key.strip():
                 prowlarr_key = getattr(settings, "PROWLARR_API_KEY", None) or None
@@ -156,11 +211,47 @@ class RuntimeServiceSettings:
             if isinstance(qb_username_store, str) and qb_username_store.strip():
                 qb_username = qb_username_store.strip()
 
+            if qb_volume_auth and qb_volume_auth.username:
+                if qb_username and qb_username != qb_volume_auth.username:
+                    log.warning(
+                        "qBittorrent username in mounted config differs from persisted runtime store; "
+                        "preferring mounted config. If this was unintended, update credentials from "
+                        "Settings to re-sync."
+                    )
+                qb_username = qb_volume_auth.username
+
+            env_password = getattr(settings, "QB_PASS", "") or ""
+            qb_password_fingerprint_store = (
+                qb_password_fingerprint_store
+                if isinstance(qb_password_fingerprint_store, str)
+                and qb_password_fingerprint_store.strip()
+                else None
+            )
+            volume_password_fingerprint = (
+                qb_volume_auth.password_fingerprint
+                if qb_volume_auth and qb_volume_auth.password_fingerprint
+                else None
+            )
+
+            if volume_password_fingerprint:
+                if (
+                    qb_password_fingerprint_store
+                    and qb_password_fingerprint_store != volume_password_fingerprint
+                ):
+                    log.warning(
+                        "qBittorrent password in mounted config appears to have changed externally; "
+                        "preferring mounted config state and resetting runtime password to environment "
+                        "default. If login fails, re-save credentials in Settings."
+                    )
+                    qb_password = env_password
+                elif not isinstance(qb_password, str):
+                    qb_password = env_password
+                self._store.set("qbittorrent_password_fingerprint", volume_password_fingerprint)
+
             if not isinstance(qb_password, str):
-                env_password = getattr(settings, "QB_PASS", "") or ""
                 qb_password = env_password if env_password else _ensure_qb_password(self._store)
             elif not qb_password:
-                qb_password = _ensure_qb_password(self._store)
+                qb_password = env_password if volume_password_fingerprint else _ensure_qb_password(self._store)
 
             if qb_url:
                 self._store.set("qbittorrent_url", qb_url)

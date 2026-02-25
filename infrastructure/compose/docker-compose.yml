@@ -29,8 +29,8 @@ services:
     environment:
       WEBUI_PORT: 8080
       TZ: ${TZ:-Etc/UTC}
-      QB_USER: ${QB_USER:-admin}
-      QB_PASS: ${QB_PASS:-change-me-now}
+      QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-admin}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-change-me-now}
       # Optional one-shot credential rotation for persisted qbittorrent_config.
       # Keep false by default; set true for one startup when intentionally rotating.
       QB_BOOTSTRAP_FORCE: ${QB_BOOTSTRAP_FORCE:-false}
@@ -76,8 +76,8 @@ services:
       TZ: ${TZ:-Etc/UTC}
       PHELIA_API_KEYS_PATH: /data/secrets.json.enc
       SECRETS_STORE_PATH: /data/secrets.json.enc
-      QB_USER: ${QB_USER:-admin}
-      QB_PASS: ${QB_PASS:-change-me-now}
+      QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-admin}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-change-me-now}
     command: ["/app/entrypoint.sh"]
     depends_on:
       db:
@@ -122,8 +122,8 @@ services:
       TZ: ${TZ:-Etc/UTC}
       PHELIA_API_KEYS_PATH: /data/secrets.json.enc
       SECRETS_STORE_PATH: /data/secrets.json.enc
-      QB_USER: ${QB_USER:-admin}
-      QB_PASS: ${QB_PASS:-change-me-now}
+      QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-admin}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-change-me-now}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","worker","-l","info","-O","fair"]
     depends_on:
       redis:
@@ -153,8 +153,8 @@ services:
       TZ: ${TZ:-Etc/UTC}
       PHELIA_API_KEYS_PATH: /data/secrets.json.enc
       SECRETS_STORE_PATH: /data/secrets.json.enc
-      QB_USER: ${QB_USER:-admin}
-      QB_PASS: ${QB_PASS:-change-me-now}
+      QBITTORRENT_USERNAME: ${QBITTORRENT_USERNAME:-admin}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:-change-me-now}
     command: ["celery","-A","app.services.jobs.tasks.celery_app","beat","-l","info"]
     depends_on:
       redis:

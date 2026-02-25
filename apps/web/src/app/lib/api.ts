@@ -515,6 +515,12 @@ export function useUpdateQbittorrentSettings() {
   });
 }
 
+export function useTestQbittorrentConnection() {
+  return useMutation<{ success: boolean; message?: string }, Error>({
+    mutationFn: () => http('settings/services/qbittorrent/test', { method: 'POST' }),
+  });
+}
+
 export function useUpdateDownloadSettings() {
   const queryClient = useQueryClient();
 

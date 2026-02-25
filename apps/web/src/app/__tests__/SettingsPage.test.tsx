@@ -10,12 +10,16 @@ const {
   prowlarrIndexersState,
   prowlarrTemplatesState,
   updateProwlarrMutate,
+  updateQbMutate,
+  testQbMutate,
   discoverProwlarrApiKeyMutate,
   createIndexerMutate,
   updateIndexerMutate,
   deleteIndexerMutate,
   testIndexerMutate,
   patchIntegrationProvidersMutate,
+  toastSuccess,
+  toastError,
 } = vi.hoisted(() => {
   const capabilitiesState = { data: { version: '1.2.3', services: { torrent_search: false } }, isLoading: false, isPending: false };
   const integrationSettingsState = {
@@ -28,22 +32,34 @@ const {
   const prowlarrIndexersState = { data: { indexers: [{ id: 1, name: 'Demo Indexer', enable: true, implementation_name: 'Cardigann', fields: [{ name: 'baseUrl', label: 'Base Url', value: 'https://old.example' }] }] }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
   const prowlarrTemplatesState = { data: { templates: [{ id: 10, name: 'Template', fields: [{ name: 'baseUrl', label: 'Base Url', value: '' }] }] }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
   const updateProwlarrMutate = vi.fn();
+  const updateQbMutate = vi.fn();
+  const testQbMutate = vi.fn();
   const discoverProwlarrApiKeyMutate = vi.fn();
   const createIndexerMutate = vi.fn();
   const updateIndexerMutate = vi.fn();
   const deleteIndexerMutate = vi.fn();
   const testIndexerMutate = vi.fn();
   const patchIntegrationProvidersMutate = vi.fn();
+  const toastSuccess = vi.fn();
+  const toastError = vi.fn();
   const serviceSettingsState = { data: { prowlarr: { url: 'http://prowlarr:9696', api_key_configured: false }, qbittorrent: { url: 'http://qbittorrent:8080', username: 'admin', password_configured: false }, downloads: { allowed_dirs: ['/downloads', '/music'], default_dir: '/downloads' } }, isLoading: false, isPending: false, isError: false, error: null as Error | null, refetch: vi.fn() };
-  return { capabilitiesState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateProwlarrMutate, discoverProwlarrApiKeyMutate, createIndexerMutate, updateIndexerMutate, deleteIndexerMutate, testIndexerMutate, patchIntegrationProvidersMutate };
+  return { capabilitiesState, serviceSettingsState, integrationSettingsState, prowlarrIndexersState, prowlarrTemplatesState, updateProwlarrMutate, updateQbMutate, testQbMutate, discoverProwlarrApiKeyMutate, createIndexerMutate, updateIndexerMutate, deleteIndexerMutate, testIndexerMutate, patchIntegrationProvidersMutate, toastSuccess, toastError };
 });
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: toastSuccess,
+    error: toastError,
+  },
+}));
 
 vi.mock('@/app/lib/api', () => ({
   useCapabilities: () => capabilitiesState,
   useServiceSettings: () => serviceSettingsState,
   useUpdateProwlarrSettings: () => ({ mutateAsync: updateProwlarrMutate, isPending: false }),
   useDiscoverProwlarrApiKey: () => ({ mutateAsync: discoverProwlarrApiKeyMutate, isPending: false }),
-  useUpdateQbittorrentSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateQbittorrentSettings: () => ({ mutateAsync: updateQbMutate, isPending: false }),
+  useTestQbittorrentConnection: () => ({ mutateAsync: testQbMutate, isPending: false }),
   useUpdateDownloadSettings: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useIntegrationSettings: () => integrationSettingsState,
   usePatchIntegrationProviders: () => ({ mutateAsync: patchIntegrationProvidersMutate, isPending: false }),
@@ -58,7 +74,17 @@ vi.mock('@/app/lib/api', () => ({
 describe('SettingsPage sidebar layout', () => {
   beforeEach(() => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    updateProwlarrMutate.mockReset(); discoverProwlarrApiKeyMutate.mockReset(); createIndexerMutate.mockReset(); updateIndexerMutate.mockReset(); deleteIndexerMutate.mockReset(); testIndexerMutate.mockReset(); patchIntegrationProvidersMutate.mockReset();
+    updateProwlarrMutate.mockReset();
+    updateQbMutate.mockReset();
+    testQbMutate.mockReset();
+    discoverProwlarrApiKeyMutate.mockReset();
+    createIndexerMutate.mockReset();
+    updateIndexerMutate.mockReset();
+    deleteIndexerMutate.mockReset();
+    testIndexerMutate.mockReset();
+    patchIntegrationProvidersMutate.mockReset();
+    toastSuccess.mockReset();
+    toastError.mockReset();
     discoverProwlarrApiKeyMutate.mockResolvedValue({ message: 'Fetched and saved API key from Prowlarr.' });
   });
 
@@ -106,6 +132,42 @@ describe('SettingsPage sidebar layout', () => {
     expect(testIndexerMutate).toHaveBeenCalledWith({ id: 1 });
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     expect(deleteIndexerMutate).toHaveBeenCalledWith({ id: 1 });
+  });
+
+  it('shows qBittorrent test success toast only when success is true', async () => {
+    const user = userEvent.setup();
+    testQbMutate.mockResolvedValue({ success: false, message: 'Nope' });
+    renderWithProviders(<SettingsPage />);
+    await user.click(screen.getByRole('button', { name: /connections/i }));
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(testQbMutate).toHaveBeenCalledWith();
+    expect(toastError).toHaveBeenCalledWith('Nope');
+    expect(toastSuccess).not.toHaveBeenCalled();
+
+    testQbMutate.mockReset();
+    toastSuccess.mockReset();
+    toastError.mockReset();
+    testQbMutate.mockResolvedValue({ success: true, message: 'Connected' });
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(toastSuccess).toHaveBeenCalledWith('Connected');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('maps qBittorrent test backend error codes to user-facing messages', async () => {
+    const user = userEvent.setup();
+    testQbMutate.mockRejectedValue(new Error('qbittorrent_auth_failed'));
+    renderWithProviders(<SettingsPage />);
+    await user.click(screen.getByRole('button', { name: /connections/i }));
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(toastError).toHaveBeenCalledWith('qBittorrent authentication failed. Check your username and password.');
+
+    testQbMutate.mockRejectedValue(new Error('qbittorrent_unavailable'));
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(toastError).toHaveBeenCalledWith('qBittorrent is unavailable. Verify the URL and ensure the service is running.');
+
+    testQbMutate.mockRejectedValue(new Error('qbittorrent_bad_base_url'));
+    await user.click(screen.getByRole('button', { name: 'Test connection' }));
+    expect(toastError).toHaveBeenCalledWith('qBittorrent URL is invalid. Include http:// or https:// and a valid host.');
   });
 
   it('smoke path: configure prowlarr, fetch key, and add indexer', async () => {

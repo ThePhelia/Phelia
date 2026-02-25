@@ -2,15 +2,37 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { useServiceSettings, useUpdateProwlarrSettings, useUpdateQbittorrentSettings } from '@/app/lib/api';
+import {
+  useServiceSettings,
+  useTestQbittorrentConnection,
+  useUpdateProwlarrSettings,
+  useUpdateQbittorrentSettings,
+} from '@/app/lib/api';
 import { safeString, safeTrimmedString } from '@/app/utils/safe';
 import { toast } from 'sonner';
 import { getErrorMessage } from './shared';
+
+const QB_TEST_ERROR_MESSAGES: Record<string, string> = {
+  qbittorrent_auth_failed: 'qBittorrent authentication failed. Check your username and password.',
+  qbittorrent_unavailable: 'qBittorrent is unavailable. Verify the URL and ensure the service is running.',
+  qbittorrent_bad_base_url: 'qBittorrent URL is invalid. Include http:// or https:// and a valid host.',
+};
+
+function getQbTestErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const normalized = error.message.trim().toLowerCase();
+    if (normalized in QB_TEST_ERROR_MESSAGES) {
+      return QB_TEST_ERROR_MESSAGES[normalized];
+    }
+  }
+  return getErrorMessage(error);
+}
 
 export function ConnectionsSection({ onDirtyChange }: { onDirtyChange: (d: boolean) => void }) {
   const serviceQuery = useServiceSettings();
   const updateProwlarr = useUpdateProwlarrSettings();
   const updateQb = useUpdateQbittorrentSettings();
+  const testQbConnection = useTestQbittorrentConnection();
   const [prowlarrUrl, setProwlarrUrl] = useState('');
   const [qbUrl, setQbUrl] = useState('');
   const [qbUsername, setQbUsername] = useState('');
@@ -55,6 +77,24 @@ export function ConnectionsSection({ onDirtyChange }: { onDirtyChange: (d: boole
       <div className="flex gap-2">
         <Button onClick={async()=>{try{await updateQb.mutateAsync({url:safeTrimmedString(qbUrl)||null,username:safeTrimmedString(qbUsername)||null,password:safeTrimmedString(qbPassword)||undefined});toast.success('qBittorrent settings updated');setQbPassword('');}catch(error){toast.error(getErrorMessage(error));}}} disabled={!qbChanged || updateQb.isPending}>Save</Button>
         {(serviceQuery.data?.qbittorrent.password_configured ?? false) ? <Button variant="outline" onClick={async()=>{try{await updateQb.mutateAsync({password:null});toast.success('qBittorrent password cleared');setQbPassword('');}catch(error){toast.error(getErrorMessage(error));}}} disabled={updateQb.isPending}>Clear password</Button> : null}
+        <Button
+          variant="outline"
+          onClick={async () => {
+            try {
+              const response = await testQbConnection.mutateAsync();
+              if (response.success) {
+                toast.success(response.message || 'qBittorrent connection successful');
+              } else {
+                toast.error(response.message || 'qBittorrent connection test failed');
+              }
+            } catch (error) {
+              toast.error(getQbTestErrorMessage(error));
+            }
+          }}
+          disabled={testQbConnection.isPending}
+        >
+          Test connection
+        </Button>
       </div>
     </div>
   </div>;

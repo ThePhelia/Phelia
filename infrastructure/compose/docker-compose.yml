@@ -31,6 +31,9 @@ services:
       TZ: ${TZ:-Etc/UTC}
       QB_USER: ${QB_USER:-admin}
       QB_PASS: ${QB_PASS:-change-me-now}
+      # Optional one-shot credential rotation for persisted qbittorrent_config.
+      # Keep false by default; set true for one startup when intentionally rotating.
+      QB_BOOTSTRAP_FORCE: ${QB_BOOTSTRAP_FORCE:-false}
     volumes:
       - qbittorrent_config:/config
       - ./qb-bootstrap.sh:/custom-cont-init.d/10-qb-bootstrap.sh:ro

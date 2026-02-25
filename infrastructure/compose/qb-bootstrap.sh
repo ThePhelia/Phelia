@@ -5,14 +5,31 @@ CONF_DIR="/config/qBittorrent"
 CONF_FILE="$CONF_DIR/qBittorrent.conf"
 QB_USER="${QB_USER:-${QBIT_USERNAME:-admin}}"
 QB_PASS="${QB_PASS:-${QBIT_PASSWORD:-}}"
+QB_BOOTSTRAP_FORCE="${QB_BOOTSTRAP_FORCE:-false}"
+
+is_true() {
+  case "${1,,}" in
+    1|true|yes|on)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 if [ -z "$QB_PASS" ]; then
-  echo "[qb-bootstrap] QB_PASS/QBIT_PASSWORD is empty; skipping bootstrap to avoid invalid config."
+  echo "[qb-bootstrap] QB_PASS/QBIT_PASSWORD is empty; credentials unchanged (skipped)."
   exit 0
 fi
 
+had_config=false
 if [ -f "$CONF_FILE" ]; then
-  echo "[qb-bootstrap] Existing qBittorrent config found; leaving credentials unchanged."
+  had_config=true
+fi
+
+if "$had_config" && ! is_true "$QB_BOOTSTRAP_FORCE"; then
+  echo "[qb-bootstrap] Existing qBittorrent config found; credentials unchanged (skipped). Set QB_BOOTSTRAP_FORCE=true to rotate."
   exit 0
 fi
 
@@ -37,4 +54,9 @@ WebUI\\Password_PBKDF2=${PBKDF2_LINE}
 EOF_CONF
 
 chmod 600 "$CONF_FILE"
-echo "[qb-bootstrap] Initialized qBittorrent WebUI credentials in persisted config."
+
+if "$had_config"; then
+  echo "[qb-bootstrap] Rotated qBittorrent WebUI credentials in persisted config (QB_BOOTSTRAP_FORCE=true)."
+else
+  echo "[qb-bootstrap] Initialized qBittorrent WebUI credentials in persisted config."
+fi

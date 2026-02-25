@@ -210,6 +210,25 @@ def test_discover_prowlarr_api_key_failure_when_http_and_volume_missing(monkeypa
     assert "manual_entry_hint" in response.json()["detail"]
 
 
+
+
+def test_qbittorrent_test_endpoint_requires_credentials(monkeypatch):
+    app = FastAPI()
+    app.include_router(settings_endpoints.router, prefix="")
+
+    class QbSnapshot:
+        url = "http://qbittorrent:8080"
+        username = "admin"
+        password = ""
+
+    monkeypatch.setattr(settings_endpoints.runtime_service_settings, "qbittorrent_snapshot", lambda: QbSnapshot())
+
+    client = TestClient(app)
+    response = client.post("/settings/services/qbittorrent/test")
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "qbittorrent_credentials_missing"
+
 def test_qbittorrent_test_endpoint_maps_auth_failure(monkeypatch):
     app = FastAPI()
     app.include_router(settings_endpoints.router, prefix="")

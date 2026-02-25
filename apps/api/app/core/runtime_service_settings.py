@@ -6,7 +6,6 @@ from collections.abc import Iterable
 import configparser
 import hashlib
 import logging
-import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -106,15 +105,6 @@ def _read_qbittorrent_auth_from_volume() -> QbittorrentVolumeAuth | None:
         except Exception:
             continue
     return None
-
-
-def _ensure_qb_password(store: SecretsStore) -> str:
-    existing = store.get("qbittorrent_password")
-    if isinstance(existing, str) and existing:
-        return existing
-    generated = secrets.token_urlsafe(24)
-    store.set_many({"qbittorrent_password": generated}, allow_empty_keys={"qbittorrent_password"})
-    return generated
 
 
 def _normalize_dirs(values: Iterable[str]) -> list[str]:
@@ -249,9 +239,9 @@ class RuntimeServiceSettings:
                 self._store.set("qbittorrent_password_fingerprint", volume_password_fingerprint)
 
             if not isinstance(qb_password, str):
-                qb_password = env_password if env_password else _ensure_qb_password(self._store)
+                qb_password = env_password
             elif not qb_password:
-                qb_password = env_password if volume_password_fingerprint else _ensure_qb_password(self._store)
+                qb_password = env_password if volume_password_fingerprint else ""
 
             if qb_url:
                 self._store.set("qbittorrent_url", qb_url)
@@ -388,6 +378,7 @@ class RuntimeServiceSettings:
                 "prowlarr_api_key_configured": bool(self._prowlarr.api_key),
                 "qbittorrent_url": self._qbittorrent.url,
                 "qbittorrent_username": self._qbittorrent.username,
+                "qbittorrent_password_configured": bool(self._qbittorrent.password),
                 "downloads_allowed_dirs": list(self._downloads.allowed_dirs),
                 "downloads_default_dir": self._downloads.default_dir,
             }

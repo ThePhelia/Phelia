@@ -120,3 +120,25 @@ def test_reset_to_env_detects_external_qb_password_change(monkeypatch, tmp_path,
     assert store.get("qbittorrent_password") == "env-pass"
     assert store.get("qbittorrent_password_fingerprint") != "stale-fingerprint"
     assert "changed externally" in caplog.text
+
+
+def test_reset_to_env_keeps_password_unconfigured_when_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.core.runtime_service_settings.settings.QB_PASS", "")
+
+    store = _store(tmp_path)
+    runtime = RuntimeServiceSettings(store=store)
+    snapshot = runtime.qbittorrent_snapshot()
+
+    assert snapshot.password == ""
+    assert store.get("qbittorrent_password") == ""
+
+
+def test_snapshot_for_api_reports_qbittorrent_password_unconfigured(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.core.runtime_service_settings.settings.QB_PASS", "")
+
+    store = _store(tmp_path)
+    runtime = RuntimeServiceSettings(store=store)
+
+    snapshot = runtime.snapshot_for_api()
+
+    assert snapshot["qbittorrent_password_configured"] is False

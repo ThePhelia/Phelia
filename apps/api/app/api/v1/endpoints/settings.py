@@ -821,6 +821,14 @@ def update_qbittorrent_settings(
 @router.post("/services/qbittorrent/test", response_model=QbittorrentTestResponse)
 async def test_qbittorrent_settings() -> QbittorrentTestResponse:
     snapshot = runtime_service_settings.qbittorrent_snapshot()
+    if not snapshot.url or not snapshot.username or not snapshot.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "qbittorrent_credentials_missing",
+                "hint": "Set qBittorrent URL, username, and password in Settings before testing",
+            },
+        )
     client = QbClient(snapshot.url, snapshot.username, snapshot.password)
     try:
         await client.login()

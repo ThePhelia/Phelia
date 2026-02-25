@@ -26,6 +26,28 @@ _TIMEOUT_SECONDS: Final[int] = 5
 _DEFAULT_TRIES: Final[int] = 12
 _BACKOFF_FACTOR: Final[float] = 1.5
 _MAX_DELAY: Final[float] = 15.0
+_AUTH_FAILURE_MARKERS: Final[tuple[str, ...]] = (
+    "fails",
+    "fail.",
+    "fails.",
+    "fails due to bad credentials",
+    "bad credentials",
+    "invalid credentials",
+    "invalid username or password",
+    "username or password is incorrect",
+    "wrong username or password",
+)
+_TRANSIENT_AUTH_MARKERS: Final[tuple[str, ...]] = (
+    "temporarily unavailable",
+    "not ready",
+    "try again",
+    "timeout",
+    "timed out",
+    "gateway timeout",
+    "service unavailable",
+    "too many requests",
+    "rate limit",
+)
 
 
 def _env(*names: str) -> str | None:
@@ -34,6 +56,16 @@ def _env(*names: str) -> str | None:
         if value:
             return value
     return None
+
+
+def _is_auth_failure_body(body: str) -> bool:
+    body_lower = body.strip().lower()
+    return any(marker in body_lower for marker in _AUTH_FAILURE_MARKERS)
+
+
+def _is_transient_auth_response(body: str) -> bool:
+    body_lower = body.strip().lower()
+    return any(marker in body_lower for marker in _TRANSIENT_AUTH_MARKERS)
 
 
 def qb_login_ok() -> bool | None:
@@ -90,7 +122,7 @@ def qb_login_ok() -> bool | None:
                 )
                 return False
 
-            if body_lower.startswith("fails") or "bad credentials" in body_lower:
+            if _is_auth_failure_body(body):
                 log.error(
                     "qBittorrent login failed due to invalid credentials (status=%s, body=%r, url=%s, user=%s)."
                     " Stopping retries to avoid WebUI IP ban; update QBIT_USERNAME/QBIT_PASSWORD and restart.",
@@ -101,7 +133,29 @@ def qb_login_ok() -> bool | None:
                 )
                 return False
 
-            if resp.status_code == 401 or "fails due to bad credentials" in body_lower:
+            if resp.status_code in {401, 403}:
+                if _is_transient_auth_response(body):
+                    log.warning(
+                        "qBittorrent login temporarily rejected (status=%s, body=%r) [attempt %d/%d, url=%s, user=%s]."
+                        " Retrying because response appears transient.",
+                        resp.status_code,
+                        body,
+                        attempt,
+                        tries,
+                        url,
+                        user,
+                    )
+                else:
+                    log.error(
+                        "qBittorrent login failed due to invalid credentials (status=%s, body=%r, url=%s, user=%s)."
+                        " Stopping retries to avoid WebUI IP ban; update QBIT_USERNAME/QBIT_PASSWORD and restart.",
+                        resp.status_code,
+                        body,
+                        url,
+                        user,
+                    )
+                    return False
+            elif "fails due to bad credentials" in body_lower:
                 log.warning(
                     "qBittorrent login rejected (status=%s, body=%r) [attempt %d/%d, url=%s, user=%s]."
                     " Verify QBIT_USERNAME/QBIT_PASSWORD and ensure the API targets the internal URL"

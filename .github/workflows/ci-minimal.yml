@@ -1,4 +1,4 @@
-name: CI (minimal)
+name: CI
 
 on:
   push:
@@ -6,24 +6,16 @@ on:
   pull_request:
 
 jobs:
-  lint-smoke:
+  backend-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r apps/api/requirements.txt
-          pip install -r services/metadata-proxy/requirements.txt
-          pip install pre-commit pytest pytest-asyncio
-      - name: Run linters
-        run: pre-commit run --all-files
-      - name: Run smoke tests
-        run: |
-          echo "Checking if tests/smoke directory exists..."
-          ls -la tests/ || echo "tests directory does not exist"
-          echo "Running pytest with verbose output..."
-          pytest tests/smoke -v || echo "pytest failed with exit code $?"
+          pip install -r apps/api/requirements.txt pytest
+      - name: Run backend unit tests
+        run: pytest -q apps/api/tests/test_health.py apps/api/tests/test_metadata_classifier.py

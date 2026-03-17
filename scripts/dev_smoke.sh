@@ -3,8 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infrastructure/compose/docker-compose.yml"
-API_HEALTH="http://localhost:8000/api/v1/healthz"
-API_CHECK="http://localhost:8000/api/v1/discover/movie"
+API_PORT="${API_PORT:-8121}"
+API_HEALTH="http://localhost:${API_PORT}/api/v1/healthz"
+API_CHECK="http://localhost:${API_PORT}/api/v1/discover/movie"
 
 cleanup() {
   docker compose -f "$COMPOSE_FILE" down --remove-orphans >/dev/null 2>&1 || true
@@ -17,7 +18,7 @@ docker compose -f "$COMPOSE_FILE" build api >/dev/null
 echo "[dev_smoke] Starting stack..."
 docker compose -f "$COMPOSE_FILE" up -d db redis qbittorrent api >/dev/null
 
-echo "[dev_smoke] Waiting for API health..."
+echo "[dev_smoke] Waiting for API health at ${API_HEALTH}..."
 until curl -fsS "$API_HEALTH" >/dev/null; do
   sleep 2
   echo "  api not ready yet..."

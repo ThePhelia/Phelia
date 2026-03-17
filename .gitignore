@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+*.tsbuildinfo
 
 # Python caches
 __pycache__/
@@ -32,9 +33,8 @@ coverage.xml
 !infrastructure/compose/.env
 deploy/.env
 
-/apps/web/node_modules
-phelia_discovery_top_fix.patch
-
-# Log files and test databases
+# Runtime artifacts
+celerybeat-schedule
 *.log
 test.db
+apps/api/tests/.test_api_keys.enc

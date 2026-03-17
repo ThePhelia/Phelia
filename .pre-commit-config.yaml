@@ -8,4 +8,3 @@ repos:
     rev: v0.5.6
     hooks:
       - id: ruff
-        args: ["--exit-zero"]

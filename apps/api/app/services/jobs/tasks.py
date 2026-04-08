@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import shutil
+from pathlib import Path
 from typing import List, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 from celery import Celery
@@ -12,10 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.runtime_service_settings import runtime_service_settings
-from app.db.session import SessionLocal
 from app.db.models import Download
-from app.services.bt.qbittorrent import QbClient, QbittorrentLoginError
+from app.db.session import SessionLocal
 from app.services.broadcast import broadcast_download
+from app.services.bt.qbittorrent import QbClient, QbittorrentLoginError
 
 
 celery_app = Celery(
@@ -24,10 +26,13 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
 )
 
+_POLL_SECONDS = 3.0
+_FINAL_STATES = {"uploading", "stalledup", "pausedup", "forcedup"}
+
 celery_app.conf.beat_schedule = {
     "poll-downloads": {
         "task": "app.services.jobs.tasks.poll_status",
-        "schedule": 15.0,
+        "schedule": _POLL_SECONDS,
     }
 }
 celery_app.conf.timezone = "UTC"
@@ -44,10 +49,7 @@ def _qb() -> QbClient:
 
 
 def _mark_download_error(db: Session, dl: Download, code: str | None = None) -> None:
-    if code:
-        dl.status = f"error:{code}"
-    else:
-        dl.status = "error"
+    dl.status = f"error:{code}" if code else "error"
     db.commit()
     broadcast_download(dl)
 
@@ -60,6 +62,152 @@ async def _maybe_await(result):
     if inspect.isawaitable(result):
         return await result
     return result
+
+
+def _safe_tag(download_id: int) -> str:
+    return f"phelia-{download_id}"
+
+
+def _extract_info_hash(magnet: str | None) -> str | None:
+    if not magnet:
+        return None
+    try:
+        parsed = urlparse(magnet)
+        if parsed.scheme != "magnet":
+            return None
+        xt_values = parse_qs(parsed.query).get("xt", [])
+        for value in xt_values:
+            decoded = unquote(value)
+            if decoded.lower().startswith("urn:btih:"):
+                return decoded.split(":")[-1].lower()
+    except Exception:
+        return None
+    return None
+
+
+def _torrent_matches_download(torrent: dict, d: Download) -> bool:
+    tags_raw = str(torrent.get("tags") or "")
+    tags = {tag.strip() for tag in tags_raw.split(",") if tag.strip()}
+    if _safe_tag(d.id) in tags:
+        return True
+    if d.hash and (torrent.get("hash") or "").lower() == d.hash.lower():
+        return True
+    return False
+
+
+def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
+    for t in stats:
+        if _torrent_matches_download(t, d):
+            return t
+    if d.name:
+        for t in stats:
+            if (t.get("name") or "").strip() == d.name.strip() and (t.get("save_path") or "") == d.save_path:
+                return t
+    if d.save_path:
+        save_path_matches = [t for t in stats if (t.get("save_path") or "") == d.save_path]
+        if len(save_path_matches) == 1:
+            return save_path_matches[0]
+        if save_path_matches:
+            return save_path_matches[0]
+    return None
+
+
+def _safe_list_torrents(qb: QbClient) -> List[dict]:
+    try:
+        res = qb.list_torrents()
+        if inspect.isawaitable(res):
+            return asyncio.run(res)
+        return res
+    except Exception as e:
+        logger.warning("Failed to list torrents: %s", e)
+        return []
+
+
+async def _add_magnet_with_optional_tags(qb: QbClient, magnet: str, save_path: str, tag: str) -> None:
+    try:
+        await _maybe_await(qb.add_magnet(magnet, save_path=save_path, tags=tag))
+    except TypeError:
+        await _maybe_await(qb.add_magnet(magnet, save_path=save_path))
+
+
+async def _add_file_with_optional_tags(qb: QbClient, torrent: bytes, save_path: str, tag: str) -> None:
+    try:
+        await _maybe_await(qb.add_torrent_file(torrent, save_path=save_path, tags=tag))
+    except TypeError:
+        await _maybe_await(qb.add_torrent_file(torrent, save_path=save_path))
+
+
+def _safe_destination(base_dir: Path, item_name: str) -> Path:
+    candidate = base_dir / item_name
+    if not candidate.exists():
+        return candidate
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    idx = 1
+    while True:
+        deduped = candidate.with_name(f"{stem}-{idx}{suffix}")
+        if not deduped.exists():
+            return deduped
+        idx += 1
+
+
+def _cleanup_empty_dirs(start: Path, stop_at: Path) -> None:
+    current = start
+    while current != stop_at and stop_at in current.parents:
+        try:
+            current.rmdir()
+        except OSError:
+            break
+        current = current.parent
+
+
+def _finalize_completed_download(db: Session, d: Download, torrent: dict) -> bool:
+    content_path_raw = torrent.get("content_path") or ""
+    name = str(torrent.get("name") or d.name or "").strip()
+    if not content_path_raw or not name:
+        logger.warning("Cannot finalize download %s: missing content path or name", d.id)
+        return False
+
+    source_path = Path(str(content_path_raw))
+    final_root = Path(settings.DOWNLOAD_FINAL_DIR)
+    final_root.mkdir(parents=True, exist_ok=True)
+    destination = _safe_destination(final_root, source_path.name)
+
+    d.status = "finalizing"
+    db.commit()
+    broadcast_download(d)
+
+    moved = False
+    try:
+        if source_path.exists():
+            shutil.move(str(source_path), str(destination))
+            moved = True
+        elif destination.exists():
+            moved = True
+        else:
+            raise FileNotFoundError(f"Source path not found: {source_path}")
+
+        d.save_path = str(destination.parent)
+        d.name = destination.name
+        d.progress = 1.0
+        d.eta = 0
+        d.dlspeed = 0
+        d.upspeed = 0
+        d.status = "completed"
+        db.commit()
+        broadcast_download(d)
+
+        _cleanup_empty_dirs(source_path.parent, Path(settings.DOWNLOAD_STAGING_DIR))
+        return True
+    except Exception as exc:
+        logger.exception("Failed to finalize download %s: %s", d.id, exc)
+        d.status = "error:finalize"
+        db.commit()
+        broadcast_download(d)
+        if moved and not destination.exists():
+            logger.error("Finalization rollback required for download %s", d.id)
+        return False
 
 
 @celery_app.task(name="app.services.jobs.tasks.enqueue_download")
@@ -75,6 +223,7 @@ def enqueue_download(
         if not dl:
             logger.warning("Download %s not found", download_id)
             return False
+
         if magnet and not dl.magnet:
             dl.magnet = magnet
         if save_path and not dl.save_path:
@@ -82,120 +231,97 @@ def enqueue_download(
         if not dl.magnet and not url:
             logger.warning("Download %s missing magnet or url", download_id)
             return False
-        else:
-            if url and not dl.magnet:
-                if url.startswith("magnet:"):
-                    dl.magnet = url
-                    url = None
-                else:
-                    scheme = urlparse(url).scheme
-                    if scheme and scheme not in ("http", "https"):
-                        logger.error(
-                            "Unrecognized URL scheme for download %s: %s",
-                            download_id,
-                            url,
-                        )
-                        return False
 
-            async def _run() -> List[dict]:
-                qb = _qb()
-                try:
-                    await _maybe_await(qb.login())
-                    content = b""
-                    if url and not dl.magnet:
-                        try:
-                            async with httpx.AsyncClient() as client:
-                                resp = await client.get(url, follow_redirects=False)
-                                if resp.is_redirect:
-                                    loc = resp.headers.get("Location", "")
-                                    if loc.startswith("magnet:"):
-                                        dl.magnet = loc
-                                        db.commit()
-                                        content = b""
-                                    else:
-                                        if loc:
-                                            scheme = urlparse(loc).scheme
-                                        if scheme and scheme not in ("http", "https"):
-                                            logger.warning(
-                                                "Download %s redirect with unexpected scheme: %s",
-                                                download_id,
-                                                loc,
-                                            )
-                                            raise httpx.UnsupportedProtocol(loc)
-                                        resp.raise_for_status()
-                                        content = resp.content
-                                else:
-                                    resp.raise_for_status()
-                                    content = resp.content
-                        except httpx.HTTPError as e:
-                            logger.error("Failed to fetch %s: %s", url, e)
-                            _mark_download_error(db, dl)
-                            raise
-                    if dl.magnet:
-                        await _maybe_await(
-                            qb.add_magnet(
-                                dl.magnet,
-                                save_path=dl.save_path
-                                or runtime_service_settings.download_snapshot().default_dir,
-                            )
-                        )
-                    else:
-                        await _maybe_await(
-                            qb.add_torrent_file(
-                                content,
-                                save_path=dl.save_path
-                                or runtime_service_settings.download_snapshot().default_dir,
-                            )
-                        )
-                    return await _maybe_await(qb.list_torrents())
-                except QbittorrentLoginError as e:
-                    logger.warning(
-                        "qBittorrent auth error for %s: %s", download_id, e
-                    )
-                    _mark_download_error(db, dl, e.code)
-                    raise
-                except httpx.HTTPError as e:
-                    logger.error(
-                        "HTTP error talking to qBittorrent for %s: %s", download_id, e
-                    )
-                    _mark_download_error(db, dl)
-                    raise
-                finally:
-                    close = getattr(qb, "close", None)
-                    if close:
-                        await _maybe_await(close())
+        parsed_hash = _extract_info_hash(dl.magnet or magnet)
+        if parsed_hash:
+            dl.hash = parsed_hash
 
-            try:
-                stats = asyncio.run(_run())
-            except Exception as e:
-                logger.exception(
-                    "Failed to enqueue download for %s: %s", download_id, e
-                )
-                if not dl.status.startswith("error"):
-                    _mark_download_error(db, dl)
-                return False
+        dl.status = "submitted"
+        db.commit()
+        broadcast_download(dl)
 
-            dl.status = "queued"
+        if url and not dl.magnet and url.startswith("magnet:"):
+            dl.magnet = url
+            parsed_hash = _extract_info_hash(url)
+            if parsed_hash:
+                dl.hash = parsed_hash
             db.commit()
             broadcast_download(dl)
+            url = None
 
-            if stats:
-                cand = _pick_candidate(stats, dl)
-                if cand:
-                    dl.name = cand.get("name") or dl.name
-                    dl.status = cand.get("state") or dl.status
-                    cand_hash = cand.get("hash")
-                    if cand_hash:
-                        dl.hash = cand_hash
-                    db.commit()
-                    broadcast_download(dl)
-            return True
-    except Exception as e:
-        logger.exception("Error in enqueue_download for %s: %s", download_id, e)
-        dl = locals().get("dl")
-        if dl and not dl.status.startswith("error"):
+        async def _run() -> List[dict]:
+            qb = _qb()
+            try:
+                await _maybe_await(qb.login())
+                content = b""
+                if url and not dl.magnet:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url, follow_redirects=False)
+                        if resp.is_redirect:
+                            loc = resp.headers.get("Location", "")
+                            if loc.startswith("magnet:"):
+                                dl.magnet = loc
+                                parsed_hash = _extract_info_hash(loc)
+                                if parsed_hash:
+                                    dl.hash = parsed_hash
+                                db.commit()
+                                broadcast_download(dl)
+                            else:
+                                scheme = urlparse(loc).scheme if loc else ""
+                                if scheme and scheme not in ("http", "https"):
+                                    logger.warning(
+                                        "Download %s redirect with unexpected scheme: %s",
+                                        download_id,
+                                        loc,
+                                    )
+                                    raise httpx.UnsupportedProtocol(loc)
+                                resp = await client.get(loc or url, follow_redirects=True)
+                                resp.raise_for_status()
+                                content = resp.content
+                        else:
+                            resp.raise_for_status()
+                            content = resp.content
+
+                submit_dir = dl.save_path or settings.DOWNLOAD_STAGING_DIR
+                if dl.magnet:
+                    await _add_magnet_with_optional_tags(
+                        qb, dl.magnet, save_path=submit_dir, tag=_safe_tag(dl.id)
+                    )
+                else:
+                    await _add_file_with_optional_tags(
+                        qb, content, save_path=submit_dir, tag=_safe_tag(dl.id)
+                    )
+                return await _maybe_await(qb.list_torrents())
+            finally:
+                close = getattr(qb, "close", None)
+                if close:
+                    await _maybe_await(close())
+
+        try:
+            stats = asyncio.run(_run())
+        except QbittorrentLoginError as exc:
+            logger.warning("qBittorrent auth error for %s: %s", download_id, exc)
+            _mark_download_error(db, dl, exc.code)
+            return False
+        except Exception as exc:
+            logger.exception("Failed to enqueue download for %s: %s", download_id, exc)
             _mark_download_error(db, dl)
-        return False
+            return False
+
+        dl.status = "queued"
+        db.commit()
+        broadcast_download(dl)
+
+        candidate = _pick_candidate(stats or [], dl)
+        if candidate:
+            cand_hash = candidate.get("hash")
+            if cand_hash:
+                dl.hash = cand_hash
+            dl.name = candidate.get("name") or dl.name
+            dl.status = candidate.get("state") or dl.status
+            db.commit()
+            broadcast_download(dl)
+        return True
     finally:
         db.close()
 
@@ -207,7 +333,22 @@ def poll_status() -> int:
         active: List[Download] = (
             db.query(Download)
             .filter(
-                Download.status.in_(("queued", "downloading", "stalled", "checking"))
+                Download.status.in_(
+                    (
+                        "queued",
+                        "submitted",
+                        "downloading",
+                        "stalled",
+                        "checking",
+                        "metaDL",
+                        "allocating",
+                        "moving",
+                        "uploading",
+                        "stalledUP",
+                        "pausedUP",
+                        "forcedUP",
+                    )
+                )
             )
             .all()
         )
@@ -226,70 +367,64 @@ def poll_status() -> int:
 
         try:
             stats = asyncio.run(_run())
-        except httpx.HTTPError as e:
-            logger.warning("HTTP error talking to qBittorrent: %s", e)
+        except httpx.HTTPError as exc:
+            logger.warning("HTTP error talking to qBittorrent: %s", exc)
+            return 0
+        except Exception as exc:
+            logger.warning("Error talking to qBittorrent during polling: %s", exc)
             return 0
         if not stats:
+            logger.info("qBittorrent returned empty torrent list; skipping prune for this poll cycle")
             return 0
 
-        changed: List[Download] = []
-        removed: List[Download] = []
+        changed = 0
+        removed: list[Download] = []
         for d in active:
             t = _pick_candidate(stats, d)
             if not t:
                 removed.append(d)
                 continue
+
             t_hash = t.get("hash")
             if t_hash:
                 d.hash = t_hash
-            d.progress = t.get("progress") or d.progress
-            d.dlspeed = t.get("dlspeed") or d.dlspeed
-            d.upspeed = t.get("upspeed") or d.upspeed
+            d.progress = float(t.get("progress") or 0.0)
+            d.dlspeed = int(t.get("dlspeed") or 0)
+            d.upspeed = int(t.get("upspeed") or 0)
+            d.eta = int(t.get("eta") or 0)
+            d.name = t.get("name") or d.name
             d.status = t.get("state") or d.status
-            d.eta = t.get("eta") or d.eta
-            if not d.name and t.get("name"):
-                d.name = t.get("name")
-            changed.append(d)
+            db.commit()
+            broadcast_download(d)
+            changed += 1
+
+            if str(t.get("state") or "").lower() in _FINAL_STATES and d.status != "completed":
+                finalized = _finalize_completed_download(db, d, t)
+                if finalized and d.hash:
+                    async def _delete() -> None:
+                        qb = _qb()
+                        try:
+                            await _maybe_await(qb.login())
+                            await _maybe_await(qb.delete_torrent(d.hash or "", delete_files=False))
+                        finally:
+                            close = getattr(qb, "close", None)
+                            if close:
+                                await _maybe_await(close())
+
+                    try:
+                        asyncio.run(_delete())
+                    except Exception as exc:
+                        logger.warning("Failed to remove finalized torrent %s from qBittorrent: %s", d.id, exc)
 
         if removed:
             for d in removed:
                 logger.info("Pruning missing download %s", d.id)
                 db.delete(d)
-
-        if changed or removed:
+                changed += 1
             db.commit()
-            for d in changed:
-                broadcast_download(d)
-        return len(changed) + len(removed)
+        return changed
     finally:
         db.close()
 
 
-def _safe_list_torrents(qb: QbClient) -> List[dict]:
-    try:
-        res = qb.list_torrents()
-        if inspect.isawaitable(res):
-            return asyncio.run(res)
-        return res
-    except Exception as e:
-        logger.warning("Failed to list torrents: %s", e)
-        return []
-
-
-def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
-    if d.hash:
-        h = d.hash.lower()
-        for t in stats:
-            if (t.get("hash") or "").lower() == h:
-                return t
-    if d.name:
-        for t in stats:
-            if (t.get("name") or "").strip() == d.name.strip():
-                return t
-    if d.save_path:
-        cands = [t for t in stats if (t.get("save_path") or "") == d.save_path]
-        if len(cands) == 1:
-            return cands[0]
-        if cands:
-            return cands[0]
-    return None
+__all__ = ["celery_app", "enqueue_download", "poll_status"]

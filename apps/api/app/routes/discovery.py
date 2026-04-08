@@ -318,6 +318,25 @@ def _normalize_genre(tag: Optional[str], genre_id: Optional[int]) -> str:
     raise HTTPException(status_code=400, detail="Unknown genre/genre_id")
 
 
+def _resolve_apple_genre_id(
+    *, genre: Optional[str], genre_id: Optional[int], mb_tag: str
+) -> int:
+    if genre_id is not None:
+        return genre_id
+    normalized_input = (genre or "").strip().lower()
+    for row in CURATED:
+        apple_genre_id = row.get("appleGenreId")
+        if not isinstance(apple_genre_id, int):
+            continue
+        key = str(row.get("key") or "").strip().lower()
+        if normalized_input and key == normalized_input:
+            return apple_genre_id
+        row_mb_tag = GENRE_SLUG_TO_MB_TAG.get(key, key.replace("-", " "))
+        if row_mb_tag == mb_tag:
+            return apple_genre_id
+    return 0
+
+
 async def _mb_get_json(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
     headers = {"User-Agent": "Phelia/1.0 (self-hosted)"}
     async with httpx.AsyncClient(timeout=15.0, headers=headers) as cx:
@@ -407,11 +426,9 @@ async def new_albums(
     if callable(apple_fn):
         try:
             storefront = getattr(settings, "APPLE_RSS_STOREFRONT", "us")
-            resolved_genre_id = genre_id if genre_id is not None else 0
-            for row in CURATED:
-                if row.get("key") == genre and isinstance(row.get("appleGenreId"), int):
-                    resolved_genre_id = int(row["appleGenreId"])
-                    break
+            resolved_genre_id = _resolve_apple_genre_id(
+                genre=genre, genre_id=genre_id, mb_tag=mb_tag
+            )
             items = apple_fn(storefront, resolved_genre_id, "most-recent", "albums", limit)
             aggregate.extend(_normalize_items(_iter_items(items or [])))
         except httpx.HTTPError:

@@ -218,6 +218,34 @@ async def test_discovery_new_endpoint_wraps_provider_results(
 
 
 @pytest.mark.anyio
+async def test_discovery_new_endpoint_normalizes_genre_for_apple_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[int] = []
+
+    def fake_apple_feed(
+        storefront: str, genre_id: int, feed: str, kind: str, limit: int
+    ) -> list[dict[str, Any]]:  # noqa: ARG001
+        captured.append(genre_id)
+        return [{"id": "apple-1", "title": "Genre Album", "artist": "Genre Artist"}]
+
+    monkeypatch.setattr(discovery_routes, "apple_feed", fake_apple_feed, raising=False)
+
+    app = FastAPI()
+    app.include_router(discovery_routes.router)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            "/api/v1/discovery/new", params={"genre": "hiphop", "limit": 3}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["title"] == "Genre Album"
+    assert captured == [18]
+
+
+@pytest.mark.anyio
 async def test_discovery_top_endpoint_handles_missing_genre_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

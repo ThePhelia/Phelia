@@ -28,6 +28,7 @@ function MusicPage() {
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<AlbumItem[] | null>([]);
   const requestRef = useRef(0);
+  const searchRequestRef = useRef(0);
 
   const selectedGenre = useMemo(
     () => (selectedKey ? genres.find((genre) => genre.key === selectedKey) ?? null : null),
@@ -119,16 +120,29 @@ function MusicPage() {
   useEffect(() => {
     const nextQuery = query.trim();
     if (!nextQuery) {
+      searchRequestRef.current += 1;
       setSearchResults([]);
       return;
     }
     setSearchResults(null);
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
     const handle = window.setTimeout(() => {
       fetchDiscoverySearch(nextQuery, 24)
-        .then(setSearchResults)
-        .catch(() => setSearchResults([]));
+        .then((items) => {
+          if (searchRequestRef.current === requestId) {
+            setSearchResults(items);
+          }
+        })
+        .catch(() => {
+          if (searchRequestRef.current === requestId) {
+            setSearchResults([]);
+          }
+        });
     }, 250);
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+    };
   }, [query]);
 
   return (

@@ -103,6 +103,12 @@ def _pick_candidate(stats: List[dict], d: Download) -> Optional[dict]:
         for t in stats:
             if (t.get("name") or "").strip() == d.name.strip() and (t.get("save_path") or "") == d.save_path:
                 return t
+    if d.save_path:
+        save_path_matches = [t for t in stats if (t.get("save_path") or "") == d.save_path]
+        if len(save_path_matches) == 1:
+            return save_path_matches[0]
+        if save_path_matches:
+            return save_path_matches[0]
     return None
 
 
@@ -366,6 +372,9 @@ def poll_status() -> int:
             return 0
         except Exception as exc:
             logger.warning("Error talking to qBittorrent during polling: %s", exc)
+            return 0
+        if not stats:
+            logger.info("qBittorrent returned empty torrent list; skipping prune for this poll cycle")
             return 0
 
         changed = 0

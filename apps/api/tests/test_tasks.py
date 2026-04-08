@@ -318,6 +318,31 @@ def test_poll_status_prunes_missing_download(monkeypatch):
         assert db.get(models.Download, download_id) is None
 
 
+def test_poll_status_empty_stats_does_not_prune(monkeypatch):
+    class FakeQB:
+        def login(self):
+            pass
+
+        def list_torrents(self):
+            return []
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(tasks, "_qb", lambda: FakeQB())
+
+    with SessionLocal() as db:
+        dl = models.Download(magnet="m", save_path="/downloads", status="queued")
+        db.add(dl)
+        db.commit()
+        download_id = dl.id
+
+    assert tasks.poll_status() == 0
+
+    with SessionLocal() as db:
+        assert db.get(models.Download, download_id) is not None
+
+
 def test_pick_candidate_prefers_hash():
     stats = [
         {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},
@@ -328,6 +353,18 @@ def test_pick_candidate_prefers_hash():
     )
     cand = tasks._pick_candidate(stats, d)
     assert cand["hash"].lower() == "bbb222"
+
+
+def test_pick_candidate_falls_back_to_save_path_for_untagged():
+    stats = [
+        {"hash": "AAA111", "name": "dl1", "save_path": "/downloads"},
+    ]
+    d = models.Download(
+        hash=None, name=None, magnet="m", save_path="/downloads", status="queued"
+    )
+    cand = tasks._pick_candidate(stats, d)
+    assert cand is not None
+    assert cand["hash"] == "AAA111"
 
 
 def test_qb_client_uses_runtime_service_credentials(monkeypatch):

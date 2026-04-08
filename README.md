@@ -73,6 +73,12 @@ Backend runtime settings also support:
 - `APP_SECRET`
 - provider keys like `TMDB_API_KEY`, `OMDB_API_KEY`, `DISCOGS_TOKEN`, `LASTFM_API_KEY`
 
+### Music discovery provider notes
+
+- `LASTFM_API_KEY` is required for reliable music search and tag/top discovery rails.
+- Last.fm shared secret is **not** required for read-only discovery/search flows.
+- `LISTENBRAINZ_TOKEN` is optional and used for similar-artist/personalization style features, not primary album search.
+
 Use `.env.example` as the baseline for non-compose local runs.
 
 ## Development commands

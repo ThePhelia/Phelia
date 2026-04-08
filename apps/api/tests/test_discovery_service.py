@@ -184,9 +184,9 @@ async def test_providers_status_flags(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_quick_search_falls_back_to_listenbrainz(monkeypatch):
+async def test_quick_search_falls_back_to_deezer(monkeypatch):
     runtime_settings.set("lastfm", "key")
-    runtime_settings.set("listenbrainz", "token")
+    runtime_settings.set("listenbrainz", None)
     calls: List[Tuple[str, dict | None]] = []
 
     def handler(url: str, params: dict, _headers: dict) -> httpx.Response:
@@ -194,15 +194,15 @@ async def test_quick_search_falls_back_to_listenbrainz(monkeypatch):
         request = httpx.Request("GET", url, params=params)
         if "ws.audioscrobbler.com" in url:
             return httpx.Response(429, request=request)
-        if "api.listenbrainz.org" in url:
+        if "api.deezer.com" in url:
             return httpx.Response(
                 200,
                 json={
-                    "results": [
+                    "data": [
                         {
-                            "release_name": "Fallback Album",
-                            "artist_name": "Fallback Artist",
-                            "release_mbid": "lb-release",
+                            "id": 100,
+                            "title": "Fallback Album",
+                            "artist": {"name": "Fallback Artist"},
                             "release_date": "2024-01-01",
                         }
                     ]
@@ -219,5 +219,5 @@ async def test_quick_search_falls_back_to_listenbrainz(monkeypatch):
 
     items = await service.quick_search(query="ambient", limit=1)
     assert len(items) == 1
-    assert items[0].source == "listenbrainz"
-    assert any("api.listenbrainz.org" in call[0] for call in calls)
+    assert items[0].source == "deezer"
+    assert any("api.deezer.com" in call[0] for call in calls)

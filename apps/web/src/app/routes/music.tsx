@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/app/components/ui/button';
+import { Input } from '@/app/components/ui/input';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import type { AlbumItem, DiscoveryGenre, DiscoveryProvidersStatus } from '@/app/lib/discovery';
 import {
@@ -8,6 +9,7 @@ import {
   fetchDiscoveryGenres,
   fetchDiscoveryNew,
   fetchDiscoveryProviders,
+  fetchDiscoverySearch,
 } from '@/app/lib/discovery';
 
 const STATIC_TAGS = ['techno', 'shoegaze', 'hip-hop'];
@@ -23,6 +25,8 @@ function MusicPage() {
   const [genres, setGenres] = useState<DiscoveryGenre[]>([]);
   const [genresLoading, setGenresLoading] = useState(true);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<AlbumItem[] | null>([]);
   const requestRef = useRef(0);
 
   const selectedGenre = useMemo(
@@ -112,6 +116,21 @@ function MusicPage() {
     };
   }, [loadGenre]);
 
+  useEffect(() => {
+    const nextQuery = query.trim();
+    if (!nextQuery) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchResults(null);
+    const handle = window.setTimeout(() => {
+      fetchDiscoverySearch(nextQuery, 24)
+        .then(setSearchResults)
+        .catch(() => setSearchResults([]));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
   return (
     <div className="space-y-12">
       <header className="space-y-2">
@@ -162,6 +181,24 @@ function MusicPage() {
           <p className="text-sm text-muted-foreground">No genres available right now.</p>
         )}
       </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Search Albums</h2>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Last.fm primary with canonical metadata enrichment</p>
+        </div>
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search album or artist…"
+          aria-label="Search albums or artists"
+        />
+      </section>
+      <DiscoverySection
+        title="Search Results"
+        subtitle={query.trim() ? `Results for "${query.trim()}"` : 'Type to search'}
+        items={searchResults}
+      />
 
       <DiscoverySection
         title="New Releases"

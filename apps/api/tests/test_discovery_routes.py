@@ -97,10 +97,12 @@ async def test_discovery_new_endpoint_uses_cache(
 ) -> None:
     fake_redis = FakeRedis()
 
-    calls: list[tuple[str, int, int]] = []
+    calls: list[tuple[str, int, str, str, int]] = []
 
-    def fake_service(genre: str, days: int, limit: int) -> list[dict[str, Any]]:
-        calls.append((genre, days, limit))
+    def fake_service(
+        storefront: str, genre_id: int, feed: str, kind: str, limit: int
+    ) -> list[dict[str, Any]]:
+        calls.append((storefront, genre_id, feed, kind, limit))
         return [
             {
                 "mbid": "rg-1",
@@ -109,9 +111,7 @@ async def test_discovery_new_endpoint_uses_cache(
             }
         ]
 
-    monkeypatch.setattr(
-        discovery_routes, "new_releases_by_genre", fake_service, raising=False
-    )
+    monkeypatch.setattr(discovery_routes, "apple_feed", fake_service, raising=False)
     monkeypatch.setattr(
         discovery_routes, "get_redis", lambda: fake_redis, raising=False
     )
@@ -132,7 +132,7 @@ async def test_discovery_new_endpoint_uses_cache(
     assert resp1.status_code == 200
     assert resp1.json()["items"][0]["title"] == "Cached Album"
     assert resp2.json() == resp1.json()
-    assert calls == [("house", 30, 20)]
+    assert calls == [("us", 1250, "most-recent", "albums", 20)]
 
 
 @pytest.mark.anyio
@@ -179,10 +179,10 @@ async def test_discovery_new_endpoint_wraps_provider_results(
         def __init__(self) -> None:
             self.calls: list[tuple[str, str, int]] = []
 
-        async def fetch_new_albums(
-            self, tag: str, since: str, limit: int
+        async def fetch_new_releases(
+            self, *, market: str | None, limit: int
         ) -> list[dict[str, Any]]:
-            self.calls.append((tag, since, limit))
+            self.calls.append(("new", market or "", limit))
             return [
                 {
                     "id": "svc-1",
@@ -214,28 +214,15 @@ async def test_discovery_new_endpoint_wraps_provider_results(
     assert "items" in payload
     assert isinstance(payload["items"], list)
     assert payload["items"][0]["title"] == "Service Album"
-    assert svc.calls  # service was invoked
+    assert svc.calls == [("new", "", 5)]
 
 
 @pytest.mark.anyio
-async def test_discovery_top_endpoint_handles_errors(
+async def test_discovery_top_endpoint_handles_missing_genre_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_redis = FakeRedis()
-
-    def failing_service(
-        *args: Any, **kwargs: Any
-    ) -> list[dict[str, Any]]:  # noqa: ARG001 - we only raise
-        raise RuntimeError("upstream failure")
-
-    monkeypatch.setattr(discovery_routes, "apple_feed", failing_service, raising=False)
-    monkeypatch.setattr(
-        discovery_routes, "get_redis", lambda: fake_redis, raising=False
-    )
-
     app = FastAPI()
     app.include_router(discovery_routes.router)
-    app.dependency_overrides[discovery_routes.get_redis] = lambda: fake_redis
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -249,28 +236,25 @@ async def test_discovery_top_endpoint_handles_errors(
             },
         )
 
-    assert resp.status_code == 502
-    assert "Apple RSS error" in resp.json()["detail"]
+    assert resp.status_code == 400
+    assert "Unknown genre/genre_id" in resp.json()["detail"]
 
 
 @pytest.mark.anyio
 async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = FakeRedis()
-    calls: list[tuple[int, str, str, int, str]] = []
+    calls: list[tuple[str, str, str, int]] = []
 
-    def fake_service(
-        storefront: str, genre_id: int, feed: str, kind: str, limit: int
-    ) -> list[dict[str, Any]]:
-        calls.append((genre_id, feed, kind, limit, storefront))
-        return [
-            {
-                "id": "apple-1",
-                "title": "Fresh Album",
-                "artist": "Apple Trio",
-            }
-        ]
+    class FakeDiscoveryService:
+        async def fetch_top(
+            self, *, kind: str, tag: str, feed: str, limit: int
+        ) -> list[dict[str, Any]]:
+            calls.append((kind, tag, feed, limit))
+            return [{"id": "svc-1", "title": "Fresh Album", "artist": "Service Trio"}]
 
-    monkeypatch.setattr(discovery_routes, "apple_feed", fake_service, raising=False)
+    monkeypatch.setattr(
+        discovery_routes, "discovery_service", FakeDiscoveryService(), raising=False
+    )
     monkeypatch.setattr(
         discovery_routes, "get_redis", lambda: fake_redis, raising=False
     )
@@ -284,7 +268,7 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
         resp1 = await client.get(
             "/api/v1/discovery/top",
             params={
-                "genre_id": 21,
+                "genre": "rock",
                 "feed": "most-recent",
                 "kind": "albums",
                 "limit": 10,
@@ -293,7 +277,7 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
         resp2 = await client.get(
             "/api/v1/discovery/top",
             params={
-                "genre_id": 21,
+                "genre": "rock",
                 "feed": "most-recent",
                 "kind": "albums",
                 "limit": 10,
@@ -303,7 +287,7 @@ async def test_discovery_top_endpoint_caches(monkeypatch: pytest.MonkeyPatch) ->
     assert resp1.status_code == 200
     assert resp1.json()["items"][0]["title"] == "Fresh Album"
     assert resp2.json() == resp1.json()
-    assert calls == [(21, "most-recent", "albums", 10, "us")]
+    assert calls == [("albums", "rock", "most-recent", 10)]
 
 
 @pytest.mark.anyio
@@ -582,7 +566,7 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
 
     items = discovery_apple.apple_feed("us", 21)
     assert captured["url"] == (
-        "https://rss.applemarketingtools.com/api/v2/us/music/most-recent/albums/50/genre=21/json"
+        "https://rss.applemarketingtools.com/api/v2/us/music/most-recent/albums/50/genre=21/explicit.json"
     )
     assert items == [
         {
@@ -592,6 +576,7 @@ def test_apple_feed_normalises(monkeypatch: pytest.MonkeyPatch) -> None:
             "url": "https://example.com/album",
             "artwork": "https://example.com/art.jpg",
             "releaseDate": "2024-03-01",
+            "source": "apple_marketing_tools",
         }
     ]
 
@@ -620,5 +605,5 @@ def test_apple_feed_uses_all_genre_when_missing(
     items = discovery_apple.apple_feed("us", 0)
     assert items == []
     assert captured["url"] == (
-        "https://rss.applemarketingtools.com/api/v2/us/music/most-recent/albums/50/genre=all/json"
+        "https://itunes.apple.com/us/rss/topalbums/limit=50/explicit/json"
     )

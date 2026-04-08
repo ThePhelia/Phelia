@@ -12,6 +12,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.config import settings
+from app.services.discovery_genres import CURATED
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +82,10 @@ else:
         def __init__(self, module: Any) -> None:
             self._module = module
 
-        async def fetch_new_albums(
-            self, tag: str, since: str, limit: int
-        ) -> list[dict[str, Any]]:  # noqa: ARG002 - since unused
-            items = await self._module.get_tag(tag=tag, limit=limit)
+        async def fetch_new_releases(
+            self, *, market: str | None, limit: int
+        ) -> list[dict[str, Any]]:
+            items = await self._module.get_new_releases(market=market, limit=limit)
             return [_model_dump(item) for item in items]
 
         async def fetch_top(
@@ -336,7 +337,7 @@ async def _mb_get_json(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/genres")
 async def list_genres():
-    """Return your curated/static genres list (kept as-is if previously implemented)."""
+    """Return curated genres including provider-specific metadata used by rails."""
     # If your project has a function like discovery_service.list_genres(), use it.
     svc = globals().get("discovery_service")
     if svc and hasattr(svc, "list_genres"):
@@ -346,11 +347,7 @@ async def list_genres():
                 return items
         except Exception:
             pass
-    # Minimal fallback. Replace with your actual static list if you have one.
-    return [
-        {"slug": k, "name": k.replace("-", " ").title()}
-        for k in sorted(GENRE_SLUG_TO_MB_TAG)
-    ]
+    return CURATED
 
 
 @router.get("/providers/status")
@@ -390,7 +387,7 @@ async def new_albums(
     limit: int = Query(24, ge=1, le=100),
     redis=Depends(get_redis),
 ) -> dict[str, Any]:
-    """Newly released albums for a given genre (keyless fallback supported)."""
+    """New releases rail: prefers release feeds over tag-based popularity sources."""
     mb_tag = _normalize_genre(genre, genre_id)
     since = (datetime.utcnow() - timedelta(days=days)).date().isoformat()
 
@@ -406,35 +403,43 @@ async def new_albums(
 
     aggregate: list[dict[str, Any]] = []
 
-    # Try existing provider first if discovery_service is available.
-    svc = globals().get("discovery_service")
-    if svc and hasattr(svc, "fetch_new_albums"):
+    apple_fn = globals().get("apple_feed")
+    if callable(apple_fn):
         try:
-            releases = await svc.fetch_new_albums(mb_tag, since, limit)  # type: ignore[arg-type]
-            aggregate.extend(_normalize_items(_iter_items(releases)))
+            storefront = getattr(settings, "APPLE_RSS_STOREFRONT", "us")
+            resolved_genre_id = genre_id if genre_id is not None else 0
+            for row in CURATED:
+                if row.get("key") == genre and isinstance(row.get("appleGenreId"), int):
+                    resolved_genre_id = int(row["appleGenreId"])
+                    break
+            items = apple_fn(storefront, resolved_genre_id, "most-recent", "albums", limit)
+            aggregate.extend(_normalize_items(_iter_items(items or [])))
+        except httpx.HTTPError:
+            pass
         except Exception:
-            # fall through to other providers if adapter errors out
             pass
 
-    provider_fn = globals().get("new_releases_by_genre")
-    if callable(provider_fn):
+    # Use provider service only for actual new releases.
+    svc = globals().get("discovery_service")
+    if svc and hasattr(svc, "fetch_new_releases"):
         try:
-            releases = provider_fn(mb_tag, days, limit)
+            releases = await svc.fetch_new_releases(market=None, limit=limit)  # type: ignore[arg-type]
             aggregate.extend(_normalize_items(_iter_items(releases)))
-        except Exception as exc:  # pragma: no cover - provider specific
-            raise HTTPException(
-                status_code=502, detail=f"New releases provider error: {exc}"
-            )
+        except Exception:
+            pass
 
     # MusicBrainz fallback (no keys required)
     if not aggregate:
         query = (
             f'tag:"{mb_tag}" AND primarytype:Album AND firstreleasedate:[{since} TO *]'
         )
-        data = await _mb_get_json(
-            "https://musicbrainz.org/ws/2/release-group",
-            {"query": query, "fmt": "json", "limit": str(limit), "offset": "0"},
-        )
+        try:
+            data = await _mb_get_json(
+                "https://musicbrainz.org/ws/2/release-group",
+                {"query": query, "fmt": "json", "limit": str(limit), "offset": "0"},
+            )
+        except HTTPException:
+            data = {}
         for rg in data.get("release-groups", []):
             aggregate.append(
                 {
@@ -446,6 +451,8 @@ async def new_albums(
                     "source": "musicbrainz",
                 }
             )
+            if len(aggregate) >= limit:
+                break
 
     payload = _prepare_payload(aggregate, limit)
     if cache:
@@ -462,7 +469,7 @@ async def top_albums(
     limit: int = Query(24, ge=1, le=100),
     redis=Depends(get_redis),
 ) -> dict[str, Any]:
-    """Top albums (or artists) for a given genre; provider first, MB fallback next."""
+    """Top rail: provider popularity for tag/genre, never "new releases again"."""
     cache_subject = None
     if isinstance(genre, str) and genre.strip():
         cache_subject = f"slug:{genre.strip().lower()}"
@@ -506,19 +513,7 @@ async def top_albums(
             # continue to other providers on error
             pass
 
-    apple_fn = globals().get("apple_feed")
-    if callable(apple_fn):
-        try:
-            storefront = getattr(settings, "APPLE_RSS_STOREFRONT", "us")
-            genre_key = genre_id if genre_id is not None else 0
-            items = apple_fn(storefront, genre_key, feed, kind, limit)
-            aggregate.extend(_normalize_items(_iter_items(items or [])))
-        except httpx.HTTPError:
-            pass
-        except Exception as exc:  # pragma: no cover - provider specific
-            raise HTTPException(status_code=502, detail=f"Apple RSS error: {exc}")
-
-    # MusicBrainz fallback: get artists by tag, then latest album for each
+    # MusicBrainz fallback: get artists by tag, then one canonical album for each
     if not tag and not aggregate:
         raise HTTPException(status_code=400, detail="Unknown genre/genre_id")
 

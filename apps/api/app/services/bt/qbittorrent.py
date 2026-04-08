@@ -1,84 +1,11 @@
 from __future__ import annotations
 import logging
-import os
-from pathlib import Path
-import re
-import subprocess
 from typing import Dict, List, Optional
 
 import httpx
 
-from app.core.runtime_service_settings import runtime_service_settings
-
 logger = logging.getLogger(__name__)
-
-
-_QBITTORRENT_LOG_PATHS: tuple[Path, ...] = (
-    Path("/mnt/qbittorrent_config/qBittorrent/logs/qbittorrent.log"),
-    Path("/config/qBittorrent/logs/qbittorrent.log"),
-)
-_QBITTORRENT_TEMP_PASSWORD_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"temporary password is provided for this session:\s*(\S+)", re.IGNORECASE),
-    re.compile(r"temporary password:\s*(\S+)", re.IGNORECASE),
-)
-
-
-def _extract_temporary_password(log_text: str) -> str | None:
-    matches: list[str] = []
-    for pattern in _QBITTORRENT_TEMP_PASSWORD_PATTERNS:
-        matches.extend(match.group(1) for match in pattern.finditer(log_text))
-    if not matches:
-        return None
-    return matches[-1]
-
-
-def _read_temporary_password_from_logs() -> str | None:
-    for path in _QBITTORRENT_LOG_PATHS:
-        try:
-            content = path.read_text(encoding="utf-8", errors="ignore")
-        except FileNotFoundError:
-            continue
-        except Exception:
-            continue
-
-        temporary_password = _extract_temporary_password(content)
-        if temporary_password:
-            return temporary_password
-    return None
-
-
-def _read_temporary_password_from_container_logs() -> str | None:
-    names_csv = os.getenv("QBIT_CONTAINER_NAMES", "qbittorrent,qbittorrent-1")
-    container_names = [name.strip() for name in names_csv.split(",") if name.strip()]
-    if not container_names:
-        return None
-
-    for container_name in container_names:
-        try:
-            result = subprocess.run(
-                ["docker", "logs", "--tail", "200", container_name],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except FileNotFoundError:
-            return None
-        except Exception:
-            continue
-        if result.returncode != 0:
-            continue
-
-        combined_logs = "\n".join(
-            text for text in (result.stdout, result.stderr) if text
-        )
-        temporary_password = _extract_temporary_password(combined_logs)
-        if temporary_password:
-            return temporary_password
-    return None
-
-
-def _read_temporary_password() -> str | None:
-    return _read_temporary_password_from_logs() or _read_temporary_password_from_container_logs()
+from app.core.runtime_service_settings import runtime_service_settings
 
 
 class QbittorrentLoginError(RuntimeError):
@@ -159,8 +86,6 @@ class QbClient:
             body_snippet,
         )
         if r.status_code == 403:
-            if await self._try_temporary_password_fallback(headers=headers):
-                return
             raise QbittorrentLoginError(
                 "AUTH_FAILED",
                 "qBittorrent auth rejected",
@@ -173,8 +98,6 @@ class QbClient:
                 status_code=r.status_code,
             )
         if r.text.strip().lower().startswith("fails"):
-            if await self._try_temporary_password_fallback(headers=headers):
-                return
             raise QbittorrentLoginError("AUTH_FAILED", "qBittorrent auth rejected")
         if not (self._has_auth_cookie(r) or self._client_has_auth_cookie()):
             raise QbittorrentLoginError("NO_SID_COOKIE", "qBittorrent auth missing SID")
@@ -191,38 +114,20 @@ class QbClient:
             headers=headers,
         )
 
-    async def _try_temporary_password_fallback(self, *, headers: dict[str, str]) -> bool:
-        temporary_password = _read_temporary_password()
-        if not temporary_password or temporary_password == self.password:
-            return False
-
-        logger.warning("qBittorrent auth rejected; retrying with temporary password from logs")
-        response = await self._do_login_request(temporary_password, headers=headers)
-        if response.status_code != 200:
-            return False
-        if response.text.strip().lower().startswith("fails"):
-            return False
-        if not (self._has_auth_cookie(response) or self._client_has_auth_cookie()):
-            return False
-        if not self._is_success(response):
-            return False
-
-        self.password = temporary_password
-        runtime_service_settings.update_qbittorrent(password=temporary_password)
-        logger.info("qBittorrent temporary password accepted; runtime credentials refreshed")
-        return True
-
     async def add_magnet(
         self,
         magnet: str,
         save_path: Optional[str] = None,
         category: Optional[str] = None,
+        tags: Optional[str] = None,
     ) -> Dict:
         data = {"urls": magnet}
         if save_path:
             data["savepath"] = save_path
         if category:
             data["category"] = category
+        if tags:
+            data["tags"] = tags
         r = await self._c().post(
             f"{self.base_url}/api/v2/torrents/add",
             data=data,
@@ -238,12 +143,15 @@ class QbClient:
         torrent: bytes,
         save_path: Optional[str] = None,
         category: Optional[str] = None,
+        tags: Optional[str] = None,
     ) -> Dict:
         data = {}
         if save_path:
             data["savepath"] = save_path
         if category:
             data["category"] = category
+        if tags:
+            data["tags"] = tags
         files = {"torrents": ("torrent.torrent", torrent, "application/x-bittorrent")}
         r = await self._c().post(
             f"{self.base_url}/api/v2/torrents/add",

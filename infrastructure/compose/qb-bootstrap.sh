@@ -3,8 +3,8 @@ set -euo pipefail
 
 CONF_DIR="/config/qBittorrent"
 CONF_FILE="$CONF_DIR/qBittorrent.conf"
-QB_USER="${QB_USER:-${QBIT_USERNAME:-admin}}"
-QB_PASS="${QB_PASS:-${QBIT_PASSWORD:-}}"
+QB_USER="${QBITTORRENT_USERNAME:-${QBIT_USERNAME:-${QB_USER:-admin}}}"
+QB_PASS="${QBITTORRENT_PASSWORD:-${QBIT_PASSWORD:-${QB_PASS:-}}}"
 QB_BOOTSTRAP_FORCE="${QB_BOOTSTRAP_FORCE:-false}"
 
 is_true() {
@@ -19,7 +19,7 @@ is_true() {
 }
 
 if [ -z "$QB_PASS" ]; then
-  echo "[qb-bootstrap] QB_PASS/QBIT_PASSWORD is empty; credentials unchanged (skipped)."
+  echo "[qb-bootstrap] QBITTORRENT_PASSWORD is empty; credentials unchanged (skipped)."
   exit 0
 fi
 
@@ -37,6 +37,12 @@ mkdir -p "$CONF_DIR"
 PBKDF2_LINE=$(python3 - <<'PY'
 import base64, hashlib, os
 password = os.environ.get('QB_PASS') or os.environ.get('QBIT_PASSWORD') or ''
+password = (
+    os.environ.get('QBITTORRENT_PASSWORD')
+    or os.environ.get('QBIT_PASSWORD')
+    or os.environ.get('QB_PASS')
+    or ''
+)
 iterations = 100000
 salt = os.urandom(16)
 digest = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), salt, iterations)

@@ -39,14 +39,26 @@ class Settings(BaseSettings):
     BT_CLIENT: str = "qb"
     QB_URL: AnyHttpUrl = Field(
         default="http://qbittorrent:8080",
-        validation_alias=AliasChoices("QBIT_URL", "QB_URL"),
+        validation_alias=AliasChoices("QBIT_URL", "QB_URL", "QBITTORRENT_URL"),
     )
     QB_USER: str = Field(
-        default="admin", validation_alias=AliasChoices("QBIT_USERNAME", "QB_USER")
+        default="admin",
+        validation_alias=AliasChoices(
+            "QBITTORRENT_USERNAME",
+            "QBIT_USERNAME",
+            "QB_USER",
+        ),
     )
     QB_PASS: str = Field(
-        default="", validation_alias=AliasChoices("QBIT_PASSWORD", "QB_PASS")
+        default="",
+        validation_alias=AliasChoices(
+            "QBITTORRENT_PASSWORD",
+            "QBIT_PASSWORD",
+            "QB_PASS",
+        ),
     )
+    DOWNLOAD_STAGING_DIR: str = "/downloads"
+    DOWNLOAD_FINAL_DIR: str = "/music"
 
     PROWLARR_URL: AnyHttpUrl = Field(
         default="http://prowlarr:9696",

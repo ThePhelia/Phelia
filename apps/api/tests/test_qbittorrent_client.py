@@ -2,7 +2,7 @@ import pytest
 import httpx
 from urllib.parse import parse_qsl
 
-from app.services.bt.qbittorrent import QbClient
+from app.services.bt.qbittorrent import QbClient, QbittorrentLoginError
 
 
 @pytest.mark.anyio
@@ -190,5 +190,6 @@ async def test_login_rejects_unexpected_body():
 
     async with QbClient("http://qb", "user", "pass") as qb:
         qb._client = httpx.AsyncClient(transport=transport)
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(QbittorrentLoginError) as excinfo:
             await qb.login()
+    assert excinfo.value.code == "AUTH_FAILED"

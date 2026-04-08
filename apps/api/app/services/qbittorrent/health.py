@@ -75,12 +75,12 @@ def qb_login_ok() -> bool | None:
         log.info("qBittorrent health-check disabled by env.")
         return None
 
-    url = (_env("QBIT_URL", "QB_URL") or "http://qbittorrent:8080").rstrip("/")
-    user = _env("QBIT_USERNAME", "QB_USER") or "admin"
-    pwd = _env("QBIT_PASSWORD", "QB_PASS") or ""
+    url = (_env("QBITTORRENT_URL", "QBIT_URL", "QB_URL") or "http://qbittorrent:8080").rstrip("/")
+    user = _env("QBITTORRENT_USERNAME", "QBIT_USERNAME", "QB_USER") or "admin"
+    pwd = _env("QBITTORRENT_PASSWORD", "QBIT_PASSWORD", "QB_PASS") or ""
 
     if not pwd:
-        log.warning("qBittorrent health-check skipped: QBIT_PASSWORD is not set.")
+        log.warning("qBittorrent health-check skipped: QBITTORRENT_PASSWORD is not set.")
         return None
 
     tries = int(os.getenv("QBIT_HEALTH_TRIES", str(_DEFAULT_TRIES)))
@@ -125,7 +125,7 @@ def qb_login_ok() -> bool | None:
             if _is_auth_failure_body(body):
                 log.error(
                     "qBittorrent login failed due to invalid credentials (status=%s, body=%r, url=%s, user=%s)."
-                    " Stopping retries to avoid WebUI IP ban; update QBIT_USERNAME/QBIT_PASSWORD and restart.",
+                    " Stopping retries to avoid WebUI IP ban; update QBITTORRENT_USERNAME/QBITTORRENT_PASSWORD and restart.",
                     resp.status_code,
                     body,
                     url,
@@ -148,7 +148,7 @@ def qb_login_ok() -> bool | None:
                 else:
                     log.error(
                         "qBittorrent login failed due to invalid credentials (status=%s, body=%r, url=%s, user=%s)."
-                        " Stopping retries to avoid WebUI IP ban; update QBIT_USERNAME/QBIT_PASSWORD and restart.",
+                        " Stopping retries to avoid WebUI IP ban; update QBITTORRENT_USERNAME/QBITTORRENT_PASSWORD and restart.",
                         resp.status_code,
                         body,
                         url,
@@ -158,7 +158,7 @@ def qb_login_ok() -> bool | None:
             elif "fails due to bad credentials" in body_lower:
                 log.warning(
                     "qBittorrent login rejected (status=%s, body=%r) [attempt %d/%d, url=%s, user=%s]."
-                    " Verify QBIT_USERNAME/QBIT_PASSWORD and ensure the API targets the internal URL"
+                    " Verify QBITTORRENT_USERNAME/QBITTORRENT_PASSWORD and ensure the API targets the internal URL"
                     " (http://qbittorrent:8080).",
                     resp.status_code,
                     body,
